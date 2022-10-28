@@ -10,19 +10,6 @@ You can then map such key in `.lua` files like `nnoremap("<CHAR-0x37>s", "<cmd>e
 There's also a file in `~/.config/nvim/lua/cmd-remap.lua` that tries to map `<CHAR-0x037>` into `<D>`. That would be amazing
 but I still had no success with it.
 
-## Families
-
-Most key bindings are done in the form of `<leader>{family}{keybind}` where `{family}` is a grouping
-per key bind function.
-This is done in order to be more mnemonic than random combination of letters.
-Often the `{keybind}` following the `{family}` key will be either the initial of a word of the function
-called, either the initials of the sentence of the function called.
-
-| key      | function |
-| -------- | -------- |
-| `<none>` | generic  |
-| `l`      | LSP      |
-
 ## Table
 
 ### General
