@@ -26,4 +26,4 @@ opt.fillchars = {
 	foldclose = "",
 }
 
-g.editorconfig = false
+g.editorconfig = true
