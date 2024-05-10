@@ -24,13 +24,13 @@ map("n", "<leader>nb", "<cmd>enew<CR>", { desc = "New buffer" })
 
 -- tabufline
 map({ "n", "i" }, "<C-Right>", function()
-	require("nvchad.tabufline").next()
+  require("nvchad.tabufline").next()
 end, { desc = "Buffer Goto next" })
 map({ "n", "i" }, "<C-Left>", function()
-	require("nvchad.tabufline").prev()
+  require("nvchad.tabufline").prev()
 end, { desc = "Buffer Goto prev" })
 map("n", "<leader>w", function()
-	require("nvchad.tabufline").close_buffer()
+  require("nvchad.tabufline").close_buffer()
 end, { desc = "Buffer Close" })
 
 --- diagnostic
@@ -42,17 +42,17 @@ map("n", "<leader>dl", vim.diagnostic.setloclist, { desc = "Lsp diagnostic locli
 --- whichkey
 map("n", "<leader>sK", "<cmd>WhichKey <CR>", { desc = "Whichkey all keymaps" })
 map("n", "<leader>sk", function()
-	vim.cmd("WhichKey " .. vim.fn.input("WhichKey: "))
+  vim.cmd("WhichKey " .. vim.fn.input("WhichKey: "))
 end, { desc = "Whichkey query lookup" })
 
 --- Telescope
 map("n", "<leader>saK", "<cmd>Telescope keymaps<cr>", { desc = "Telescope Find keymaps" })
 map("n", "<C-p>", "<cmd>Telescope find_files<cr>", { desc = "Telescope Find files" })
 map(
-	"n",
-	"<C-P>",
-	"<cmd>Telescope find_files follow=true no_ignore=true hidden=true<CR>",
-	{ desc = "Telescope Find all files" }
+  "n",
+  "<C-P>",
+  "<cmd>Telescope find_files follow=true no_ignore=true hidden=true<CR>",
+  { desc = "Telescope Find all files" }
 )
 map("n", "::", ":Telescope cmdline<CR>", { noremap = true, desc = "Cmdline" })
 
@@ -62,8 +62,8 @@ map("n", "zM", require("ufo").closeAllFolds)
 map("n", "zr", require("ufo").openFoldsExceptKinds)
 map("n", "zm", require("ufo").closeFoldsWith) -- closeAllFolds == closeFoldsWith(0)
 map("n", "zk", function()
-	local winid = require("ufo").peekFoldedLinesUnderCursor()
-	if not winid then
-		vim.lsp.buf.hover()
-	end
+  local winid = require("ufo").peekFoldedLinesUnderCursor()
+  if not winid then
+    vim.lsp.buf.hover()
+  end
 end)

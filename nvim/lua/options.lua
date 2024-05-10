@@ -19,11 +19,11 @@ o.foldlevelstart = 99
 o.foldenable = true
 
 opt.fillchars = {
-	eob = " ",
-	fold = " ",
-	foldopen = "",
-	foldsep = " ",
-	foldclose = "",
+  eob = " ",
+  fold = " ",
+  foldopen = "",
+  foldsep = " ",
+  foldclose = "",
 }
 
 g.editorconfig = true
