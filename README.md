@@ -2,4 +2,5 @@
 
 My VIM looks like this at the moment
 
-![2022 10 28_12 19 44_shot](https://user-images.githubusercontent.com/39259934/198564780-db25f86d-0fcc-4cf3-9475-a80489daddfc.png)
+![image](https://github.com/patrykk21/dotfiles/assets/39259934/47216ff2-00b8-4458-ad96-61eba213cb61)
+
