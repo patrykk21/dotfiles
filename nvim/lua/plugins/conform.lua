@@ -1,6 +1,6 @@
 return {
-	{
-		"stevearc/conform.nvim",
+  {
+    "stevearc/conform.nvim",
     enabled = false,
-	},
+  },
 }

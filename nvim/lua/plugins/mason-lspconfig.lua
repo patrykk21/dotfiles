@@ -1,10 +1,10 @@
 return {
-	"williamboman/mason-lspconfig.nvim",
-	dependencies = { "williamboman/mason.nvim" },
-	opts = {
-		ensure_installed = {
-			"solargraph",
+  "williamboman/mason-lspconfig.nvim",
+  dependencies = { "williamboman/mason.nvim" },
+  opts = {
+    ensure_installed = {
+      "solargraph",
       "vtsls"
-		},
-	},
+    },
+  },
 }
