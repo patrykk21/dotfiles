@@ -1,7 +1,7 @@
 local lspconfig = require("lspconfig")
 local cmp_lsp = require("cmp_nvim_lsp")
 local configs = require("nvchad.configs.lspconfig")
-local conf = require("nvconfig").ui.lsp
+-- local conf = require("nvconfig").ui.lsp
 
 local map = vim.keymap.set
 
@@ -32,9 +32,9 @@ local on_attach = function(client, bufnr)
   map("n", "gr", vim.lsp.buf.references, opts("Show references"))
 
   -- setup signature popup
-  if conf.signature and client.server_capabilities.signatureHelpProvider then
-    require("nvchad.lsp.signature").setup(client, bufnr)
-  end
+  -- if conf.signature and client.server_capabilities.signatureHelpProvider then
+  --   require("nvchad.lsp.signature").setup(client, bufnr)
+  -- end
 end
 
 local on_init = configs.on_init
@@ -59,6 +59,8 @@ for _, lsp in ipairs(servers) do
 end
 
 lspconfig.lua_ls.setup({
+  on_init = on_init,
+  on_attach = on_attach,
   capabilities = capabilities,
   settings = {
     Lua = {
@@ -80,11 +82,24 @@ lspconfig.lua_ls.setup({
 lspconfig.solargraph.setup({
   on_init = on_init,
   on_attach = on_attach,
-  -- capabilities = capabilities,
+  capabilities = capabilities,
   settings = {
     solargraph = {
       formatting = false,
       diagnostic = false,
     },
   },
+  root_dir = lspconfig.util.root_pattern(".null-ls-root", "Gemfile", ".git", ".ruby-version")
 })
+
+lspconfig.pyright.setup({
+  on_init = on_init,
+  on_attach = on_attach,
+  capabilities = capabilities,
+  settings = {
+    python = {
+      pythonPath = './venv/bin/python'
+    }
+  },
+})
+

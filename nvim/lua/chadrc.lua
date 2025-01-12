@@ -7,7 +7,7 @@ local stbufnr = function()
 end
 
 M.ui = {
-  theme = "tokyodark",
+  theme = "onedark",
   transparency = false,
   hl_override = {
     Visual = {

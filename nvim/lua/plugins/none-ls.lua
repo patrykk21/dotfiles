@@ -13,10 +13,20 @@ return {
     local ruby_code_actions = require("ruby-code-actions")
 
     null_ls.setup({
+      debug = false,
       debounce = 150,
       save_after_format = false,
       sources = {
-        require("none-ls.diagnostics.eslint_d"),
+        require("none-ls.diagnostics.eslint_d").with({
+          condition = function(utils)
+            return utils.root_has_file({ ".eslintrc.js", ".eslintrc.cjs", ".eslintrc.json" })
+          end,
+        }),
+        require("none-ls.code_actions.eslint_d").with({
+          condition = function(utils)
+            return utils.root_has_file({ ".eslintrc.js", ".eslintrc.cjs", ".eslintrc.json" })
+          end,
+        }),
 
         null_ls.builtins.code_actions.gitsigns,
         null_ls.builtins.diagnostics.rubocop,

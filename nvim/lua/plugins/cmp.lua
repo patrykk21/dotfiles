@@ -39,8 +39,8 @@ return {
     },
     view = {
       entries = {
-        follow_cursor = true
-      }
-    }
+        follow_cursor = true,
+      },
+    },
   },
 }

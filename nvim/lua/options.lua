@@ -17,6 +17,7 @@ o.foldcolumn = "1"
 o.foldlevel = 99
 o.foldlevelstart = 99
 o.foldenable = true
+o.scrolloff = 4
 
 opt.fillchars = {
   eob = " ",
@@ -27,3 +28,8 @@ opt.fillchars = {
 }
 
 g.editorconfig = true
+
+if vim.fn.getenv("TERM_PROGRAM") == "ghostty" then
+  opt.title = true
+  opt.titlestring = "%{fnamemodify(getcwd(), ':t')}"
+end

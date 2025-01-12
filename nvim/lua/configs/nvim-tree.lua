@@ -4,6 +4,7 @@ local icons = require("icons")
 M.opts = {
   git = { enable = true },
   renderer = {
+    highlight_opened_files = "all",
     highlight_git = true,
     icons = {
       glyphs = {
