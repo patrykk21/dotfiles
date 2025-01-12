@@ -57,6 +57,11 @@ local options = {
       case_mode = "smart_case",
     },
   },
+  pickers = {
+    oldfiles = {
+      cwd_only = true,
+    },
+  },
 }
 
 return options

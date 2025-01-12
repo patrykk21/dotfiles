@@ -16,8 +16,25 @@ del("n", "<leader>wK")
 del("n", "<leader>wk")
 del("n", "<leader>h")
 del("n", "<leader>v")
+del("n", "<leader>e")
 
 -- Custom keybinds section
+
+-- base
+map("n", "<C-d>", "<C-d>zz")
+map("n", "<C-u>", "<C-u>zz")
+map({ "n", "i", "v" }, "<C-s>", function()
+  vim.cmd("w")
+end)
+
+-- vim-illuminate
+map("n", "[[", function()
+  require("illuminate").goto_next_reference(false)
+end, { desc = "Next Reference" })
+
+map("n", "]]", function()
+  require("illuminate").goto_prev_reference(false)
+end, { desc = "Prev Reference" })
 
 -- buffer
 map("n", "<leader>nb", "<cmd>enew<CR>", { desc = "New buffer" })
@@ -67,3 +84,6 @@ map("n", "zk", function()
     vim.lsp.buf.hover()
   end
 end)
+
+--- nvim-tree
+map("n", "<leader>e", "<cmd>NvimTreeFindFile<CR>", { desc = "Open nvim tree to current file" })

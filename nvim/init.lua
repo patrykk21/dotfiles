@@ -32,8 +32,10 @@ require("lazy").setup({
 dofile(vim.g.base46_cache .. "defaults")
 dofile(vim.g.base46_cache .. "statusline")
 
-require "nvchad.autocmds"
+require "autocmds"
 
 vim.schedule(function()
   require "mappings"
 end)
+
+-- vim.env.PATH = vim.fn.system('source ~/.rvm/scripts/rvm && rvm use default && rvm which ruby'):gsub('\n', '') .. '/bin:' .. vim.env.PATH

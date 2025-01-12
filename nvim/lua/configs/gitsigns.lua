@@ -45,10 +45,19 @@ local options = {
 
     -- Close preview with ESC
     map("n", "<ESC>", function()
+      local something_closed = false
+
       for _, id in ipairs(vim.api.nvim_list_wins()) do
         if vim.api.nvim_win_get_config(id).relative ~= "" then
           vim.api.nvim_win_close(id, false)
+
+          something_closed = true
         end
+      end
+
+      -- Clear search by pressing ESC
+      if not something_closed then
+        vim.cmd("noh")
       end
     end, { buffer = bufnr })
   end,

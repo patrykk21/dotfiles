@@ -3,7 +3,6 @@ return {
   dependencies = { "williamboman/mason.nvim" },
   opts = {
     ensure_installed = {
-      "solargraph",
       "vtsls"
     },
   },
