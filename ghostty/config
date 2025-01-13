@@ -1,0 +1,9 @@
+background-opacity = 0.85
+background-blur-radius = 20
+theme = tokyonight
+macos-titlebar-style = tabs
+
+keybind = cmd+left=text:\x01
+keybind = cmd+right=text:\x05
+keybind = cmd+backspace=text:\x15
+keybind = option+backspace=text:\x17
