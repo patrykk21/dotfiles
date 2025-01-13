@@ -1,8 +1,24 @@
+dofile(vim.g.base46_cache .. "mason")
+
+local cfg = {
+  PATH = "skip",
+
+  ui = {
+    icons = {
+      package_pending = " ",
+      package_installed = " ",
+      package_uninstalled = " ",
+    },
+  },
+
+  max_concurrent_installers = 10,
+}
+
 return {
   "williamboman/mason.nvim",
   cmd = { "Mason", "MasonInstall", "MasonInstallAll", "MasonUpdate" },
   opts = function()
-    return require("nvchad.configs.mason")
+    return cfg
   end,
   config = function(_, opts)
     dofile(vim.g.base46_cache .. "mason")

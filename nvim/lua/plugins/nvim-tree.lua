@@ -1,17 +1,43 @@
-local cfg = require("configs.nvim-tree")
+local icons = require("icons")
+
+local options = {
+	git = { enable = true },
+	renderer = {
+		highlight_opened_files = "all",
+		highlight_git = true,
+		icons = {
+			glyphs = {
+				default = icons.ui.Text,
+				symlink = icons.ui.FileSymlink,
+				bookmark = icons.ui.BookMark,
+				folder = {
+					arrow_closed = icons.ui.ChevronRight,
+					arrow_open = icons.ui.ChevronShortDown,
+					default = icons.ui.Folder,
+					open = icons.ui.FolderOpen,
+					empty = icons.ui.EmptyFolder,
+					empty_open = icons.ui.EmptyFolderOpen,
+					symlink = icons.ui.FolderSymlink,
+					symlink_open = icons.ui.FolderOpen,
+				},
+			},
+			show = {
+				git = false,
+			},
+		},
+	},
+	filters = {
+		dotfiles = false,
+		git_ignored = false,
+	},
+}
 
 return {
-  "nvim-tree/nvim-tree.lua",
-  opts = function()
-    return cfg.opts
-  end,
-  config = function(_, opts)
-    dofile(vim.g.base46_cache .. "nvimtree")
-    require("nvim-tree").setup(opts)
+	"nvim-tree/nvim-tree.lua",
+	cmd = { "NvimTreeToggle", "NvimTreeFocus" },
+	config = function()
+		dofile(vim.g.base46_cache .. "nvimtree")
 
-    -- TODO: Fix colors!!!
-    -- vim.cmd("hi! link GitSignsChangedelete GitSignsDelete")
-    -- vim.cmd("hi! link NvimTreeGitNew GitSignsAdd")
-    -- vim.cmd("hi! link NvimTreeGitDirty GitSignsChange")
-  end,
+		require("nvim-tree").setup(options)
+	end,
 }

@@ -6,9 +6,12 @@ local stbufnr = function()
   return vim.api.nvim_win_get_buf(vim.g.statusline_winid or 0)
 end
 
-M.ui = {
+M.base46 = {
   theme = "onedark",
   transparency = false,
+}
+
+M.ui = {
   hl_override = {
     Visual = {
       -- fg = "sun",
@@ -28,6 +31,7 @@ M.ui = {
     style = "atom",
   },
   statusline = {
+    enabled = true,
     theme = "default",
     order = { "mode", "relativepath", "file", "git", "%=", "lsp_msg", "%=", "diagnostics", "lsp", "cwd", "cursor" },
     modules = {
@@ -41,6 +45,9 @@ M.ui = {
         return "%#St_relativepath#  " .. vim.fn.expand("%:.:h") .. " /"
       end,
     },
+  },
+  tabufline = {
+    enabled = false,
   },
 }
 
