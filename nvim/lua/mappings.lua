@@ -220,3 +220,8 @@ end, { desc = "Treesitter Search" })
 map("c", "<c-s>", function()
   require("flash").toggle()
 end, { desc = "Toggle Flash Search" })
+
+-- neogit
+map("n", "<leader>gs", function()
+  require("neogit").open()
+end, { desc = "Open Neogit Menu" })
