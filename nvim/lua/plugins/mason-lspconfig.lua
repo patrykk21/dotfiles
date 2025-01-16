@@ -3,7 +3,7 @@ return {
   dependencies = { "williamboman/mason.nvim" },
   opts = {
     ensure_installed = {
-      "vtsls"
+      "ts_ls"
     },
   },
 }

@@ -1,6 +1,7 @@
 return {
   "https://gitlab.com/HiPhish/rainbow-delimiters.nvim",
-  config = function ()
-    require('rainbow-delimiters.setup')
-  end
+  event = { "BufReadPre", "BufNewFile" },
+  config = function()
+    require("rainbow-delimiters.setup")
+  end,
 }
