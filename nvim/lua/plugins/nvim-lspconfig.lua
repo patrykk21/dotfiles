@@ -53,7 +53,7 @@ local function setup()
 	}
 
 	local servers = {
-		"vtsls",
+		"ts_ls",
 		-- "eslint",
 	}
 
