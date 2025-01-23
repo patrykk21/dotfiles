@@ -60,3 +60,11 @@ vim.api.nvim_create_autocmd("BufDelete", {
     end
   end,
 })
+
+-- Clear jumps when changing directory
+vim.api.nvim_create_autocmd("VimEnter", {
+  callback = function()
+    vim.cmd("clearjumps")
+  end,
+  desc = "Clear jump list on directory change",
+})
