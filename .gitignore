@@ -4,4 +4,7 @@
 !nvim/
 !zsh/
 !ghostty/
+!aerospace/
+!zellij/
+
 !starship.toml
