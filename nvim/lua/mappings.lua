@@ -6,7 +6,7 @@ map("n", "<C-u>", "<C-u>zz")
 map({ "n", "i", "v" }, "<C-s>", function()
   vim.cmd("w")
 end)
-map("v", "p", '"_dP')
+-- map("v", "p", '"_dP')
 
 -- NvChad/ui
 map("n", "<leader>th", function()
