@@ -37,13 +37,18 @@ return {
             behavior = cmp.ConfirmBehavior.Insert,
             select = true,
           }),
+          -- ["<C-y>"] = require("minuet").make_cmp_map(),
         },
         completion = { completeopt = "menu,menuone" },
         sources = {
+          { name = "minuet" },
           { name = "nvim_lsp" },
           { name = "buffer" },
           { name = "nvim_lua" },
           { name = "path" },
+        },
+        performance = {
+          fetching_timeout = 2000,
         },
       }
 

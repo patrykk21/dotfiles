@@ -12,6 +12,11 @@ local cfg = {
   },
 
   max_concurrent_installers = 10,
+  
+  ensure_installed = {
+    "ts_ls",
+    "biome",
+  },
 }
 
 return {
