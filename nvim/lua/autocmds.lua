@@ -28,13 +28,13 @@ local function tab_win_closed(winnr)
     end
   end
 end
-vim.api.nvim_create_autocmd("WinClosed", {
-  callback = function()
-    local winnr = tonumber(vim.fn.expand("<amatch>"))
-    vim.schedule_wrap(tab_win_closed(winnr))
-  end,
-  nested = true,
-})
+-- vim.api.nvim_create_autocmd("WinClosed", {
+--   callback = function()
+--     local winnr = tonumber(vim.fn.expand("<amatch>"))
+--     vim.schedule_wrap(tab_win_closed(winnr))
+--   end,
+--   nested = true,
+-- })
 
 -- Change cwd when opening vim so nvim tree has correct structure
 local group_cdpwd = vim.api.nvim_create_augroup("group_cdpwd", { clear = true })

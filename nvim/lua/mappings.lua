@@ -225,3 +225,6 @@ end, { desc = "Toggle Flash Search" })
 map("n", "<leader>gs", function()
   require("neogit").open()
 end, { desc = "Open Neogit Menu" })
+
+-- claude
+map("n", "<leader>cc", "<cmd>ClaudeCode<CR>", { desc = "Toggle Claude Code" })

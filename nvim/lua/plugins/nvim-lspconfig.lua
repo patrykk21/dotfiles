@@ -56,6 +56,7 @@ local function setup()
     "ts_ls",
     "tailwindcss",
     "gopls",
+    "biome",
     -- "eslint",
   }
 
