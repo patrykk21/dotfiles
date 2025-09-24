@@ -17,3 +17,4 @@ keybind = super+zero=reset_font_size
 keybind = cmd+k=text:clear
 
 # custom-shader = shaders/matrix-hallway.glsl
+keybind = shift+enter=text:\n
