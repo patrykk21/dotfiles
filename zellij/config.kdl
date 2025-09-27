@@ -262,9 +262,12 @@ plugins {
 }
 
 // Plugins to load in the background when a new session starts
-// eg. "file:/path/to/my-plugin.wasm"
+// eg. "file:/path/to/my-plugin.wasm"  
 // eg. "https://example.com/my-plugin.wasm"
 load_plugins {
+    "file:/Users/vigenerr/.config/zellij/zjframes.wasm" {
+        hide_frame_for_single_pane       "true"
+    }
 }
 web_client {
     font "monospace"
@@ -275,7 +278,7 @@ web_client {
 //   - true
 //   - false (Default)
 // 
-// simplified_ui true
+simplified_ui true
  
 // Choose the theme that is specified in the themes section.
 // Default: default
@@ -325,7 +328,7 @@ default_layout "default"
 //   - true (default, enabled)
 //   - false
 // 
-pane_frames false
+// pane_frames false  // Disabled for zjframes plugin compatibility
  
 // When attaching to an existing session with other users,
 // should the session be mirrored (true)
