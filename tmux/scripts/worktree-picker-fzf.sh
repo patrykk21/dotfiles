@@ -160,8 +160,9 @@ if [ -n "$selected" ]; then
                 tmux new-window -t "$ticket:3" -n "commands" -c "$worktree_path"
                 
                 # Create bottom pane for each window
-                ~/.config/tmux/scripts/create-bottom-pane-for-window.sh "$ticket:1"
-                ~/.config/tmux/scripts/create-bottom-pane-for-window.sh "$ticket:2"
+                # Run them sequentially to ensure proper creation
+                ~/.config/tmux/scripts/create-bottom-pane-for-window.sh "$ticket:1" && \
+                ~/.config/tmux/scripts/create-bottom-pane-for-window.sh "$ticket:2" && \
                 ~/.config/tmux/scripts/create-bottom-pane-for-window.sh "$ticket:3"
                 
                 tmux select-window -t "$ticket:1"
@@ -176,8 +177,9 @@ if [ -n "$selected" ]; then
                 tmux new-window -t "$ticket:3" -n "commands" -c "$worktree_path"
                 
                 # Create bottom pane for each window
-                ~/.config/tmux/scripts/create-bottom-pane-for-window.sh "$ticket:1"
-                ~/.config/tmux/scripts/create-bottom-pane-for-window.sh "$ticket:2"
+                # Run them sequentially to ensure proper creation
+                ~/.config/tmux/scripts/create-bottom-pane-for-window.sh "$ticket:1" && \
+                ~/.config/tmux/scripts/create-bottom-pane-for-window.sh "$ticket:2" && \
                 ~/.config/tmux/scripts/create-bottom-pane-for-window.sh "$ticket:3"
                 
                 tmux select-window -t "$ticket:1"

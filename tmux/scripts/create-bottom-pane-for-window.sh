@@ -7,7 +7,7 @@ PANE_HEIGHT=1
 # Get the target window (passed as argument or current)
 TARGET_WINDOW="${1:-$(tmux display-message -p '#{session_name}:#{window_index}')}"
 
-# Check if this window already has a bottom status pane
+# Check if this window already has a bottom status pane by looking for the specific title
 EXISTING_BOTTOM=$(tmux list-panes -t "$TARGET_WINDOW" -F "#{pane_id} #{pane_title}" | grep "__tmux_status_bar__" | awk '{print $1}')
 
 if [ -n "$EXISTING_BOTTOM" ]; then
