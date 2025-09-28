@@ -39,14 +39,23 @@ for window in 1 2 3; do
     BOTTOM_PANE=$(tmux split-window -t "$TICKET:$window" -v -d -P -F "#{pane_id}" "~/.config/tmux/scripts/bottom-pane-display.sh")
     
     # Log after creation
-    echo "[DEBUG] After creating bottom pane $BOTTOM_PANE" >> /tmp/tmux-worktree-debug.log
+    echo "[DEBUG] After creating bottom pane BOTTOM_PANE='$BOTTOM_PANE'" >> /tmp/tmux-worktree-debug.log
     tmux list-panes -t "$TICKET:$window" -F "#{pane_index}:#{pane_height}:#{pane_id}" >> /tmp/tmux-worktree-debug.log
     
     # Set the title
     tmux select-pane -t "$BOTTOM_PANE" -T "__tmux_status_bar__"
     
+    # Small delay to ensure pane is ready
+    sleep 0.1
+    
     # Immediately resize to 1 line (like the hook does)
-    tmux resize-pane -t "$BOTTOM_PANE" -y 1
+    if ! tmux resize-pane -t "$BOTTOM_PANE" -y 1 2>>/tmp/tmux-worktree-debug.log; then
+        echo "[DEBUG] Resize failed for pane $BOTTOM_PANE" >> /tmp/tmux-worktree-debug.log
+    fi
+    
+    # Log after resize
+    echo "[DEBUG] After resize for window $window" >> /tmp/tmux-worktree-debug.log
+    tmux list-panes -t "$TICKET:$window" -F "#{pane_index}:#{pane_height}:#{pane_id}" >> /tmp/tmux-worktree-debug.log
     
     # Return focus to main pane
     tmux select-pane -t "$TICKET:$window.1"
