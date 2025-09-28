@@ -13,22 +13,29 @@ if git rev-parse --git-dir > /dev/null 2>&1; then
     if [ "$CURRENT_DIR" = "$MAIN_REPO" ] || [[ "$CURRENT_DIR" == "$MAIN_REPO"/* && ! "$CURRENT_DIR" =~ /worktrees/ ]]; then
         # We're in the base repository
         
-        # Check if base session exists
-        if tmux has-session -t "base" 2>/dev/null; then
-            # Attach to existing base session
-            exec tmux attach-session -t "base"
+        # Create a unique base session name for this repository
+        REPO_NAME=$(basename "$MAIN_REPO")
+        # Sanitize repo name - replace dots and other special chars with underscores
+        SAFE_REPO_NAME=$(echo "$REPO_NAME" | sed 's/[^a-zA-Z0-9-]/_/g')
+        BASE_SESSION_NAME="${SAFE_REPO_NAME}-base"
+        
+        # Check if this repo's base session exists
+        if tmux has-session -t "$BASE_SESSION_NAME" 2>/dev/null; then
+            # Attach to existing base session for this repository
+            exec tmux attach-session -t "$BASE_SESSION_NAME"
         else
             # Create new base session in detached mode first
-            ~/.config/tmux/scripts/create-worktree-session.sh "base" "$MAIN_REPO"
+            ~/.config/tmux/scripts/create-worktree-session.sh "$BASE_SESSION_NAME" "$MAIN_REPO"
             
             # Save metadata for the base session
-            REPO_NAME=$(basename "$MAIN_REPO")
             source ~/.config/tmux/scripts/worktree-metadata.sh
-            save_session_metadata "$REPO_NAME" "base" "$MAIN_REPO" "master" "base"
+            # Get the current branch name
+            CURRENT_BRANCH=$(git -C "$MAIN_REPO" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "master")
+            save_session_metadata "$REPO_NAME" "$BASE_SESSION_NAME" "$MAIN_REPO" "$CURRENT_BRANCH" "$BASE_SESSION_NAME"
             
             
             # Now attach to the already-configured session
-            exec tmux attach-session -t "base"
+            exec tmux attach-session -t "$BASE_SESSION_NAME"
         fi
     fi
 fi
