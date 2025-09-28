@@ -36,7 +36,11 @@ for window in 1 2 3; do
     
     # Find all status bar panes
     STATUS_PANES=$(tmux list-panes -t "$TICKET:$window" -F "#{pane_id} #{pane_title}" | grep "__tmux_status_bar__" | awk '{print $1}')
-    STATUS_COUNT=$(echo "$STATUS_PANES" | grep -c '^%' || echo 0)
+    if [ -z "$STATUS_PANES" ]; then
+        STATUS_COUNT=0
+    else
+        STATUS_COUNT=$(echo "$STATUS_PANES" | wc -l | tr -d ' ')
+    fi
     
     if [ "$STATUS_COUNT" -eq 0 ]; then
         # No status pane exists, create one
