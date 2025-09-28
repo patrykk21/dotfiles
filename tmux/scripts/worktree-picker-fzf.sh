@@ -135,7 +135,7 @@ get_worktrees() {
         port_text = "-"
         if (type_text == "[WORKTREE]" && session_text != "[NO SESSION]") {
             # Read port from metadata file
-            port_cmd = "test -f " worktrees_base "/" repo_name "/.worktree-meta/sessions/" ticket ".json && jq -r .port " worktrees_base "/" repo_name "/.worktree-meta/sessions/" ticket ".json 2>/dev/null || echo -"
+            port_cmd = "test -f " worktrees_base "/" repo_name "/.worktree-meta/sessions/" ticket ".json && jq -r '.port // \"-\"' " worktrees_base "/" repo_name "/.worktree-meta/sessions/" ticket ".json 2>/dev/null || echo -"
             port_cmd | getline port_text
             close(port_cmd)
         }
@@ -201,12 +201,13 @@ if [ -n "$selected" ]; then
         # Remove status icon and spaces
         sub(/^[●○][[:space:]]+/, "", $0)
         
-        # Now we have: "name type session branch path..."
+        # Now we have: "name type session port branch path..."
         # Extract fields
         name = $1
         type = $2
         session = $3
-        branch = $4
+        port = $4
+        branch = $5
         
         # Determine icon based on arrow presence and original content
         if (has_arrow) {
@@ -225,12 +226,12 @@ if [ -n "$selected" ]; then
         path = arr[n]
         
         # Output as tab-separated values
-        print icon "\t" name "\t" type "\t" session "\t" branch "\t" path "\t" has_arrow
+        print icon "\t" name "\t" type "\t" session "\t" port "\t" branch "\t" path "\t" has_arrow
     }')
     
     # Parse the tab-separated values
-    local icon name type session branch worktree_path has_arrow
-    IFS=$'\t' read -r icon name type session branch worktree_path has_arrow <<< "$parsed_fields"
+    local icon name type session port branch worktree_path has_arrow
+    IFS=$'\t' read -r icon name type session port branch worktree_path has_arrow <<< "$parsed_fields"
     
     echo "[PICKER DEBUG] Parsed - icon:'$icon' name:'$name' type:'$type' session:'$session' path:'$worktree_path'" >> /tmp/tmux-worktree-debug.log
     
@@ -242,9 +243,9 @@ if [ -n "$selected" ]; then
     
     # Check if this is the main repository (base)
     if [ "$type" = "[BASE]" ]; then
-        # For base repo, extract from the parsed name (which already includes -base)
+        # For base repo, use the name which already includes -base
         local session_name="$name"
-        echo "[PICKER DEBUG] Using parsed name as session_name='$session_name'" >> /tmp/tmux-worktree-debug.log
+        echo "[PICKER DEBUG] Base repo: Using name='$name' as session_name" >> /tmp/tmux-worktree-debug.log
         
         # Check if base session exists
         if tmux has-session -t "$session_name" 2>/dev/null; then

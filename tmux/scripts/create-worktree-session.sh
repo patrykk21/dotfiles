@@ -20,13 +20,15 @@ REPO_NAME=$(basename "$MAIN_REPO")
 
 # Get port from metadata if this is a worktree (not base)
 SERVER_PORT=""
+PORT_GENERATED=false
 if [[ ! "$TICKET" =~ -base$ ]]; then
     # Try to get existing port from metadata
     SERVER_PORT=$(get_session_metadata "$REPO_NAME" "$TICKET" "port")
     
-    # If no port exists, this will be generated when metadata is saved
+    # If no port exists, generate one and update metadata
     if [ -z "$SERVER_PORT" ]; then
         SERVER_PORT=$(generate_worktree_port)
+        PORT_GENERATED=true
     fi
 fi
 
@@ -94,3 +96,13 @@ done
 # Return to first window
 tmux select-window -t "$TICKET:1"
 
+# If we generated a new port, update the metadata
+if [ "$PORT_GENERATED" = "true" ] && [ -n "$SERVER_PORT" ]; then
+    # Check if metadata file exists
+    METADATA_FILE="$WORKTREES_BASE/$REPO_NAME/.worktree-meta/sessions/${TICKET}.json"
+    if [ -f "$METADATA_FILE" ]; then
+        # Update existing metadata with port
+        TEMP_FILE=$(mktemp)
+        jq --arg port "$SERVER_PORT" '.port = ($port | tonumber)' "$METADATA_FILE" > "$TEMP_FILE" && mv "$TEMP_FILE" "$METADATA_FILE"
+    fi
+fi
