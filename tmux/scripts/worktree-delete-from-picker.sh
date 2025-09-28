@@ -23,14 +23,10 @@ fi
 MAIN_REPO=$(git worktree list | head -1 | awk '{print $1}')
 REPO_NAME=$(basename "$MAIN_REPO")
 
-# Kill tmux session if it exists
-tmux has-session -t "$TICKET" 2>/dev/null && tmux kill-session -t "$TICKET" 2>/dev/null
+# Show confirmation dialog using tmux command prompt
+# Need to escape the variables for the command prompt
+ESCAPED_TICKET=$(printf '%q' "$TICKET")
+ESCAPED_PATH=$(printf '%q' "$WORKTREE_PATH")
+ESCAPED_REPO=$(printf '%q' "$REPO_NAME")
 
-# Remove metadata if it exists
-remove_session_metadata "$REPO_NAME" "$TICKET"
-
-# Remove the git worktree
-git worktree remove "$WORKTREE_PATH" --force 2>/dev/null || git worktree prune
-
-# Exit silently
-exit 0
+tmux command-prompt -p "Delete worktree '$TICKET'? (y/N)" "if-shell -b '[ \"%%\" = \"y\" ] || [ \"%%\" = \"Y\" ]' 'run-shell \"~/.config/tmux/scripts/worktree-delete-confirmed.sh $ESCAPED_TICKET $ESCAPED_PATH $ESCAPED_REPO\"' ''"
