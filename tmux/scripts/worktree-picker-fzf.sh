@@ -153,28 +153,18 @@ if [ -n "$selected" ]; then
                 # Use stored path if available, otherwise use detected path
                 [ -n "$stored_path" ] && worktree_path="$stored_path"
                 
-                # Create session with tabs from metadata
-                # Use explicit cd in the command to ensure directory is set
-                tmux new-session -d -s "$ticket" -n "claude" -c "$worktree_path" "cd '$worktree_path' && exec $SHELL"
-                tmux new-window -t "$ticket:2" -n "server" -c "$worktree_path"
-                tmux new-window -t "$ticket:3" -n "commands" -c "$worktree_path"
-                tmux select-window -t "$ticket:1"
+                # Create session using dedicated script
+                ~/.config/tmux/scripts/create-worktree-session.sh "$ticket" "$worktree_path"
                 
                 # Update last accessed time
                 update_session_access "$REPO_NAME" "$ticket"
                 
                 # Switch to the session
                 tmux switch-client -t "$ticket"
-                
-                # Setup bottom panes after switching (run in background like normal tmux startup)
-                tmux run-shell -b "~/.config/tmux/scripts/setup-worktree-bottom-panes.sh '$ticket'"
             else
                 # No metadata, create new session with defaults
-                # Use explicit cd in the command to ensure directory is set
-                tmux new-session -d -s "$ticket" -n "claude" -c "$worktree_path" "cd '$worktree_path' && exec $SHELL"
-                tmux new-window -t "$ticket:2" -n "server" -c "$worktree_path"
-                tmux new-window -t "$ticket:3" -n "commands" -c "$worktree_path"
-                tmux select-window -t "$ticket:1"
+                # Create session using dedicated script
+                ~/.config/tmux/scripts/create-worktree-session.sh "$ticket" "$worktree_path"
                 
                 # Save metadata
                 local branch=$(git -C "$worktree_path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
@@ -182,9 +172,6 @@ if [ -n "$selected" ]; then
                 
                 # Switch to the session
                 tmux switch-client -t "$ticket"
-                
-                # Setup bottom panes after switching (run in background like normal tmux startup)
-                tmux run-shell -b "~/.config/tmux/scripts/setup-worktree-bottom-panes.sh '$ticket'"
             fi
             
             # Switch to the session (only reached if session creation was skipped)

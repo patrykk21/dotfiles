@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+
+# Create a worktree session with proper window setup
+# This mimics manual tab creation
+
+TICKET="$1"
+WORKTREE_PATH="$2"
+
+if [ -z "$TICKET" ] || [ -z "$WORKTREE_PATH" ]; then
+    echo "Usage: $0 <ticket> <worktree_path>"
+    exit 1
+fi
+
+# Create new session attached (not detached) with first window
+tmux new-session -s "$TICKET" -n "claude" -c "$WORKTREE_PATH" -d "cd '$WORKTREE_PATH' && exec $SHELL"
+
+# Now we're in the session context, create the other windows
+# This should trigger the same hooks as manual tab creation
+tmux new-window -t "$TICKET:2" -n "server" -c "$WORKTREE_PATH"
+tmux new-window -t "$TICKET:3" -n "commands" -c "$WORKTREE_PATH"
+
+# Go back to first window
+tmux select-window -t "$TICKET:1"
+
+# Now manually create bottom panes for windows that don't have them
+for window in 1 2 3; do
+    # Check if window has only 1 pane (no bottom pane)
+    PANE_COUNT=$(tmux list-panes -t "$TICKET:$window" | wc -l)
+    if [ "$PANE_COUNT" -eq 1 ]; then
+        # Create bottom pane for this specific window
+        tmux split-window -t "$TICKET:$window.1" -v -l 1 -d "~/.config/tmux/scripts/bottom-pane-display.sh"
+        # Get the new pane ID and set its title
+        BOTTOM_PANE=$(tmux list-panes -t "$TICKET:$window" -F "#{pane_id}" | tail -1)
+        tmux select-pane -t "$BOTTOM_PANE" -T "__tmux_status_bar__"
+    fi
+done
+
+# Select first window
+tmux select-window -t "$TICKET:1"
