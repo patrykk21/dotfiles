@@ -116,6 +116,9 @@ save_session_metadata "$REPO_NAME" "$TICKET" "$WORKTREE_PATH" "$BRANCH_NAME" "$S
 # Run dependency installation in the background
 install_dependencies
 
+# Wait a moment for shells to initialize
+sleep 0.5
+
 # Switch to the new session
 tmux switch-client -t "$SESSION_NAME"
 

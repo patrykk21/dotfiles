@@ -251,6 +251,11 @@ if [ -n "$selected" ]; then
         # Check if base session exists
         if tmux has-session -t "$session_name" 2>/dev/null; then
             echo "[PICKER DEBUG] Base session '$session_name' exists, switching" >> /tmp/tmux-worktree-debug.log
+            # Make sure session_name is not empty
+            if [ -z "$session_name" ]; then
+                echo "[PICKER DEBUG] ERROR: session_name is empty!" >> /tmp/tmux-worktree-debug.log
+                exit 1
+            fi
             echo "$session_name" > /tmp/tmux-switch-to-session
             exit 0
         else
