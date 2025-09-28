@@ -9,6 +9,9 @@ source "$(dirname "$0")/worktree-metadata.sh"
 TICKET="$1"
 WORKTREE_PATH="$2"
 
+# Get user's default shell
+USER_SHELL="${SHELL:-/bin/zsh}"
+
 if [ -z "$TICKET" ] || [ -z "$WORKTREE_PATH" ]; then
     echo "Usage: $0 <ticket> <worktree_path>"
     exit 1
@@ -36,15 +39,15 @@ fi
 # Set SERVER_PORT environment variable if we have one
 if [ -n "$SERVER_PORT" ]; then
     tmux new-session -s "$TICKET" -n "claude" -c "$WORKTREE_PATH" -d -x 120 -y 90 \
-        "export SERVER_PORT=$SERVER_PORT && cd '$WORKTREE_PATH' && exec $SHELL"
+        "export SERVER_PORT=$SERVER_PORT && cd '$WORKTREE_PATH' && exec $USER_SHELL"
     tmux new-window -t "$TICKET:2" -n "server" -c "$WORKTREE_PATH" \
-        "export SERVER_PORT=$SERVER_PORT && cd '$WORKTREE_PATH' && exec $SHELL"
+        "export SERVER_PORT=$SERVER_PORT && cd '$WORKTREE_PATH' && exec $USER_SHELL"
     tmux new-window -t "$TICKET:3" -n "commands" -c "$WORKTREE_PATH" \
-        "export SERVER_PORT=$SERVER_PORT && cd '$WORKTREE_PATH' && exec $SHELL"
+        "export SERVER_PORT=$SERVER_PORT && cd '$WORKTREE_PATH' && exec $USER_SHELL"
 else
-    tmux new-session -s "$TICKET" -n "claude" -c "$WORKTREE_PATH" -d -x 120 -y 90 "cd '$WORKTREE_PATH' && exec $SHELL"
-    tmux new-window -t "$TICKET:2" -n "server" -c "$WORKTREE_PATH"
-    tmux new-window -t "$TICKET:3" -n "commands" -c "$WORKTREE_PATH"
+    tmux new-session -s "$TICKET" -n "claude" -c "$WORKTREE_PATH" -d -x 120 -y 90 "cd '$WORKTREE_PATH' && exec $USER_SHELL"
+    tmux new-window -t "$TICKET:2" -n "server" -c "$WORKTREE_PATH" "cd '$WORKTREE_PATH' && exec $USER_SHELL"
+    tmux new-window -t "$TICKET:3" -n "commands" -c "$WORKTREE_PATH" "cd '$WORKTREE_PATH' && exec $USER_SHELL"
 fi
 
 # Go back to first window
@@ -69,9 +72,9 @@ for window in 1 2 3; do
     if [ "$STATUS_COUNT" -eq 0 ]; then
         # No status pane exists, create one
         if [ -n "$SERVER_PORT" ]; then
-            BOTTOM_PANE=$(tmux split-window -t "$TICKET:$window" -v -d -l 1 -P -F "#{pane_id}" "export SERVER_PORT=$SERVER_PORT && ~/.config/tmux/scripts/bottom-pane-display.sh")
+            BOTTOM_PANE=$(tmux split-window -t "$TICKET:$window" -v -d -l 1 -P -F "#{pane_id}" "export SERVER_PORT=$SERVER_PORT && exec ~/.config/tmux/scripts/bottom-pane-display.sh")
         else
-            BOTTOM_PANE=$(tmux split-window -t "$TICKET:$window" -v -d -l 1 -P -F "#{pane_id}" "~/.config/tmux/scripts/bottom-pane-display.sh")
+            BOTTOM_PANE=$(tmux split-window -t "$TICKET:$window" -v -d -l 1 -P -F "#{pane_id}" "exec ~/.config/tmux/scripts/bottom-pane-display.sh")
         fi
         tmux select-pane -t "$BOTTOM_PANE" -T "__tmux_status_bar__"
         # Force correct sizes - bottom pane is already 1 line from split -l 1
