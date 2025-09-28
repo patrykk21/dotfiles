@@ -54,7 +54,13 @@ for window in 1 2 3; do
         tmux select-pane -t "$BOTTOM_PANE" -T "__tmux_status_bar__"
         
         # Resize the bottom pane to exactly 1 line
-        tmux resize-pane -t "$TICKET:$window.2" -y 1
+        echo "[DEBUG] Resizing pane $TICKET:$window.2 to 1 line" >> /tmp/tmux-worktree-debug.log
+        tmux resize-pane -t "$TICKET:$window.2" -y 1 2>&1 | tee -a /tmp/tmux-worktree-debug.log
+        
+        # Verify the resize worked
+        PANE_HEIGHT=$(tmux list-panes -t "$TICKET:$window" -F "#{pane_index}:#{pane_height}" | grep "^2:" | cut -d: -f2)
+        echo "[DEBUG] Pane $TICKET:$window.2 height after resize: $PANE_HEIGHT" >> /tmp/tmux-worktree-debug.log
+        
         
         # Return to the main pane
         tmux select-pane -t "$TICKET:$window.1"

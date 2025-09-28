@@ -55,10 +55,7 @@ while true; do
         STATUS_PLAIN=$(echo "$STATUS_RAW" | sed 's/#\[[^]]*\]//g')
         STATUS_LENGTH=${#STATUS_PLAIN}
         
-        # Clear and redraw
-        clear
-        
-        # Position cursor and print left-aligned status
+        # Don't clear - just position cursor at start and overwrite
         tput cup 0 0
         
         # Background color for the whole line
