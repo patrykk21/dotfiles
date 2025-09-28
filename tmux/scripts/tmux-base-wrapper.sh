@@ -27,7 +27,7 @@ if git rev-parse --git-dir > /dev/null 2>&1; then
             save_session_metadata "$REPO_NAME" "base" "$MAIN_REPO" "master" "base"
             
             # Set up a one-time hook to resize after client attaches
-            tmux set-hook -t "base" client-attached 'run-shell "for window in 1 2 3; do tmux resize-pane -t \"base:\$window.2\" -y 1 2>/dev/null || true; done; tmux set-hook -t \"base\" -u client-attached"'
+            tmux set-hook -t "base" client-attached 'run-shell "~/.config/tmux/scripts/resize-all-status-bars.sh base"'
             
             # Attach to the new session
             exec tmux attach-session -t "base"
