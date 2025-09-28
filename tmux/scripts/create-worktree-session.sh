@@ -16,15 +16,12 @@ fi
 
 # Temporarily set a no-op hook to prevent conflicts
 echo "[DEBUG] Setting no-op after-new-window hook" >> /tmp/tmux-worktree-debug.log
-tmux set-hook -g after-new-window 'run-shell "true"'
+tmux set-hook -g after-new-window ''
 
-# Create new session attached (not detached) with first window
-tmux new-session -s "$TICKET" -n "claude" -c "$WORKTREE_PATH" -d "cd '$WORKTREE_PATH' && exec $SHELL"
-
-# Now we're in the session context, create the other windows
-# This should trigger the same hooks as manual tab creation
-tmux new-window -t "$TICKET:2" -n "server" -c "$WORKTREE_PATH"
-tmux new-window -t "$TICKET:3" -n "commands" -c "$WORKTREE_PATH"
+# Create new session with all windows at once to avoid hook triggers
+tmux new-session -s "$TICKET" -n "claude" -c "$WORKTREE_PATH" -d "cd '$WORKTREE_PATH' && exec $SHELL" \; \
+    new-window -t "$TICKET:2" -n "server" -c "$WORKTREE_PATH" \; \
+    new-window -t "$TICKET:3" -n "commands" -c "$WORKTREE_PATH"
 
 # Go back to first window
 tmux select-window -t "$TICKET:1"
