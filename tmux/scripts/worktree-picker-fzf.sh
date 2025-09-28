@@ -154,42 +154,59 @@ selected=$(get_worktrees | fzf-tmux -p 80%,60% \
 if [ -n "$selected" ]; then
     echo "[PICKER DEBUG] Selected: '$selected'" >> /tmp/tmux-worktree-debug.log
     
-    # Use read to split fields - this works correctly
-    # Format depends on whether it has arrow or not
-    # With arrow: "→ ● name type session branch path"
-    # Without arrow: "  ● name type session branch path"
-    local fields=($selected)
-    local icon name type session branch path
+    # Debug the raw selected line
+    echo "[PICKER DEBUG] Raw selected: '$selected'" >> /tmp/tmux-worktree-debug.log
+    echo "[PICKER DEBUG] Length: ${#selected}" >> /tmp/tmux-worktree-debug.log
     
-    # Check if first field is arrow
-    if [[ "${fields[0]}" == "→" ]]; then
-        # Arrow present: → ● name type session branch path
-        icon="${fields[1]}"  # ● or ○
-        name="${fields[2]}"
-        type="${fields[3]}"
-        session="${fields[4]}"
-        branch="${fields[5]}"
-        path="${fields[6]}"
-    else
-        # No arrow: ● name type session branch path
-        icon="${fields[0]}"  # ● or ○
-        name="${fields[1]}"
-        type="${fields[2]}"
-        session="${fields[3]}"
-        branch="${fields[4]}"
-        path="${fields[5]}"
-    fi
+    # Parse using a single awk command to avoid subshell issues
+    local parsed_fields
+    parsed_fields=$(echo "$selected" | awk '
+    {
+        # Save original line
+        original = $0
+        
+        # Remove leading spaces
+        gsub(/^[[:space:]]+/, "", $0)
+        
+        # Check if starts with arrow
+        has_arrow = 0
+        if (substr($0, 1, 1) == "→") {
+            has_arrow = 1
+            # Remove arrow and spaces
+            sub(/^→[[:space:]]+/, "", $0)
+            # Now line starts with status icon
+        }
+        
+        # Remove status icon and spaces
+        sub(/^[●○][[:space:]]+/, "", $0)
+        
+        # Now we have: "name type session branch path..."
+        # Extract fields
+        name = $1
+        type = $2
+        session = $3
+        branch = $4
+        
+        # Determine icon based on arrow presence
+        if (has_arrow) {
+            icon = "→"
+        } else {
+            icon = substr(original, 1, 1) == " " ? substr(original, 3, 1) : substr(original, 1, 1)
+        }
+        
+        # Path is the last field of the ORIGINAL line
+        n = split(original, arr, " ")
+        path = arr[n]
+        
+        # Output as tab-separated values
+        print icon "\t" name "\t" type "\t" session "\t" branch "\t" path "\t" has_arrow
+    }')
     
-    # The path might have been split if it contains spaces, so we need to reconstruct it
-    if [ -n "$rest" ]; then
-        path="$path $rest"
-    fi
+    # Parse the tab-separated values
+    local icon name type session branch worktree_path has_arrow
+    IFS=$'\t' read -r icon name type session branch worktree_path has_arrow <<< "$parsed_fields"
     
-    # For fixed-width format, path is always the last complete field
-    # But we need to handle the case where there are many spaces between columns
-    local worktree_path=$(echo "$selected" | rev | cut -d' ' -f1 | rev)
-    
-    echo "[PICKER DEBUG] Name: '$name', Type: '$type', Path: '$worktree_path'" >> /tmp/tmux-worktree-debug.log
+    echo "[PICKER DEBUG] Parsed - icon:'$icon' name:'$name' type:'$type' session:'$session' path:'$worktree_path'" >> /tmp/tmux-worktree-debug.log
     
     # Check if this is the main repository (base)
     if [ "$type" = "[BASE]" ]; then
@@ -213,8 +230,7 @@ if [ -n "$selected" ]; then
         local ticket
         ticket="$name"
         
-        # Debug all variables
-        echo "[PICKER DEBUG] All vars - icon:'$icon' name:'$name' type:'$type' session:'$session' branch:'$branch' path:'$path'" >> /tmp/tmux-worktree-debug.log
+        # Debug ticket value
         echo "[PICKER DEBUG] Worktree ticket: '$ticket' (from name: '$name')" >> /tmp/tmux-worktree-debug.log
         
         # Check if session exists
@@ -232,6 +248,12 @@ if [ -n "$selected" ]; then
                 # Use stored path if available, otherwise use detected path
                 [ -n "$stored_path" ] && worktree_path="$stored_path"
                 
+                # Make sure we have a valid path
+                if [ -z "$worktree_path" ]; then
+                    echo "[PICKER DEBUG] ERROR: Empty worktree path from metadata!" >> /tmp/tmux-worktree-debug.log
+                    exit 1
+                fi
+                
                 # Create session using dedicated script
                 ~/.config/tmux/scripts/create-worktree-session.sh "$name" "$worktree_path"
                 
@@ -243,6 +265,13 @@ if [ -n "$selected" ]; then
             else
                 # No metadata, create new session with defaults
                 echo "[PICKER DEBUG] Creating new session for $name at $worktree_path" >> /tmp/tmux-worktree-debug.log
+                
+                # Make sure we have a valid path
+                if [ -z "$worktree_path" ]; then
+                    echo "[PICKER DEBUG] ERROR: Empty worktree path!" >> /tmp/tmux-worktree-debug.log
+                    exit 1
+                fi
+                
                 # Create session using dedicated script
                 ~/.config/tmux/scripts/create-worktree-session.sh "$name" "$worktree_path"
                 
