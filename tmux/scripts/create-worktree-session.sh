@@ -9,8 +9,8 @@ source "$(dirname "$0")/worktree-metadata.sh"
 TICKET="$1"
 WORKTREE_PATH="$2"
 
-# Get user's default shell
-USER_SHELL="${SHELL:-/bin/zsh}"
+# Get user's default shell - use /bin/zsh directly since $SHELL might not be available in script context
+USER_SHELL="/bin/zsh"
 
 if [ -z "$TICKET" ] || [ -z "$WORKTREE_PATH" ]; then
     echo "Usage: $0 <ticket> <worktree_path>"
