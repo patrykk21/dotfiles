@@ -141,10 +141,14 @@ if [ -n "$selected" ]; then
     else
         # Check if session exists
         if tmux has-session -t "$ticket" 2>/dev/null; then
-            # Session exists, switch to it and ensure we're in the right directory
+            # Session exists, switch to it
             tmux switch-client -t "$ticket"
-            # Send cd command to ensure we're in the worktree directory
-            tmux send-keys -t "$ticket:1" "cd $worktree_path" Enter
+            
+            # Immediately update directory for current window/pane
+            tmux send-keys C-u "cd $worktree_path" Enter
+            
+            # Store the worktree path in a tmux user option for the session
+            tmux set-option -t "$ticket" @worktree_path "$worktree_path"
         else
             # Check if we have metadata for this worktree
             if session_exists_in_metadata "$REPO_NAME" "$ticket"; then
@@ -161,6 +165,9 @@ if [ -n "$selected" ]; then
                 tmux new-window -t "$ticket:3" -n "commands" -c "$worktree_path"
                 tmux select-window -t "$ticket:1"
                 
+                # Store worktree path in session
+                tmux set-option -t "$ticket" @worktree_path "$worktree_path"
+                
                 # Update last accessed time
                 update_session_access "$REPO_NAME" "$ticket"
             else
@@ -169,6 +176,9 @@ if [ -n "$selected" ]; then
                 tmux new-window -t "$ticket:2" -n "server" -c "$worktree_path"
                 tmux new-window -t "$ticket:3" -n "commands" -c "$worktree_path"
                 tmux select-window -t "$ticket:1"
+                
+                # Store worktree path in session
+                tmux set-option -t "$ticket" @worktree_path "$worktree_path"
                 
                 # Save metadata
                 local branch=$(git -C "$worktree_path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
