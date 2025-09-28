@@ -14,3 +14,6 @@ alias gCM='git checkout master'
 alias gCnb='git checkout -b'
 alias gCb='git checkout'
 
+# Tmux with automatic session restoration (like Zellij)
+alias tmux='tmux-auto'
+
