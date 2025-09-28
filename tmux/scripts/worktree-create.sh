@@ -106,15 +106,9 @@ install_dependencies() {
     fi
 }
 
-# Create tmux session with 3 tabs
-# Use simple ticket name for session
+# Create tmux session with proper window setup using dedicated script
 SESSION_NAME="$TICKET"
-tmux new-session -d -s "$SESSION_NAME" -c "$WORKTREE_PATH" -n "claude"
-tmux new-window -t "$SESSION_NAME:2" -n "server" -c "$WORKTREE_PATH"
-tmux new-window -t "$SESSION_NAME:3" -n "commands" -c "$WORKTREE_PATH"
-
-# Select first window
-tmux select-window -t "$SESSION_NAME:1"
+~/.config/tmux/scripts/create-worktree-session.sh "$SESSION_NAME" "$WORKTREE_PATH"
 
 # Save session metadata
 save_session_metadata "$REPO_NAME" "$TICKET" "$WORKTREE_PATH" "$BRANCH_NAME" "$SESSION_NAME"
