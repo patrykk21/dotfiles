@@ -165,6 +165,7 @@ if [ -n "$selected" ]; then
     echo "[PICKER DEBUG] TMUX env: '$TMUX'" >> /tmp/tmux-worktree-debug.log
     echo "[PICKER DEBUG] TMUX_PANE: '$TMUX_PANE'" >> /tmp/tmux-worktree-debug.log
     echo "[PICKER DEBUG] Selected: '$selected'" >> /tmp/tmux-worktree-debug.log
+    echo "[PICKER DEBUG] SAFE_REPO_NAME at selection: '$SAFE_REPO_NAME'" >> /tmp/tmux-worktree-debug.log
     
     # Debug the raw selected line
     echo "[PICKER DEBUG] Raw selected: '$selected'" >> /tmp/tmux-worktree-debug.log
@@ -232,13 +233,15 @@ if [ -n "$selected" ]; then
     
     # Check if this is the main repository (base)
     if [ "$type" = "[BASE]" ]; then
-        # For base repo, use repository-specific base session name
-        local session_name="${SAFE_REPO_NAME}-base"
+        # For base repo, extract from the parsed name (which already includes -base)
+        local session_name="$name"
+        echo "[PICKER DEBUG] Using parsed name as session_name='$session_name'" >> /tmp/tmux-worktree-debug.log
         
         # Check if base session exists
         if tmux has-session -t "$session_name" 2>/dev/null; then
-            echo "[PICKER DEBUG] Base session already exists, switching" >> /tmp/tmux-worktree-debug.log
+            echo "[PICKER DEBUG] Base session already exists, switching to '$session_name'" >> /tmp/tmux-worktree-debug.log
             echo "$session_name" > /tmp/tmux-switch-to-session
+            echo "[PICKER DEBUG] Wrote '$session_name' to /tmp/tmux-switch-to-session" >> /tmp/tmux-worktree-debug.log
             exit 0
         else
             # Check if we have metadata for base
