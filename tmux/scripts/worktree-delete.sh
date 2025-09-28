@@ -82,6 +82,14 @@ fi
 # Get the branch name for the worktree
 BRANCH_NAME=$(git worktree list --porcelain | grep -A2 "^worktree $WORKTREE_PATH" | grep "^branch" | cut -d' ' -f2)
 
+# Show confirmation dialog
+tmux display-message -p "Delete worktree '$TICKET' at $WORKTREE_PATH? (y/n)" > /dev/null
+read -n 1 -r response < /dev/tty
+if [[ ! "$response" =~ ^[Yy]$ ]]; then
+    tmux display-message -d 1000 "Deletion cancelled"
+    exit 0
+fi
+
 # Find a session to switch to
 MAIN_SESSION=$(tmux list-sessions -F "#{session_name}" | grep -v "^${CURRENT_SESSION}$" | head -1)
 
