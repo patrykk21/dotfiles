@@ -38,6 +38,8 @@ get_worktrees() {
     }
     /^branch/ {
         branch = $2
+        # Remove refs/heads/ prefix to save space
+        sub(/^refs\/heads\//, "", branch)
         
         # Extract ticket from path or branch
         ticket = ""
