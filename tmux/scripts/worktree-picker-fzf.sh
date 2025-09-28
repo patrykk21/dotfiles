@@ -1,20 +1,32 @@
 #!/usr/bin/env bash
 
 # Worktree picker using fzf-tmux
-# Shows all git worktrees and allows switching or deleting
+# Shows all git worktrees with metadata-based session status
 
-# Get the main repository path (parent of current worktree)
+# Source metadata functions
+source "$(dirname "$0")/worktree-metadata.sh"
+
+# Get the main repository path
 MAIN_REPO=$(git worktree list | head -1 | awk '{print $1}')
 REPO_NAME=$(basename "$MAIN_REPO")
-PARENT_DIR=$(dirname "$MAIN_REPO")
 
 # Get current directory to identify current worktree
-CURRENT_DIR=$(pwd)
-CURRENT_WORKTREE=$(git rev-parse --show-toplevel 2>/dev/null)
+CURRENT_DIR=$(tmux display-message -p "#{pane_current_path}")
+CURRENT_WORKTREE=$(cd "$CURRENT_DIR" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null)
+CURRENT_SESSION=$(tmux display-message -p "#{session_name}")
 
-# Get list of worktrees with their info
+# Get list of worktrees with metadata-enhanced info
 get_worktrees() {
-    git worktree list --porcelain | awk -v current="$CURRENT_WORKTREE" '
+    # Print header
+    printf "%-4s %-15s %-12s %-30s %s\n" "" "TICKET" "SESSION" "BRANCH" "PATH"
+    printf "%-4s %-15s %-12s %-30s %s\n" "" "------" "-------" "------" "----"
+    
+    # Process each worktree
+    git worktree list --porcelain | awk -v current="$CURRENT_WORKTREE" -v repo_name="$REPO_NAME" -v worktrees_base="$WORKTREES_BASE" '
+    BEGIN {
+        # Function to check metadata file
+        metadata_cmd = "source " ENVIRON["HOME"] "/.config/tmux/scripts/worktree-metadata.sh"
+    }
     /^worktree/ {
         path = $2
         # Extract just the directory name
@@ -26,8 +38,16 @@ get_worktrees() {
     }
     /^branch/ {
         branch = $2
-        # Extract ticket number from branch if possible
-        if (match(branch, /[A-Z]+-[0-9]+/)) {
+        
+        # Extract ticket from path or branch
+        ticket = ""
+        session_status = "inactive"
+        session_text = "[NO SESSION]"
+        
+        # Check if this is under our worktrees structure
+        if (match(path, worktrees_base "/" repo_name "/([^/]+)$", m)) {
+            ticket = m[1]
+        } else if (match(branch, /[A-Z]+-[0-9]+/)) {
             ticket = substr(branch, RSTART, RLENGTH)
         } else if (match(dirname, /[A-Z]+-[0-9]+/)) {
             ticket = substr(dirname, RSTART, RLENGTH)
@@ -35,10 +55,29 @@ get_worktrees() {
             ticket = dirname
         }
         
-        # Check if tmux session exists
-        cmd = "tmux has-session -t " ticket " 2>/dev/null && echo active || echo inactive"
-        cmd | getline session_status
-        close(cmd)
+        # Check both metadata and tmux session
+        metadata_file = worktrees_base "/" repo_name "/.worktree-meta/sessions/" ticket ".json"
+        if (system("test -f " metadata_file) == 0) {
+            # Metadata exists, check if tmux session also exists
+            cmd = "tmux has-session -t " ticket " 2>/dev/null && echo active || echo inactive"
+            cmd | getline session_status
+            close(cmd)
+            
+            if (session_status == "active") {
+                session_text = "[SESSION]"
+            } else {
+                session_text = "[METADATA]"  # Has metadata but no active session
+            }
+        } else {
+            # No metadata, check if session exists anyway
+            cmd = "tmux has-session -t " ticket " 2>/dev/null && echo active || echo inactive"
+            cmd | getline session_status
+            close(cmd)
+            
+            if (session_status == "active") {
+                session_text = "[ORPHAN]"  # Has session but no metadata
+            }
+        }
         
         # Format output
         if (path == current) {
@@ -56,16 +95,16 @@ get_worktrees() {
             }
         }
         
-        printf "%s%-15s %-30s %s\n", status_icon, ticket, branch, path
+        printf "%s%-15s %-12s %-30s %s\n", status_icon, ticket, session_text, branch, path
     }'
 }
-
 
 # Function to switch to worktree session
 switch_to_worktree() {
     local selection="$1"
-    # Extract the ticket/session name and path
-    local ticket=$(echo "$selection" | awk '{print $2}')
+    
+    # Extract fields
+    local ticket=$(echo "$selection" | sed 's/^[[:space:]]*[→○●[:space:]]*//' | awk '{print $1}')
     local worktree_path=$(echo "$selection" | awk '{print $NF}')
     
     # Check if this is the main repository
@@ -75,16 +114,26 @@ switch_to_worktree() {
         return
     fi
     
-    # For actual worktrees, check if session exists
+    # Update metadata access time if it exists
+    if session_exists_in_metadata "$REPO_NAME" "$ticket"; then
+        update_session_access "$REPO_NAME" "$ticket"
+    fi
+    
+    # Check if session exists
     if tmux has-session -t "$ticket" 2>/dev/null; then
         # Session exists, switch to it
         tmux switch-client -t "$ticket"
     else
-        # Only create session with 3 tabs for actual worktrees (not main)
+        # Create new session
         tmux new-session -d -s "$ticket" -c "$worktree_path" -n "claude"
         tmux new-window -t "$ticket:2" -n "server" -c "$worktree_path"
         tmux new-window -t "$ticket:3" -n "commands" -c "$worktree_path"
         tmux select-window -t "$ticket:1"
+        
+        # Save or update metadata
+        local branch=$(git -C "$worktree_path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+        save_session_metadata "$REPO_NAME" "$ticket" "$worktree_path" "$branch" "$ticket"
+        
         tmux switch-client -t "$ticket"
     fi
 }
@@ -101,10 +150,10 @@ if [ "$1" = "reload" ]; then
 fi
 
 # Use fzf-tmux to select a worktree
-selected=$(get_worktrees | fzf-tmux -p 70%,60% \
+selected=$(get_worktrees | fzf-tmux -p 80%,60% \
     --prompt=" Select worktree: " \
-    --header="↵ switch | ctrl-x delete | ctrl-r reload | ^C cancel" \
-    --header-lines=0 \
+    --header="● = Active | ○ = Inactive | → = Current | [SESSION]=Active | [METADATA]=Saved | [ORPHAN]=No metadata | ↵ switch | ctrl-x delete" \
+    --header-lines=2 \
     --color="fg:250,bg:235,hl:114,fg+:235,bg+:114,hl+:235,prompt:114,pointer:114,header:243" \
     --border=rounded \
     --border-label=" Git Worktrees " \
