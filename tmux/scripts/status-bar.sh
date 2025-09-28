@@ -17,7 +17,7 @@ MODE=$(tmux display-message -p '#{client_key_table}')
 case "$MODE" in
     "root")
         # Main menu with OneDark colored pills and matching text
-        echo "  #[bg=colour75,fg=colour235] C-S-p #[bg=default,fg=colour75] PANE  #[bg=colour114,fg=colour235] C-S-t #[bg=default,fg=colour114] TAB  #[bg=colour180,fg=colour235] C-S-r #[bg=default,fg=colour180] RESIZE  #[bg=colour168,fg=colour235] C-S-o #[bg=default,fg=colour168] SESSION  #[bg=colour176,fg=colour235] C-S-m #[bg=default,fg=colour176] SCROLL"
+        echo "  #[bg=colour75,fg=colour235] C-S-p #[bg=default,fg=colour75] PANE  #[bg=colour114,fg=colour235] C-S-t #[bg=default,fg=colour114] TAB  #[bg=colour180,fg=colour235] C-S-r #[bg=default,fg=colour180] RESIZE  #[bg=colour168,fg=colour235] C-S-o #[bg=default,fg=colour168] SESSION  #[bg=colour176,fg=colour235] C-S-m #[bg=default,fg=colour176] SCROLL  #[bg=colour73,fg=colour235] C-S-w #[bg=default,fg=colour73] WORKTREE"
         ;;
     "pane-mode")
         # Pane submenu with organized keybinds
@@ -42,6 +42,10 @@ case "$MODE" in
     "tmux-mode")
         # Tmux submenu with organized keybinds
         echo "#[bg=colour73,fg=colour235,bold] ◆ TMUX #[bg=colour235,fg=colour73]  #[fg=colour250]new window #[fg=colour73]c  #[fg=colour250]kill #[fg=colour73]x  #[fg=colour250]split-h #[fg=colour73]%  #[fg=colour250]split-v #[fg=colour73]\"  #[bg=colour235,fg=colour243] ESC to exit"
+        ;;
+    "worktree-mode")
+        # Worktree submenu with organized keybinds
+        echo "#[bg=colour73,fg=colour235,bold] ◆ WORKTREE #[bg=colour235,fg=colour73]  #[fg=colour250]list/switch #[fg=colour73]w  #[fg=colour250]create #[fg=colour73]c  #[fg=colour250]delete #[fg=colour73]x  #[bg=colour235,fg=colour243] ESC to exit"
         ;;
     *)
         echo "#[bg=colour240,fg=colour250] MODE: $MODE"
