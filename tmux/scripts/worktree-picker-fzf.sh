@@ -112,6 +112,7 @@ switch_to_worktree() {
     local ticket=$(echo "$selection" | sed 's/^[[:space:]]*[→○●[:space:]]*//' | awk '{print $1}')
     local worktree_path=$(echo "$selection" | awk '{print $NF}')
     
+    
     # Check if this is the main repository
     if [ "$worktree_path" = "$MAIN_REPO" ]; then
         # For main repo, just change directory in current session
@@ -127,9 +128,18 @@ switch_to_worktree() {
     # Check if session exists
     if tmux has-session -t "$ticket" 2>/dev/null; then
         # Session exists, switch to it
+        tmux display-message -d 1000 "Session exists, switching..."
         tmux switch-client -t "$ticket"
     else
         # Create new session
+        tmux display-message -d 1000 "Creating session '$ticket' at '$worktree_path'..."
+        
+        # Verify worktree path exists
+        if [ ! -d "$worktree_path" ]; then
+            tmux display-message -d 2000 "Error: Worktree path does not exist: $worktree_path"
+            return 1
+        fi
+        
         tmux new-session -d -s "$ticket" -c "$worktree_path" -n "claude"
         tmux new-window -t "$ticket:2" -n "server" -c "$worktree_path"
         tmux new-window -t "$ticket:3" -n "commands" -c "$worktree_path"
