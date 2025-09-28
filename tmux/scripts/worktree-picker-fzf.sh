@@ -70,19 +70,15 @@ get_worktrees() {
         
         # Check session status
         if (type_text == "[BASE]") {
-            # For base repo, check if main or 0 session exists
-            cmd = "tmux has-session -t main 2>/dev/null && echo active || echo inactive"
-            cmd | getline session_status
+            # For base repo, check if any numeric session exists (main tmux session)
+            # Get the first session name
+            cmd = "tmux list-sessions -F \"#{session_name}\" 2>/dev/null | head -1"
+            cmd | getline first_session
             close(cmd)
             
-            if (session_status == "inactive") {
-                cmd = "tmux has-session -t 0 2>/dev/null && echo active || echo inactive"
-                cmd | getline session_status
-                close(cmd)
-            }
-            
-            if (session_status == "active") {
+            if (first_session != "") {
                 session_text = "[SESSION]"
+                session_status = "active"
             }
         } else {
             # For worktrees, check metadata and session as before
@@ -159,9 +155,30 @@ if [ -n "$selected" ]; then
     echo "[PICKER DEBUG] Selected: '$selected'" >> /tmp/tmux-worktree-debug.log
     
     # Use read to split fields - this works correctly
-    # New format: icon name type session branch path
-    local icon name type session branch path rest
-    read -r icon name type session branch path rest <<< "$selected"
+    # Format depends on whether it has arrow or not
+    # With arrow: "→ ● name type session branch path"
+    # Without arrow: "  ● name type session branch path"
+    local fields=($selected)
+    local icon name type session branch path
+    
+    # Check if first field is arrow
+    if [[ "${fields[0]}" == "→" ]]; then
+        # Arrow present: → ● name type session branch path
+        icon="${fields[1]}"  # ● or ○
+        name="${fields[2]}"
+        type="${fields[3]}"
+        session="${fields[4]}"
+        branch="${fields[5]}"
+        path="${fields[6]}"
+    else
+        # No arrow: ● name type session branch path
+        icon="${fields[0]}"  # ● or ○
+        name="${fields[1]}"
+        type="${fields[2]}"
+        session="${fields[3]}"
+        branch="${fields[4]}"
+        path="${fields[5]}"
+    fi
     
     # The path might have been split if it contains spaces, so we need to reconstruct it
     if [ -n "$rest" ]; then
@@ -176,59 +193,69 @@ if [ -n "$selected" ]; then
     
     # Check if this is the main repository (base)
     if [ "$type" = "[BASE]" ]; then
-        # For base repo, always switch to the main session
-        if tmux has-session -t "main" 2>/dev/null; then
-            echo "[PICKER DEBUG] Switching to main session" >> /tmp/tmux-worktree-debug.log
-            tmux switch-client -t "main"
-        elif tmux has-session -t "0" 2>/dev/null; then
-            echo "[PICKER DEBUG] Switching to session 0" >> /tmp/tmux-worktree-debug.log
-            tmux switch-client -t "0"
+        # For base repo, switch to the first available session (your original tmux session)
+        local first_session=$(tmux list-sessions -F "#{session_name}" 2>/dev/null | grep -E '^[0-9]+$' | head -1)
+        if [ -n "$first_session" ]; then
+            echo "[PICKER DEBUG] Switching to base session: $first_session" >> /tmp/tmux-worktree-debug.log
+            tmux switch-client -t "$first_session"
         else
-            echo "[PICKER DEBUG] No main session found, staying in current" >> /tmp/tmux-worktree-debug.log
+            # No numeric session found, try any first session
+            first_session=$(tmux list-sessions -F "#{session_name}" 2>/dev/null | head -1)
+            if [ -n "$first_session" ]; then
+                echo "[PICKER DEBUG] Switching to first session: $first_session" >> /tmp/tmux-worktree-debug.log
+                tmux switch-client -t "$first_session"
+            else
+                echo "[PICKER DEBUG] No sessions found" >> /tmp/tmux-worktree-debug.log
+            fi
         fi
     else
         # This is a worktree, use the name as ticket
-        local ticket="$name"
+        local ticket
+        ticket="$name"
+        
+        # Debug all variables
+        echo "[PICKER DEBUG] All vars - icon:'$icon' name:'$name' type:'$type' session:'$session' branch:'$branch' path:'$path'" >> /tmp/tmux-worktree-debug.log
+        echo "[PICKER DEBUG] Worktree ticket: '$ticket' (from name: '$name')" >> /tmp/tmux-worktree-debug.log
         
         # Check if session exists
-        if tmux has-session -t "$ticket" 2>/dev/null; then
-            echo "[PICKER DEBUG] Session $ticket already exists, switching" >> /tmp/tmux-worktree-debug.log
+        if tmux has-session -t "$name" 2>/dev/null; then
+            echo "[PICKER DEBUG] Session $name already exists, switching" >> /tmp/tmux-worktree-debug.log
             # Session exists, just switch to it
-            tmux switch-client -t "$ticket"
+            tmux switch-client -t "$name"
         else
             # Check if we have metadata for this worktree
-            if session_exists_in_metadata "$REPO_NAME" "$ticket"; then
+            if session_exists_in_metadata "$REPO_NAME" "$name"; then
                 # Restore from metadata
-                local stored_path=$(get_session_metadata "$REPO_NAME" "$ticket" "worktree_path")
-                local tabs=$(get_session_metadata "$REPO_NAME" "$ticket" "tabs")
+                local stored_path=$(get_session_metadata "$REPO_NAME" "$name" "worktree_path")
+                local tabs=$(get_session_metadata "$REPO_NAME" "$name" "tabs")
                 
                 # Use stored path if available, otherwise use detected path
                 [ -n "$stored_path" ] && worktree_path="$stored_path"
                 
                 # Create session using dedicated script
-                ~/.config/tmux/scripts/create-worktree-session.sh "$ticket" "$worktree_path"
+                ~/.config/tmux/scripts/create-worktree-session.sh "$name" "$worktree_path"
                 
                 # Update last accessed time
-                update_session_access "$REPO_NAME" "$ticket"
+                update_session_access "$REPO_NAME" "$name"
                 
                 # Switch to the session
-                tmux switch-client -t "$ticket"
+                tmux switch-client -t "$name"
             else
                 # No metadata, create new session with defaults
-                echo "[PICKER DEBUG] Creating new session for $ticket at $worktree_path" >> /tmp/tmux-worktree-debug.log
+                echo "[PICKER DEBUG] Creating new session for $name at $worktree_path" >> /tmp/tmux-worktree-debug.log
                 # Create session using dedicated script
-                ~/.config/tmux/scripts/create-worktree-session.sh "$ticket" "$worktree_path"
+                ~/.config/tmux/scripts/create-worktree-session.sh "$name" "$worktree_path"
                 
                 # Save metadata
                 local branch=$(git -C "$worktree_path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
-                save_session_metadata "$REPO_NAME" "$ticket" "$worktree_path" "$branch" "$ticket"
+                save_session_metadata "$REPO_NAME" "$name" "$worktree_path" "$branch" "$name"
                 
                 # Switch to the session
-                tmux switch-client -t "$ticket"
+                tmux switch-client -t "$name"
             fi
             
             # Switch to the session (only reached if session creation was skipped)
-            tmux switch-client -t "$ticket"
+            tmux switch-client -t "$name"
         fi
     fi
 fi
