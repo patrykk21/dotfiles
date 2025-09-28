@@ -55,8 +55,11 @@ for window in 1 2 3; do
         
         # Immediately resize to 1 line
         # Find the pane with the status bar title
+        echo "[DEBUG] Looking for status bar pane in window $TICKET:$window" >> /tmp/tmux-worktree-debug.log
         STATUS_PANE=$(tmux list-panes -t "$TICKET:$window" -F "#{pane_id}:#{pane_title}" | grep "__tmux_status_bar__" | cut -d: -f1)
+        echo "[DEBUG] Found status pane: $STATUS_PANE" >> /tmp/tmux-worktree-debug.log
         if [ -n "$STATUS_PANE" ]; then
+            echo "[DEBUG] Resizing pane $STATUS_PANE to 1 line" >> /tmp/tmux-worktree-debug.log
             tmux resize-pane -t "$STATUS_PANE" -y 1
         fi
         
@@ -69,12 +72,15 @@ done
 tmux select-window -t "$TICKET:1"
 
 # Final resize to ensure bottom panes are 1 line
+echo "[DEBUG] Starting final resize for session $TICKET" >> /tmp/tmux-worktree-debug.log
 for window in 1 2 3; do
     if tmux list-windows -t "$TICKET" -F "#{window_index}" 2>/dev/null | grep -q "^${window}$"; then
         # Find the pane with the status bar title
         STATUS_PANE=$(tmux list-panes -t "$TICKET:$window" -F "#{pane_id}:#{pane_title}" 2>/dev/null | grep "__tmux_status_bar__" | cut -d: -f1)
+        echo "[DEBUG] Window $window - found status pane: $STATUS_PANE" >> /tmp/tmux-worktree-debug.log
         if [ -n "$STATUS_PANE" ]; then
             tmux resize-pane -t "$STATUS_PANE" -y 1 2>/dev/null
+            echo "[DEBUG] Resized pane $STATUS_PANE" >> /tmp/tmux-worktree-debug.log
         fi
     fi
 done
