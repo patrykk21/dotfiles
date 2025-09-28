@@ -250,9 +250,8 @@ if [ -n "$selected" ]; then
         
         # Check if base session exists
         if tmux has-session -t "$session_name" 2>/dev/null; then
-            echo "[PICKER DEBUG] Base session already exists, switching to '$session_name'" >> /tmp/tmux-worktree-debug.log
+            echo "[PICKER DEBUG] Base session '$session_name' exists, switching" >> /tmp/tmux-worktree-debug.log
             echo "$session_name" > /tmp/tmux-switch-to-session
-            echo "[PICKER DEBUG] Wrote '$session_name' to /tmp/tmux-switch-to-session" >> /tmp/tmux-worktree-debug.log
             exit 0
         else
             # Check if we have metadata for base
