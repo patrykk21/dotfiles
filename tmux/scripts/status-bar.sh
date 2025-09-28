@@ -32,8 +32,8 @@ case "$MODE" in
         echo "#[bg=colour180,fg=colour235,bold] ◆ RESIZE #[bg=colour235,fg=colour180]  #[fg=colour250]resize #[fg=colour180]h/j/k/l  #[fg=colour250]fine #[fg=colour180]H/J/K/L  #[fg=colour250]adjust #[fg=colour180]+/-  #[bg=colour235,fg=colour243] ESC to exit"
         ;;
     "session-mode")
-        # Session submenu with organized keybinds
-        echo "#[bg=colour168,fg=colour235,bold] ◆ SESSION #[bg=colour235,fg=colour168]  #[fg=colour250]detach #[fg=colour168]d  #[fg=colour250]choose #[fg=colour168]w  #[fg=colour250]create #[fg=colour168]c  #[bg=colour235,fg=colour243] ESC to exit"
+        # Enhanced session submenu with all new keybinds
+        echo "#[bg=colour168,fg=colour235,bold] ◆ SESSION #[bg=colour235,fg=colour168]  #[fg=colour250]detach #[fg=colour168]d  #[fg=colour250]choose #[fg=colour168]w  #[fg=colour250]create #[fg=colour168]c  #[fg=colour250]new-auto #[fg=colour168]n  #[fg=colour250]kill #[fg=colour168]x  #[fg=colour250]list #[fg=colour168]l  #[fg=colour250]rename #[fg=colour168]r  #[bg=colour235,fg=colour243] ESC to exit"
         ;;
     "scroll-mode")
         # Scroll submenu with organized keybinds
