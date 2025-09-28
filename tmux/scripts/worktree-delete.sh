@@ -3,6 +3,9 @@
 # Delete current worktree and its associated tmux session
 # This script is called from within a tmux session
 
+# Source metadata functions
+source "$(dirname "$0")/worktree-metadata.sh"
+
 # Get current session name
 CURRENT_SESSION=$(tmux display-message -p '#S')
 
@@ -14,42 +17,58 @@ if [ -z "$MAIN_REPO" ]; then
 fi
 
 REPO_NAME=$(basename "$MAIN_REPO")
-PARENT_DIR=$(dirname "$MAIN_REPO")
 
-# Try to find the worktree path for this session
-# First, check if we're in a worktree directory
+# Get current path
 CURRENT_PATH=$(pwd)
 IS_WORKTREE=false
 WORKTREE_PATH=""
+TICKET=""
 
-# Check if current path is a worktree
-if git worktree list | grep -q "$CURRENT_PATH"; then
-    IS_WORKTREE=true
-    WORKTREE_PATH="$CURRENT_PATH"
-else
-    # Try to find worktree by session name pattern
-    EXPECTED_WORKTREE="$PARENT_DIR/$REPO_NAME-$CURRENT_SESSION"
-    if [ -d "$EXPECTED_WORKTREE" ] && git worktree list | grep -q "$EXPECTED_WORKTREE"; then
+# First check if we can get info from metadata
+if [ -f "$GLOBAL_METADATA_DIR/repos.json" ]; then
+    # Check if current session matches a known worktree
+    for repo_sessions_dir in "$WORKTREES_BASE"/*/.worktree-meta/sessions; do
+        if [ -d "$repo_sessions_dir" ]; then
+            for metadata_file in "$repo_sessions_dir"/*.json; do
+                if [ -f "$metadata_file" ]; then
+                    session_name=$(jq -r '.session_name // empty' "$metadata_file" 2>/dev/null)
+                    if [ "$session_name" = "$CURRENT_SESSION" ]; then
+                        WORKTREE_PATH=$(jq -r '.worktree_path // empty' "$metadata_file" 2>/dev/null)
+                        TICKET=$(jq -r '.ticket // empty' "$metadata_file" 2>/dev/null)
+                        IS_WORKTREE=true
+                        break 2
+                    fi
+                fi
+            done
+        fi
+    done
+fi
+
+# If not found in metadata, try traditional detection
+if [ "$IS_WORKTREE" = false ]; then
+    # Check if current path is a worktree
+    if git worktree list | grep -q "$CURRENT_PATH"; then
         IS_WORKTREE=true
-        WORKTREE_PATH="$EXPECTED_WORKTREE"
+        WORKTREE_PATH="$CURRENT_PATH"
+        # Try to extract ticket from path
+        if [[ "$CURRENT_PATH" =~ .*\/([A-Z]+-[0-9]+)$ ]]; then
+            TICKET="${BASH_REMATCH[1]}"
+        else
+            TICKET="$CURRENT_SESSION"
+        fi
+    else
+        # Try to find worktree in new structure
+        EXPECTED_PATH="$WORKTREES_BASE/$REPO_NAME/$CURRENT_SESSION"
+        if [ -d "$EXPECTED_PATH" ] && git worktree list | grep -q "$EXPECTED_PATH"; then
+            IS_WORKTREE=true
+            WORKTREE_PATH="$EXPECTED_PATH"
+            TICKET="$CURRENT_SESSION"
+        fi
     fi
 fi
 
-# If not in a worktree, check if session name matches a ticket pattern
-if [ "$IS_WORKTREE" = false ]; then
-    # Check all worktrees to find one that matches the session name
-    while IFS= read -r line; do
-        worktree_dir=$(echo "$line" | awk '{print $1}')
-        if [[ "$worktree_dir" == *"-$CURRENT_SESSION" ]]; then
-            IS_WORKTREE=true
-            WORKTREE_PATH="$worktree_dir"
-            break
-        fi
-    done < <(git worktree list | tail -n +2)
-fi
-
-# If we still haven't found a worktree, this session might not be associated with one
-if [ "$IS_WORKTREE" = false ]; then
+# Validate we found a worktree
+if [ "$IS_WORKTREE" = false ] || [ -z "$WORKTREE_PATH" ]; then
     tmux display-message -d 2000 "Error: Current session '$CURRENT_SESSION' is not associated with a git worktree"
     exit 1
 fi
@@ -63,14 +82,10 @@ fi
 # Get the branch name for the worktree
 BRANCH_NAME=$(git worktree list --porcelain | grep -A2 "^worktree $WORKTREE_PATH" | grep "^branch" | cut -d' ' -f2)
 
-# Store the main session name (usually the first session or one named after the repo)
-MAIN_SESSION=$(tmux list-sessions -F "#{session_name}" | grep -E "^${REPO_NAME}$|^main$" | head -1)
-if [ -z "$MAIN_SESSION" ]; then
-    # Fallback to first available session that isn't the current one
-    MAIN_SESSION=$(tmux list-sessions -F "#{session_name}" | grep -v "^${CURRENT_SESSION}$" | head -1)
-fi
+# Find a session to switch to
+MAIN_SESSION=$(tmux list-sessions -F "#{session_name}" | grep -v "^${CURRENT_SESSION}$" | head -1)
 
-# Switch to main session first (so we're not in the session we're about to kill)
+# Switch to another session or create one if needed
 if [ -n "$MAIN_SESSION" ]; then
     tmux switch-client -t "$MAIN_SESSION"
 else
@@ -81,6 +96,11 @@ fi
 
 # Kill the worktree session
 tmux kill-session -t "$CURRENT_SESSION" 2>/dev/null
+
+# Remove metadata if it exists
+if [ -n "$TICKET" ]; then
+    remove_session_metadata "$REPO_NAME" "$TICKET"
+fi
 
 # Remove the git worktree
 tmux display-message -d 1000 "Removing worktree at $WORKTREE_PATH..."

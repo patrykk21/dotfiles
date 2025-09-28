@@ -3,6 +3,9 @@
 # Create a new git worktree with associated tmux session
 # Usage: worktree-create.sh <ticket-name>
 
+# Source metadata functions
+source "$(dirname "$0")/worktree-metadata.sh"
+
 TICKET="$1"
 
 # Validate input
@@ -25,11 +28,18 @@ if [ -z "$MAIN_REPO" ]; then
 fi
 
 REPO_NAME=$(basename "$MAIN_REPO")
-PARENT_DIR=$(dirname "$MAIN_REPO")
+
+# Use centralized worktrees directory with repo subdirectory
+WORKTREES_BASE="$HOME/worktrees"
+REPO_WORKTREES_DIR="$WORKTREES_BASE/$REPO_NAME"
+mkdir -p "$REPO_WORKTREES_DIR"
 
 # Define paths
-WORKTREE_PATH="$PARENT_DIR/$REPO_NAME-$TICKET"
+WORKTREE_PATH="$REPO_WORKTREES_DIR/$TICKET"
 BRANCH_NAME="feature/$TICKET"
+
+# Register repository in metadata if not already done
+register_repo "$REPO_NAME" "$MAIN_REPO"
 
 # Check if worktree already exists
 if [ -d "$WORKTREE_PATH" ]; then
@@ -97,18 +107,23 @@ install_dependencies() {
 }
 
 # Create tmux session with 3 tabs
-tmux new-session -d -s "$TICKET" -c "$WORKTREE_PATH" -n "claude"
-tmux new-window -t "$TICKET:2" -n "server" -c "$WORKTREE_PATH"
-tmux new-window -t "$TICKET:3" -n "commands" -c "$WORKTREE_PATH"
+# Use simple ticket name for session
+SESSION_NAME="$TICKET"
+tmux new-session -d -s "$SESSION_NAME" -c "$WORKTREE_PATH" -n "claude"
+tmux new-window -t "$SESSION_NAME:2" -n "server" -c "$WORKTREE_PATH"
+tmux new-window -t "$SESSION_NAME:3" -n "commands" -c "$WORKTREE_PATH"
 
 # Select first window
-tmux select-window -t "$TICKET:1"
+tmux select-window -t "$SESSION_NAME:1"
+
+# Save session metadata
+save_session_metadata "$REPO_NAME" "$TICKET" "$WORKTREE_PATH" "$BRANCH_NAME" "$SESSION_NAME"
 
 # Run dependency installation in the background
 install_dependencies
 
 # Switch to the new session
-tmux switch-client -t "$TICKET"
+tmux switch-client -t "$SESSION_NAME"
 
 # Display success message
-tmux display-message -d 2000 "✓ Created worktree $TICKET with session"
+tmux display-message -d 2000 "✓ Created worktree $TICKET in ~/worktrees/$REPO_NAME/ with session"
