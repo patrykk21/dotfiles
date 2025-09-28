@@ -45,6 +45,11 @@ EOF
     fi
 }
 
+# Generate a random port between 55000 and 56000
+generate_worktree_port() {
+    echo $((55000 + RANDOM % 1001))
+}
+
 # Save session metadata
 save_session_metadata() {
     local repo_name="$1"
@@ -57,17 +62,38 @@ save_session_metadata() {
     
     local metadata_file="$WORKTREES_BASE/$repo_name/.worktree-meta/sessions/${ticket}.json"
     
-    cat > "$metadata_file" <<EOF
-{
-  "ticket": "$ticket",
-  "session_name": "$session_name",
-  "worktree_path": "$worktree_path",
-  "branch": "$branch",
-  "created": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
-  "last_accessed": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
-  "tabs": ["claude", "server", "commands"]
-}
-EOF
+    # Generate port for worktrees (not base repos)
+    local port=""
+    if [[ ! "$ticket" =~ -base$ ]]; then
+        # Check if we already have a port assigned
+        if [ -f "$metadata_file" ]; then
+            port=$(jq -r '.port // empty' "$metadata_file")
+        fi
+        # If no port assigned yet, generate one
+        if [ -z "$port" ]; then
+            port=$(generate_worktree_port)
+        fi
+    fi
+    
+    # Build JSON with optional port field
+    local json_content="{
+  \"ticket\": \"$ticket\",
+  \"session_name\": \"$session_name\",
+  \"worktree_path\": \"$worktree_path\",
+  \"branch\": \"$branch\",
+  \"created\": \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\",
+  \"last_accessed\": \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\",
+  \"tabs\": [\"claude\", \"server\", \"commands\"]"
+    
+    if [ -n "$port" ]; then
+        json_content+=",
+  \"port\": $port"
+    fi
+    
+    json_content+="
+}"
+    
+    echo "$json_content" > "$metadata_file"
 }
 
 # Update last accessed time

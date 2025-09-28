@@ -20,8 +20,8 @@ CURRENT_SESSION=$(tmux display-message -p "#{session_name}")
 # Get list of worktrees with metadata-enhanced info
 get_worktrees() {
     # Print header (without delimiter so it shows in fzf)
-    printf "%-4s %-15s %-10s %-12s %-30s %s\n" "" "NAME" "TYPE" "SESSION" "BRANCH" "PATH"
-    printf "%-4s %-15s %-10s %-12s %-30s %s\n" "" "----" "----" "-------" "------" "----"
+    printf "%-4s %-15s %-10s %-12s %-6s %-30s %s\n" "" "NAME" "TYPE" "SESSION" "PORT" "BRANCH" "PATH"
+    printf "%-4s %-15s %-10s %-12s %-6s %-30s %s\n" "" "----" "----" "-------" "----" "------" "----"
     
     # Process each worktree
     git worktree list --porcelain | awk -v current="$CURRENT_WORKTREE" -v repo_name="$REPO_NAME" -v safe_repo_name="$SAFE_REPO_NAME" -v worktrees_base="$WORKTREES_BASE" '
@@ -131,8 +131,20 @@ get_worktrees() {
             }
         }
         
-        # Output format with type column
-        printf "%s%-15s %-10s %-12s %-30s %s\n", status_icon, ticket, type_text, session_text, branch, path
+        # Get port from metadata if it's a worktree session
+        port_text = "-"
+        if (type_text == "[WORKTREE]" && session_text != "[NO SESSION]") {
+            # Read port from metadata file
+            metadata_file = worktrees_base "/" repo_name "/.worktree-meta/sessions/" ticket ".json"
+            if (system("test -f " metadata_file) == 0) {
+                cmd = "jq -r '.port // \"-\"' " metadata_file " 2>/dev/null || echo \"-\""
+                cmd | getline port_text
+                close(cmd)
+            }
+        }
+        
+        # Output format with type column and port
+        printf "%s%-15s %-10s %-12s %-6s %-30s %s\n", status_icon, ticket, type_text, session_text, port_text, branch, path
     }'
 }
 
