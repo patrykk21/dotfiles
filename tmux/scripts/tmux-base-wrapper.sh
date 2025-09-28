@@ -32,6 +32,9 @@ if git rev-parse --git-dir > /dev/null 2>&1; then
                 tmux resize-pane -t "base:$window.2" -y 1 2>/dev/null || true
             done
             
+            # Force a display refresh
+            tmux refresh-client -S 2>/dev/null || true
+            
             # Attach to the new session
             exec tmux attach-session -t "base"
         fi
