@@ -14,6 +14,9 @@ if [ -z "$TICKET" ] || [ -z "$WORKTREE_PATH" ]; then
     exit 1
 fi
 
+# Temporarily disable the after-new-window hook to prevent conflicts
+tmux set-hook -g after-new-window ''
+
 # Create new session attached (not detached) with first window
 tmux new-session -s "$TICKET" -n "claude" -c "$WORKTREE_PATH" -d "cd '$WORKTREE_PATH' && exec $SHELL"
 
@@ -63,3 +66,6 @@ done
 
 # Return to first window
 tmux select-window -t "$TICKET:1"
+
+# Re-enable the after-new-window hook
+tmux set-hook -g after-new-window 'run-shell -b "~/.config/tmux/scripts/create-bottom-pane-for-window.sh #{session_name}:#{window_index}"'
