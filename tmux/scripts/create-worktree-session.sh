@@ -37,16 +37,11 @@ for window in 1 2 3; do
     
     if [ -z "$EXISTING_BOTTOM" ]; then
         # Create bottom pane only if it doesn't exist
-        BOTTOM_PANE=$(tmux split-window -t "$TICKET:$window" -v -d -P -F "#{pane_id}" "~/.config/tmux/scripts/bottom-pane-display.sh")
+        # Use -l 1 to set size at creation time
+        BOTTOM_PANE=$(tmux split-window -t "$TICKET:$window" -v -d -l 1 -P -F "#{pane_id}" "~/.config/tmux/scripts/bottom-pane-display.sh")
         
         # Set the title
         tmux select-pane -t "$BOTTOM_PANE" -T "__tmux_status_bar__"
-        
-        # Small delay to ensure pane is ready
-        sleep 0.1
-        
-        # Immediately resize to 1 line (like the hook does)
-        tmux resize-pane -t "$BOTTOM_PANE" -y 1
     else
         # Just resize existing pane
         tmux resize-pane -t "$EXISTING_BOTTOM" -y 1
@@ -59,11 +54,11 @@ done
 # Return to first window
 tmux select-window -t "$TICKET:1"
 
-# Log final state
-echo "[DEBUG] Final pane state for session $TICKET:" >> /tmp/tmux-worktree-debug.log
+# Log final state (simplified)
+echo "[DEBUG] Final pane heights for session $TICKET:" >> /tmp/tmux-worktree-debug.log
 for window in 1 2 3; do
-    echo "  Window $window:" >> /tmp/tmux-worktree-debug.log
-    tmux list-panes -t "$TICKET:$window" -F "    Pane #{pane_index}: Height #{pane_height}, Title: #{pane_title}" >> /tmp/tmux-worktree-debug.log
+    HEIGHTS=$(tmux list-panes -t "$TICKET:$window" -F "#{pane_height}" | tr '\n' ',' | sed 's/,$//')
+    echo "  Window $window: $HEIGHTS" >> /tmp/tmux-worktree-debug.log
 done
 
 # Restore the after-new-window hook
