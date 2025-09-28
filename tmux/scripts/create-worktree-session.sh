@@ -14,8 +14,11 @@ if [ -z "$TICKET" ] || [ -z "$WORKTREE_PATH" ]; then
     exit 1
 fi
 
-# Temporarily disable the after-new-window hook to prevent conflicts
-tmux set-hook -g after-new-window ''
+# Save current hook and disable it to prevent conflicts
+echo "[DEBUG] Disabling after-new-window hook" >> /tmp/tmux-worktree-debug.log
+SAVED_HOOK=$(tmux show-hooks -g | grep "^after-new-window" | cut -d' ' -f2-)
+tmux set-hook -gu after-new-window
+echo "[DEBUG] Hook disabled, was: $SAVED_HOOK" >> /tmp/tmux-worktree-debug.log
 
 # Create new session attached (not detached) with first window
 tmux new-session -s "$TICKET" -n "claude" -c "$WORKTREE_PATH" -d "cd '$WORKTREE_PATH' && exec $SHELL"
@@ -34,16 +37,8 @@ for window in 1 2 3; do
     # Switch to the window
     tmux select-window -t "$TICKET:$window"
     
-    # Log before creation
-    echo "[DEBUG] Before creating bottom pane for window $window" >> /tmp/tmux-worktree-debug.log
-    tmux list-panes -t "$TICKET:$window" -F "#{pane_index}:#{pane_height}" >> /tmp/tmux-worktree-debug.log
-    
     # Create bottom pane exactly like the hook does - without initial size
     BOTTOM_PANE=$(tmux split-window -t "$TICKET:$window" -v -d -P -F "#{pane_id}" "~/.config/tmux/scripts/bottom-pane-display.sh")
-    
-    # Log after creation
-    echo "[DEBUG] After creating bottom pane BOTTOM_PANE='$BOTTOM_PANE'" >> /tmp/tmux-worktree-debug.log
-    tmux list-panes -t "$TICKET:$window" -F "#{pane_index}:#{pane_height}:#{pane_id}" >> /tmp/tmux-worktree-debug.log
     
     # Set the title
     tmux select-pane -t "$BOTTOM_PANE" -T "__tmux_status_bar__"
@@ -52,13 +47,7 @@ for window in 1 2 3; do
     sleep 0.1
     
     # Immediately resize to 1 line (like the hook does)
-    if ! tmux resize-pane -t "$BOTTOM_PANE" -y 1 2>>/tmp/tmux-worktree-debug.log; then
-        echo "[DEBUG] Resize failed for pane $BOTTOM_PANE" >> /tmp/tmux-worktree-debug.log
-    fi
-    
-    # Log after resize
-    echo "[DEBUG] After resize for window $window" >> /tmp/tmux-worktree-debug.log
-    tmux list-panes -t "$TICKET:$window" -F "#{pane_index}:#{pane_height}:#{pane_id}" >> /tmp/tmux-worktree-debug.log
+    tmux resize-pane -t "$BOTTOM_PANE" -y 1
     
     # Return focus to main pane
     tmux select-pane -t "$TICKET:$window.1"
@@ -67,5 +56,15 @@ done
 # Return to first window
 tmux select-window -t "$TICKET:1"
 
-# Re-enable the after-new-window hook
-tmux set-hook -g after-new-window 'run-shell -b "~/.config/tmux/scripts/create-bottom-pane-for-window.sh #{session_name}:#{window_index}"'
+# Log final state
+echo "[DEBUG] Final pane state for session $TICKET:" >> /tmp/tmux-worktree-debug.log
+for window in 1 2 3; do
+    echo "  Window $window:" >> /tmp/tmux-worktree-debug.log
+    tmux list-panes -t "$TICKET:$window" -F "    Pane #{pane_index}: Height #{pane_height}, Title: #{pane_title}" >> /tmp/tmux-worktree-debug.log
+done
+
+# Restore the after-new-window hook
+if [ -n "$SAVED_HOOK" ]; then
+    tmux set-hook -g after-new-window "$SAVED_HOOK"
+    echo "[DEBUG] Hook restored" >> /tmp/tmux-worktree-debug.log
+fi
