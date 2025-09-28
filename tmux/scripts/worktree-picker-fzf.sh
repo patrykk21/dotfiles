@@ -133,25 +133,16 @@ selected=$(get_worktrees | fzf-tmux -p 80%,60% \
 if [ -n "$selected" ]; then
     echo "[PICKER DEBUG] Selected: '$selected'" >> /tmp/tmux-worktree-debug.log
     
-    # Extract fields from the formatted output
-    # The line format is: "  ● ticket         [STATUS]     branch                         path"
-    # We need to handle variable spacing
+    # Use read to split fields - this works correctly
+    local icon ticket status branch path rest
+    read -r icon ticket status branch path rest <<< "$selected"
     
-    # First, normalize spaces and extract fields
-    local normalized=$(echo "$selected" | tr -s ' ')
-    echo "[PICKER DEBUG] Normalized: '$normalized'" >> /tmp/tmux-worktree-debug.log
+    # The path might have been split if it contains spaces, so we need to reconstruct it
+    if [ -n "$rest" ]; then
+        path="$path $rest"
+    fi
     
-    # Extract ticket (skip icon, get next field)
-    local ticket=$(echo "$normalized" | awk '{
-        for (i=1; i<=NF; i++) {
-            if ($i ~ /^[→○●]$/) {
-                print $(i+1)
-                exit
-            }
-        }
-    }')
-    
-    # Extract path (always the last field)
+    # For fixed-width format, path is always the last complete field
     local worktree_path=$(echo "$selected" | awk '{print $NF}')
     
     echo "[PICKER DEBUG] Ticket: '$ticket', Path: '$worktree_path'" >> /tmp/tmux-worktree-debug.log
