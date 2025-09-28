@@ -6,5 +6,6 @@
 !ghostty/
 !aerospace/
 !zellij/
+!tmux/
 
 !starship.toml
