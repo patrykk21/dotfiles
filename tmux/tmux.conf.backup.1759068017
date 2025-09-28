@@ -5,7 +5,6 @@
 # Basic Settings
 set -g default-terminal "screen-256color"
 set -ga terminal-overrides ",xterm-256color:Tc"
-set -ga terminal-overrides ",xterm-ghostty:Tc:RGB"
 set -g mouse on
 
 # Set cursor style - use thin beam cursor
@@ -42,10 +41,10 @@ bind C-Space send-prefix
 # =====================================
 
 # Normal mode navigation (Ctrl-Shift-hjkl) - Focus or Tab
-bind-key -n C-S-h if -F '#{pane_at_left}' 'previous-window' 'run-shell "~/.config/tmux/scripts/smart-select-pane.sh L"'
-bind-key -n C-S-j run-shell '~/.config/tmux/scripts/smart-select-pane.sh D'
-bind-key -n C-S-k run-shell '~/.config/tmux/scripts/smart-select-pane.sh U'
-bind-key -n C-S-l if -F '#{pane_at_right}' 'next-window' 'run-shell "~/.config/tmux/scripts/smart-select-pane.sh R"'
+bind-key -n C-S-h if -F '#{pane_at_left}' 'previous-window' 'select-pane -L'
+bind-key -n C-S-j select-pane -D  
+bind-key -n C-S-k select-pane -U
+bind-key -n C-S-l if -F '#{pane_at_right}' 'next-window' 'select-pane -R'
 
 # Mode switching (exact zellij bindings)
 bind-key -n C-S-p switch-client -T pane-mode \; refresh-client -S
@@ -63,20 +62,20 @@ bind-key -n C-S-q kill-session
 # =====================================
 # PANE MODE (exact zellij pane bindings)
 # =====================================
-bind-key -T pane-mode Left run-shell '~/.config/tmux/scripts/smart-select-pane.sh L'
-bind-key -T pane-mode Down run-shell '~/.config/tmux/scripts/smart-select-pane.sh D'
-bind-key -T pane-mode Up run-shell '~/.config/tmux/scripts/smart-select-pane.sh U'
-bind-key -T pane-mode Right run-shell '~/.config/tmux/scripts/smart-select-pane.sh R'
-bind-key -T pane-mode h run-shell '~/.config/tmux/scripts/smart-select-pane.sh L'
-bind-key -T pane-mode j run-shell '~/.config/tmux/scripts/smart-select-pane.sh D'
-bind-key -T pane-mode k run-shell '~/.config/tmux/scripts/smart-select-pane.sh U'
-bind-key -T pane-mode l run-shell '~/.config/tmux/scripts/smart-select-pane.sh R'
+bind-key -T pane-mode Left select-pane -L
+bind-key -T pane-mode Down select-pane -D
+bind-key -T pane-mode Up select-pane -U
+bind-key -T pane-mode Right select-pane -R
+bind-key -T pane-mode h select-pane -L
+bind-key -T pane-mode j select-pane -D
+bind-key -T pane-mode k select-pane -U
+bind-key -T pane-mode l select-pane -R
 bind-key -T pane-mode n split-window -h -c "#{pane_current_path}"
 bind-key -T pane-mode p select-pane -l
 bind-key -T pane-mode s split-window -h -c "#{pane_current_path}"
 bind-key -T pane-mode v split-window -v -c "#{pane_current_path}"
 bind-key -T pane-mode x kill-pane
-bind-key -T pane-mode f run-shell '~/.config/tmux/scripts/toggle-fullscreen.sh'
+bind-key -T pane-mode f resize-pane -Z
 bind-key -T pane-mode w run-shell "echo 'Floating panes not available in tmux'"
 bind-key -T pane-mode e run-shell "echo 'Embed/Float not available in tmux'"
 bind-key -T pane-mode z run-shell 'tmux set pane-border-status #{?#{==:#{pane-border-status},off},top,off}'
@@ -142,14 +141,20 @@ bind-key -T session-mode C-o switch-client -T root
 bind-key -T session-mode C-s switch-client -T scroll-mode
 bind-key -T session-mode d detach-client
 
-# Enhanced session chooser with floating popup
-bind-key -T session-mode w run-shell '~/.config/tmux/scripts/session-switcher-fzf.sh'
+# Enhanced session chooser with fallback
+bind-key -T session-mode w run-shell '
+    if [ $(tmux list-sessions | wc -l) -gt 1 ]; then
+        tmux choose-session
+    else
+        tmux display-message "Only one session: $(tmux display-message -p "#S"). Use c to create new session."
+    fi
+'
 
 # Create new session (prompts for name)
 bind-key -T session-mode c command-prompt -p "New session name:" "new-session -d -s '%%' ; switch-client -t '%%'"
 
 # Create new session with auto-generated name
-bind-key -T session-mode n run-shell 'tmux new-session -d -s "session-$(date +%s)" && tmux switch-client -t "session-$(date +%s)"'
+bind-key -T session-mode n new-session -d -s "session-$(date +%s)" \; switch-client -t "session-$(date +%s)"
 
 # Delete/kill session (with confirmation)
 bind-key -T session-mode x confirm-before -p "Kill session #S? (y/n)" kill-session
@@ -175,22 +180,6 @@ bind-key -T session-mode a display-message "Session: #S | Windows: #{session_win
 bind-key -T session-mode Escape switch-client -T root \; refresh-client -S
 
 # =====================================
-# WORKTREE MODE (git worktree management)
-# =====================================
-bind-key -n C-S-w switch-client -T worktree-mode \; refresh-client -S
-
-# Worktree picker with fzf (list/switch/delete)
-bind-key -T worktree-mode w run-shell '~/.config/tmux/scripts/worktree-picker-fzf.sh'
-
-# Create new worktree (prompts for ticket name)
-bind-key -T worktree-mode c command-prompt -p "Ticket name:" "run-shell '~/.config/tmux/scripts/worktree-create.sh %%'"
-
-# Delete current worktree (with confirmation)
-bind-key -T worktree-mode x confirm-before -p "Delete worktree for session #S? (y/n)" "run-shell '~/.config/tmux/scripts/worktree-delete.sh'"
-
-bind-key -T worktree-mode Escape switch-client -T root \; refresh-client -S
-
-# =====================================
 # SCROLL MODE (exact zellij scroll bindings)
 # =====================================
 bind-key -T scroll-mode C-c copy-mode -q
@@ -211,7 +200,7 @@ bind-key -T tmux-mode '[' copy-mode
 bind-key -T tmux-mode C-b send-keys C-b
 bind-key -T tmux-mode '"' split-window -v -c "#{pane_current_path}"
 bind-key -T tmux-mode '%' split-window -h -c "#{pane_current_path}"
-bind-key -T tmux-mode z run-shell '~/.config/tmux/scripts/toggle-fullscreen.sh'
+bind-key -T tmux-mode z resize-pane -Z
 bind-key -T tmux-mode c new-window -c "#{pane_current_path}"
 bind-key -T tmux-mode ',' command-prompt "rename-window '%%'"
 bind-key -T tmux-mode p previous-window
@@ -248,7 +237,7 @@ set -g status-fg "colour250"  # OneDark foreground
 set -g status-position top
 set -g status-justify left
 set -g status-left " "
-set -g status-right "#(~/.config/tmux/scripts/worktree-status.sh)"
+set -g status-right "#[fg=colour243,bg=colour235] #S "
 set -g status-left-length 30
 set -g status-right-length 50
 set -g status-interval 0  # Minimize unnecessary updates
@@ -258,12 +247,9 @@ set -g window-status-format "#[fg=colour250,bg=colour236] #I #[fg=colour243]#W "
 set -g window-status-current-format "#[fg=colour235,bg=colour114] #I #[fg=colour235,bold]#W "
 set -g window-status-separator ""
 
-# Message bar styling (for tmux messages)
-set -g message-style "bg=black,fg=yellow"
-set -g message-command-style "bg=black,fg=yellow"
-
-# Disable pane border status completely
-set -g pane-border-status off
+# Pane border at bottom with script for clean keybind display
+set -g pane-border-status bottom
+set -g pane-border-format "#(~/.config/tmux/scripts/status-bar.sh)"
 set -g pane-border-style "fg=colour235"
 set -g pane-active-border-style "fg=colour235"
 set -g pane-border-lines single
@@ -279,31 +265,7 @@ set -g @plugin 'tmux-plugins/tmux-continuum'
 # Other plugin configurations
 set -g @resurrect-capture-pane-contents 'on'
 set -g @continuum-restore 'on'
-set -g @continuum-save-interval '1'  # Save every minute instead of 5
-set -g @continuum-boot 'on'  # Start tmux on system boot
-# Restore pane working directories
-set -g @resurrect-processes 'false'
-set -g @resurrect-save-command-strategy 'ps'
-
-# Auto-save hooks - save state before any potentially destructive action
-set-hook -g client-detached 'run-shell "~/.config/tmux/scripts/auto-save-restore.sh save"'
-set-hook -g session-closed 'run-shell "~/.config/tmux/scripts/auto-save-restore.sh save"'
-set-hook -g pane-died 'run-shell "~/.config/tmux/scripts/auto-save-restore.sh save"'
-
-# =====================================
-# BOTTOM STATUS PANE IMPLEMENTATION
-# =====================================
-
-# Create bottom pane on new windows and sessions
-set-hook -g after-new-window 'run-shell -b "sleep 0.1 && ~/.config/tmux/scripts/create-bottom-pane.sh"'
-set-hook -g session-created 'run-shell -b "sleep 0.1 && ~/.config/tmux/scripts/create-bottom-pane.sh"'
-set-hook -g client-attached 'run-shell -b "sleep 0.1 && ~/.config/tmux/scripts/create-bottom-pane.sh"'
-
-# Prevent selecting the bottom status pane
-set-hook -g after-select-pane 'run-shell -b "~/.config/tmux/scripts/protect-bottom-pane.sh"'
-
-# Keybind to toggle bottom status pane
-bind-key b run-shell '~/.config/tmux/scripts/toggle-bottom-pane.sh'
+set -g @continuum-save-interval '5'
 
 # =====================================
 # ADDITIONAL IMPROVEMENTS
