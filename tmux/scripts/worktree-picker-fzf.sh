@@ -231,7 +231,7 @@ if [ -n "$selected" ]; then
     }')
     
     # Parse the tab-separated values
-    local icon name type session port branch worktree_path has_arrow
+    local icon name type session port branch worktree_path has_arrow session_name
     IFS=$'\t' read -r icon name type session port branch worktree_path has_arrow <<< "$parsed_fields"
     
     echo "[PICKER DEBUG] Parsed - icon:'$icon' name:'$name' type:'$type' session:'$session' path:'$worktree_path'" >> /tmp/tmux-worktree-debug.log
@@ -245,17 +245,12 @@ if [ -n "$selected" ]; then
     # Check if this is the main repository (base)
     if [ "$type" = "[BASE]" ]; then
         # For base repo, use the name which already includes -base
-        local session_name="$name"
-        echo "[PICKER DEBUG] Base repo: Using name='$name' as session_name" >> /tmp/tmux-worktree-debug.log
+        session_name="$name"
+        echo "[PICKER DEBUG] Base repo: name='$name', session_name='$session_name'" >> /tmp/tmux-worktree-debug.log
         
         # Check if base session exists
         if tmux has-session -t "$session_name" 2>/dev/null; then
-            echo "[PICKER DEBUG] Base session '$session_name' exists, switching" >> /tmp/tmux-worktree-debug.log
-            # Make sure session_name is not empty
-            if [ -z "$session_name" ]; then
-                echo "[PICKER DEBUG] ERROR: session_name is empty!" >> /tmp/tmux-worktree-debug.log
-                exit 1
-            fi
+            echo "[PICKER DEBUG] Base session exists, switching to: $session_name" >> /tmp/tmux-worktree-debug.log
             echo "$session_name" > /tmp/tmux-switch-to-session
             exit 0
         else
