@@ -61,6 +61,8 @@ for window in 1 2 3; do
         if [ -n "$STATUS_PANE" ]; then
             echo "[DEBUG] Resizing pane $STATUS_PANE to 1 line" >> /tmp/tmux-worktree-debug.log
             tmux resize-pane -t "$STATUS_PANE" -y 1
+            # Force select this window to ensure resize takes effect
+            tmux select-window -t "$TICKET:$window"
         fi
         
         # Return to the main pane
