@@ -168,17 +168,16 @@ if [ -n "$selected" ]; then
         # Save original line
         original = $0
         
-        # Remove leading spaces
-        gsub(/^[[:space:]]+/, "", $0)
-        
-        # Check if starts with arrow
+        # Check if starts with arrow (before removing spaces)
         has_arrow = 0
-        if (substr($0, 1, 1) == "→") {
+        if (match($0, /^[[:space:]]*→/)) {
             has_arrow = 1
-            # Remove arrow and spaces
-            sub(/^→[[:space:]]+/, "", $0)
-            # Now line starts with status icon
+            # Remove everything up to and including arrow
+            sub(/^[[:space:]]*→[[:space:]]+/, "", $0)
         }
+        
+        # Remove leading spaces if any remain
+        gsub(/^[[:space:]]+/, "", $0)
         
         # Remove status icon and spaces
         sub(/^[●○][[:space:]]+/, "", $0)
@@ -190,11 +189,16 @@ if [ -n "$selected" ]; then
         session = $3
         branch = $4
         
-        # Determine icon based on arrow presence
+        # Determine icon based on arrow presence and original content
         if (has_arrow) {
             icon = "→"
         } else {
-            icon = substr(original, 1, 1) == " " ? substr(original, 3, 1) : substr(original, 1, 1)
+            # Extract status icon from original line (● or ○)
+            if (match(original, /[●○]/)) {
+                icon = substr(original, RSTART, 1)
+            } else {
+                icon = "?"
+            }
         }
         
         # Path is the last field of the ORIGINAL line
@@ -210,6 +214,12 @@ if [ -n "$selected" ]; then
     IFS=$'\t' read -r icon name type session branch worktree_path has_arrow <<< "$parsed_fields"
     
     echo "[PICKER DEBUG] Parsed - icon:'$icon' name:'$name' type:'$type' session:'$session' path:'$worktree_path'" >> /tmp/tmux-worktree-debug.log
+    
+    # Check if we selected the current session (indicated by arrow)
+    if [ "$has_arrow" = "1" ]; then
+        echo "[PICKER DEBUG] Already in current session, no switch needed" >> /tmp/tmux-worktree-debug.log
+        exit 0
+    fi
     
     # Check if this is the main repository (base)
     if [ "$type" = "[BASE]" ]; then
