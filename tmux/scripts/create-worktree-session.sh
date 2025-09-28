@@ -25,4 +25,11 @@ tmux new-window -t "$TICKET:3" -n "commands" -c "$WORKTREE_PATH"
 # Go back to first window
 tmux select-window -t "$TICKET:1"
 
-# The after-new-window hook will create bottom panes for each window
+# The after-new-window hook won't trigger for these initial windows, so create bottom panes manually
+# Wait a moment for windows to be fully created
+sleep 0.1
+
+# Create bottom panes for each window
+for window in 1 2 3; do
+    ~/.config/tmux/scripts/create-bottom-pane-for-window.sh "$TICKET:$window"
+done
