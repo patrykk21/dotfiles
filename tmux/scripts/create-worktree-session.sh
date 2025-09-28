@@ -29,11 +29,11 @@ tmux select-window -t "$TICKET:1"
 for window in 1 2 3; do
     echo "[DEBUG] Checking window $TICKET:$window" >> /tmp/tmux-worktree-debug.log
     
-    # Check if window has only 1 pane (no bottom pane)
-    PANE_COUNT=$(tmux list-panes -t "$TICKET:$window" 2>&1 | wc -l)
-    echo "[DEBUG] Window $TICKET:$window has $PANE_COUNT panes" >> /tmp/tmux-worktree-debug.log
+    # Check if window already has a bottom pane by looking for the special title
+    HAS_STATUS_BAR=$(tmux list-panes -t "$TICKET:$window" -F "#{pane_title}" 2>/dev/null | grep -c "__tmux_status_bar__" || echo 0)
+    echo "[DEBUG] Window $TICKET:$window has $HAS_STATUS_BAR status bar panes" >> /tmp/tmux-worktree-debug.log
     
-    if [ "$PANE_COUNT" -eq 1 ]; then
+    if [ "$HAS_STATUS_BAR" -eq 0 ]; then
         echo "[DEBUG] Creating bottom pane for window $TICKET:$window" >> /tmp/tmux-worktree-debug.log
         # Create bottom pane for this specific window
         tmux split-window -t "$TICKET:$window.1" -v -l 1 -d "~/.config/tmux/scripts/bottom-pane-display.sh" 2>&1 | tee -a /tmp/tmux-worktree-debug.log

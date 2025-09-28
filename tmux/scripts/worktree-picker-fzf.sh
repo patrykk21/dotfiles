@@ -48,7 +48,7 @@ get_worktrees() {
         # Check if this is the main repository (base)
         if (path !~ worktrees_base) {
             type_text = "[BASE]"
-            ticket = repo_name
+            ticket = "base"
         } else {
             # This is a worktree
             # Check if this is under our worktrees structure
@@ -70,15 +70,19 @@ get_worktrees() {
         
         # Check session status
         if (type_text == "[BASE]") {
-            # For base repo, check if any numeric session exists (main tmux session)
-            # Get the first session name
-            cmd = "tmux list-sessions -F \"#{session_name}\" 2>/dev/null | head -1"
-            cmd | getline first_session
+            # For base repo, check if "base" session exists
+            cmd = "tmux has-session -t base 2>/dev/null && echo active || echo inactive"
+            cmd | getline session_status
             close(cmd)
             
-            if (first_session != "") {
+            if (session_status == "active") {
                 session_text = "[SESSION]"
-                session_status = "active"
+            } else {
+                # Check if metadata exists for base
+                metadata_file = worktrees_base "/" repo_name "/.worktree-meta/sessions/base.json"
+                if (system("test -f " metadata_file) == 0) {
+                    session_text = "[METADATA]"
+                }
             }
         } else {
             # For worktrees, check metadata and session as before
@@ -223,21 +227,46 @@ if [ -n "$selected" ]; then
     
     # Check if this is the main repository (base)
     if [ "$type" = "[BASE]" ]; then
-        # For base repo, switch to the first available session (your original tmux session)
-        local first_session=$(tmux list-sessions -F "#{session_name}" 2>/dev/null | grep -E '^[0-9]+$' | head -1)
-        if [ -n "$first_session" ]; then
-            echo "[PICKER DEBUG] Switching to base session: $first_session" >> /tmp/tmux-worktree-debug.log
-            echo "$first_session" > /tmp/tmux-switch-to-session
+        # For base repo, use "base" as the session name
+        local session_name="base"
+        
+        # Check if base session exists
+        if tmux has-session -t "$session_name" 2>/dev/null; then
+            echo "[PICKER DEBUG] Base session already exists, switching" >> /tmp/tmux-worktree-debug.log
+            echo "$session_name" > /tmp/tmux-switch-to-session
             exit 0
         else
-            # No numeric session found, try any first session
-            first_session=$(tmux list-sessions -F "#{session_name}" 2>/dev/null | head -1)
-            if [ -n "$first_session" ]; then
-                echo "[PICKER DEBUG] Switching to first session: $first_session" >> /tmp/tmux-worktree-debug.log
-                echo "$first_session" > /tmp/tmux-switch-to-session
+            # Check if we have metadata for base
+            if session_exists_in_metadata "$REPO_NAME" "base"; then
+                # Restore from metadata
+                local stored_path=$(get_session_metadata "$REPO_NAME" "base" "worktree_path")
+                local tabs=$(get_session_metadata "$REPO_NAME" "base" "tabs")
+                
+                # Use main repo path
+                worktree_path="$MAIN_REPO"
+                
+                # Create session using dedicated script
+                ~/.config/tmux/scripts/create-worktree-session.sh "base" "$worktree_path"
+                
+                # Update last accessed time
+                update_session_access "$REPO_NAME" "base"
+                
+                # Write session name for tmux to switch to
+                echo "base" > /tmp/tmux-switch-to-session
                 exit 0
             else
-                echo "[PICKER DEBUG] No sessions found" >> /tmp/tmux-worktree-debug.log
+                # No metadata, create new base session with defaults
+                echo "[PICKER DEBUG] Creating new base session at $MAIN_REPO" >> /tmp/tmux-worktree-debug.log
+                
+                # Create session using dedicated script
+                ~/.config/tmux/scripts/create-worktree-session.sh "base" "$MAIN_REPO"
+                
+                # Save metadata
+                save_session_metadata "$REPO_NAME" "base" "$MAIN_REPO" "master" "base"
+                
+                # Write session name for tmux to switch to
+                echo "base" > /tmp/tmux-switch-to-session
+                exit 0
             fi
         fi
     else
