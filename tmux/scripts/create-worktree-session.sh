@@ -26,10 +26,19 @@ tmux new-window -t "$TICKET:3" -n "commands" -c "$WORKTREE_PATH"
 tmux select-window -t "$TICKET:1"
 
 # The after-new-window hook won't trigger for these initial windows, so create bottom panes manually
-# Wait a moment for windows to be fully created
-sleep 0.1
+# Wait for windows to be fully created
+sleep 0.2
 
 # Create bottom panes for each window
 for window in 1 2 3; do
     ~/.config/tmux/scripts/create-bottom-pane-for-window.sh "$TICKET:$window"
+done
+
+# Force resize after creation
+sleep 0.1
+for window in 1 2 3; do
+    STATUS_PANE=$(tmux list-panes -t "$TICKET:$window" -F "#{pane_id}:#{pane_title}" 2>/dev/null | grep "__tmux_status_bar__" | cut -d: -f1)
+    if [ -n "$STATUS_PANE" ]; then
+        tmux resize-pane -t "$STATUS_PANE" -y 1
+    fi
 done
