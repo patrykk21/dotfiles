@@ -129,10 +129,18 @@ selected=$(get_worktrees | fzf-tmux -p 80%,60% \
 
 # If a worktree was selected (Enter pressed), switch to it
 if [ -n "$selected" ]; then
-    # Extract fields
-    local clean_line=$(echo "$selected" | sed 's/^[[:space:]]*[→○●[:space:]]*//')
+    echo "[PICKER DEBUG] Selected: '$selected'" >> /tmp/tmux-worktree-debug.log
+    
+    # Extract fields - handle the status icons correctly
+    # Remove only the leading spaces and status icon (→, ○, or ●)
+    local clean_line=$(echo "$selected" | sed 's/^[[:space:]]*[→○●][[:space:]]*//')
+    echo "[PICKER DEBUG] Clean line: '$clean_line'" >> /tmp/tmux-worktree-debug.log
+    
+    # Extract ticket (first field) and path (last field) from clean line
     local ticket=$(echo "$clean_line" | awk '{print $1}')
-    local worktree_path=$(echo "$selected" | awk '{print $NF}')
+    local worktree_path=$(echo "$clean_line" | awk '{print $NF}')
+    
+    echo "[PICKER DEBUG] Ticket: '$ticket', Path: '$worktree_path'" >> /tmp/tmux-worktree-debug.log
     
     # Check if this is the main repository
     if [ "$worktree_path" = "$MAIN_REPO" ]; then
@@ -141,6 +149,7 @@ if [ -n "$selected" ]; then
     else
         # Check if session exists
         if tmux has-session -t "$ticket" 2>/dev/null; then
+            echo "[PICKER DEBUG] Session $ticket already exists, switching" >> /tmp/tmux-worktree-debug.log
             # Session exists, just switch to it
             tmux switch-client -t "$ticket"
         else
@@ -163,6 +172,7 @@ if [ -n "$selected" ]; then
                 tmux switch-client -t "$ticket"
             else
                 # No metadata, create new session with defaults
+                echo "[PICKER DEBUG] Creating new session for $ticket at $worktree_path" >> /tmp/tmux-worktree-debug.log
                 # Create session using dedicated script
                 ~/.config/tmux/scripts/create-worktree-session.sh "$ticket" "$worktree_path"
                 
