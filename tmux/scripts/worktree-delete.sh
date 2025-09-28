@@ -82,10 +82,19 @@ fi
 # Get the branch name for the worktree
 BRANCH_NAME=$(git worktree list --porcelain | grep -A2 "^worktree $WORKTREE_PATH" | grep "^branch" | cut -d' ' -f2)
 
-# Show confirmation dialog
-tmux display-message -p "Delete worktree '$TICKET' at $WORKTREE_PATH? (y/n)" > /dev/null
-read -n 1 -r response < /dev/tty
-if [[ ! "$response" =~ ^[Yy]$ ]]; then
+# Show fzf confirmation dialog
+confirm=$(printf "NO - Cancel\nYES - Delete worktree '$TICKET'" | fzf-tmux -p 50%,30% \
+    --prompt=" Delete worktree '$TICKET'? " \
+    --header="This will permanently delete the worktree and its session" \
+    --header-lines=0 \
+    --no-sort \
+    --color="fg:250,bg:235,hl:168,fg+:235,bg+:168,hl+:235,prompt:168,pointer:168,header:180" \
+    --border=rounded \
+    --border-label=" ⚠️  Confirm Deletion " \
+    --no-multi)
+
+# Check if user confirmed deletion
+if [[ "$confirm" != "YES"* ]]; then
     tmux display-message -d 1000 "Deletion cancelled"
     exit 0
 fi
