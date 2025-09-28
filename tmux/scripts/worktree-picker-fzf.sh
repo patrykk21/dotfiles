@@ -18,8 +18,8 @@ CURRENT_SESSION=$(tmux display-message -p "#{session_name}")
 # Get list of worktrees with metadata-enhanced info
 get_worktrees() {
     # Print header (without delimiter so it shows in fzf)
-    printf "%-4s %-15s %-12s %-30s %s\n" "" "TICKET" "SESSION" "BRANCH" "PATH"
-    printf "%-4s %-15s %-12s %-30s %s\n" "" "------" "-------" "------" "----"
+    printf "%-4s %-15s %-10s %-12s %-30s %s\n" "" "NAME" "TYPE" "SESSION" "BRANCH" "PATH"
+    printf "%-4s %-15s %-10s %-12s %-30s %s\n" "" "----" "----" "-------" "------" "----"
     
     # Process each worktree
     git worktree list --porcelain | awk -v current="$CURRENT_WORKTREE" -v repo_name="$REPO_NAME" -v worktrees_base="$WORKTREES_BASE" '
@@ -43,49 +43,74 @@ get_worktrees() {
         ticket = ""
         session_status = "inactive"
         session_text = "[NO SESSION]"
+        type_text = "[WORKTREE]"
         
-        # Check if this is under our worktrees structure
-        pattern = worktrees_base "/" repo_name "/"
-        if (index(path, pattern) > 0) {
-            # Extract the ticket from the path
-            path_copy = path
-            sub(".*" worktrees_base "/" repo_name "/", "", path_copy)
-            sub("/.*", "", path_copy)
-            ticket = path_copy
-        } else if (match(branch, /[A-Z]+-[0-9]+/)) {
-            ticket = substr(branch, RSTART, RLENGTH)
-        } else if (match(dirname, /[A-Z]+-[0-9]+/)) {
-            ticket = substr(dirname, RSTART, RLENGTH)
+        # Check if this is the main repository (base)
+        if (path !~ worktrees_base) {
+            type_text = "[BASE]"
+            ticket = repo_name
         } else {
-            ticket = dirname
+            # This is a worktree
+            # Check if this is under our worktrees structure
+            pattern = worktrees_base "/" repo_name "/"
+            if (index(path, pattern) > 0) {
+                # Extract the ticket from the path
+                path_copy = path
+                sub(".*" worktrees_base "/" repo_name "/", "", path_copy)
+                sub("/.*", "", path_copy)
+                ticket = path_copy
+            } else if (match(branch, /[A-Z]+-[0-9]+/)) {
+                ticket = substr(branch, RSTART, RLENGTH)
+            } else if (match(dirname, /[A-Z]+-[0-9]+/)) {
+                ticket = substr(dirname, RSTART, RLENGTH)
+            } else {
+                ticket = dirname
+            }
         }
         
-        # Check both metadata and tmux session
-        metadata_file = worktrees_base "/" repo_name "/.worktree-meta/sessions/" ticket ".json"
-        if (system("test -f " metadata_file) == 0) {
-            # Metadata exists, check if tmux session also exists
-            cmd = "tmux has-session -t " ticket " 2>/dev/null && echo active || echo inactive"
+        # Check session status
+        if (type_text == "[BASE]") {
+            # For base repo, check if main or 0 session exists
+            cmd = "tmux has-session -t main 2>/dev/null && echo active || echo inactive"
             cmd | getline session_status
             close(cmd)
+            
+            if (session_status == "inactive") {
+                cmd = "tmux has-session -t 0 2>/dev/null && echo active || echo inactive"
+                cmd | getline session_status
+                close(cmd)
+            }
             
             if (session_status == "active") {
                 session_text = "[SESSION]"
-            } else {
-                session_text = "[METADATA]"  # Has metadata but no active session
             }
         } else {
-            # No metadata, check if session exists anyway
-            cmd = "tmux has-session -t " ticket " 2>/dev/null && echo active || echo inactive"
-            cmd | getline session_status
-            close(cmd)
-            
-            if (session_status == "active") {
-                session_text = "[ORPHAN]"  # Has session but no metadata
+            # For worktrees, check metadata and session as before
+            metadata_file = worktrees_base "/" repo_name "/.worktree-meta/sessions/" ticket ".json"
+            if (system("test -f " metadata_file) == 0) {
+                # Metadata exists, check if tmux session also exists
+                cmd = "tmux has-session -t " ticket " 2>/dev/null && echo active || echo inactive"
+                cmd | getline session_status
+                close(cmd)
+                
+                if (session_status == "active") {
+                    session_text = "[SESSION]"
+                } else {
+                    session_text = "[METADATA]"  # Has metadata but no active session
+                }
+            } else {
+                # No metadata, check if session exists anyway
+                cmd = "tmux has-session -t " ticket " 2>/dev/null && echo active || echo inactive"
+                cmd | getline session_status
+                close(cmd)
+                
+                if (session_status == "active") {
+                    session_text = "[ORPHAN]"  # Has session but no metadata
+                }
             }
         }
         
-        # Format output with hidden data fields
-        # Format: VISIBLE|HIDDEN_TICKET|HIDDEN_PATH
+        # Format output
         if (path == current) {
             # Current worktree - show with arrow
             if (session_status == "active") {
@@ -101,8 +126,8 @@ get_worktrees() {
             }
         }
         
-        # Output normal format (no hidden fields)
-        printf "%s%-15s %-12s %-30s %s\n", status_icon, ticket, session_text, branch, path
+        # Output format with type column
+        printf "%s%-15s %-10s %-12s %-30s %s\n", status_icon, ticket, type_text, session_text, branch, path
     }'
 }
 
@@ -134,8 +159,9 @@ if [ -n "$selected" ]; then
     echo "[PICKER DEBUG] Selected: '$selected'" >> /tmp/tmux-worktree-debug.log
     
     # Use read to split fields - this works correctly
-    local icon ticket status branch path rest
-    read -r icon ticket status branch path rest <<< "$selected"
+    # New format: icon name type session branch path
+    local icon name type session branch path rest
+    read -r icon name type session branch path rest <<< "$selected"
     
     # The path might have been split if it contains spaces, so we need to reconstruct it
     if [ -n "$rest" ]; then
@@ -143,15 +169,27 @@ if [ -n "$selected" ]; then
     fi
     
     # For fixed-width format, path is always the last complete field
-    local worktree_path=$(echo "$selected" | awk '{print $NF}')
+    # But we need to handle the case where there are many spaces between columns
+    local worktree_path=$(echo "$selected" | rev | cut -d' ' -f1 | rev)
     
-    echo "[PICKER DEBUG] Ticket: '$ticket', Path: '$worktree_path'" >> /tmp/tmux-worktree-debug.log
+    echo "[PICKER DEBUG] Name: '$name', Type: '$type', Path: '$worktree_path'" >> /tmp/tmux-worktree-debug.log
     
-    # Check if this is the main repository
-    if [ "$worktree_path" = "$MAIN_REPO" ]; then
-        # For main repo, just change directory in current session
-        tmux send-keys "cd $worktree_path" Enter
+    # Check if this is the main repository (base)
+    if [ "$type" = "[BASE]" ]; then
+        # For base repo, always switch to the main session
+        if tmux has-session -t "main" 2>/dev/null; then
+            echo "[PICKER DEBUG] Switching to main session" >> /tmp/tmux-worktree-debug.log
+            tmux switch-client -t "main"
+        elif tmux has-session -t "0" 2>/dev/null; then
+            echo "[PICKER DEBUG] Switching to session 0" >> /tmp/tmux-worktree-debug.log
+            tmux switch-client -t "0"
+        else
+            echo "[PICKER DEBUG] No main session found, staying in current" >> /tmp/tmux-worktree-debug.log
+        fi
     else
+        # This is a worktree, use the name as ticket
+        local ticket="$name"
+        
         # Check if session exists
         if tmux has-session -t "$ticket" 2>/dev/null; then
             echo "[PICKER DEBUG] Session $ticket already exists, switching" >> /tmp/tmux-worktree-debug.log
