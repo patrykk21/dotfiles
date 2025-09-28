@@ -104,54 +104,6 @@ get_worktrees() {
     }'
 }
 
-# Function to switch to worktree session
-switch_to_worktree() {
-    local selection="$1"
-    
-    # Extract fields
-    local ticket=$(echo "$selection" | sed 's/^[[:space:]]*[→○●[:space:]]*//' | awk '{print $1}')
-    local worktree_path=$(echo "$selection" | awk '{print $NF}')
-    
-    
-    # Check if this is the main repository
-    if [ "$worktree_path" = "$MAIN_REPO" ]; then
-        # For main repo, just change directory in current session
-        tmux send-keys -t . "cd $worktree_path" Enter
-        return
-    fi
-    
-    # Update metadata access time if it exists
-    if session_exists_in_metadata "$REPO_NAME" "$ticket"; then
-        update_session_access "$REPO_NAME" "$ticket"
-    fi
-    
-    # Check if session exists
-    if tmux has-session -t "$ticket" 2>/dev/null; then
-        # Session exists, switch to it
-        tmux display-message -d 1000 "Session exists, switching..."
-        tmux switch-client -t "$ticket"
-    else
-        # Create new session
-        tmux display-message -d 1000 "Creating session '$ticket' at '$worktree_path'..."
-        
-        # Verify worktree path exists
-        if [ ! -d "$worktree_path" ]; then
-            tmux display-message -d 2000 "Error: Worktree path does not exist: $worktree_path"
-            return 1
-        fi
-        
-        tmux new-session -d -s "$ticket" -c "$worktree_path" -n "claude"
-        tmux new-window -t "$ticket:2" -n "server" -c "$worktree_path"
-        tmux new-window -t "$ticket:3" -n "commands" -c "$worktree_path"
-        tmux select-window -t "$ticket:1"
-        
-        # Save or update metadata
-        local branch=$(git -C "$worktree_path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
-        save_session_metadata "$REPO_NAME" "$ticket" "$worktree_path" "$branch" "$ticket"
-        
-        tmux switch-client -t "$ticket"
-    fi
-}
 
 # Function to reload worktrees list
 reload_worktrees() {
@@ -177,5 +129,32 @@ selected=$(get_worktrees | fzf-tmux -p 80%,60% \
 
 # If a worktree was selected (Enter pressed), switch to it
 if [ -n "$selected" ]; then
-    switch_to_worktree "$selected"
+    # Extract fields
+    local clean_line=$(echo "$selected" | sed 's/^[[:space:]]*[→○●[:space:]]*//')
+    local ticket=$(echo "$clean_line" | awk '{print $1}')
+    local worktree_path=$(echo "$selected" | awk '{print $NF}')
+    
+    # Check if this is the main repository
+    if [ "$worktree_path" = "$MAIN_REPO" ]; then
+        # For main repo, just change directory in current session
+        tmux send-keys "cd $worktree_path" Enter
+    else
+        # Check if session exists
+        if tmux has-session -t "$ticket" 2>/dev/null; then
+            # Session exists, switch to it
+            tmux switch-client -t "$ticket"
+        else
+            # Create new session and switch
+            tmux new-session -d -s "$ticket" -c "$worktree_path" -n "claude"
+            tmux new-window -t "$ticket:2" -n "server" -c "$worktree_path"
+            tmux new-window -t "$ticket:3" -n "commands" -c "$worktree_path"
+            tmux select-window -t "$ticket:1"
+            
+            # Save metadata
+            local branch=$(git -C "$worktree_path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+            save_session_metadata "$REPO_NAME" "$ticket" "$worktree_path" "$branch" "$ticket"
+            
+            tmux switch-client -t "$ticket"
+        fi
+    fi
 fi
