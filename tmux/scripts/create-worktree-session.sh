@@ -14,11 +14,9 @@ if [ -z "$TICKET" ] || [ -z "$WORKTREE_PATH" ]; then
     exit 1
 fi
 
-# Save current hook and disable it to prevent conflicts
-echo "[DEBUG] Disabling after-new-window hook" >> /tmp/tmux-worktree-debug.log
-SAVED_HOOK=$(tmux show-hooks -g | grep "^after-new-window" | cut -d' ' -f2-)
-tmux set-hook -gu after-new-window
-echo "[DEBUG] Hook disabled, was: $SAVED_HOOK" >> /tmp/tmux-worktree-debug.log
+# Temporarily set a no-op hook to prevent conflicts
+echo "[DEBUG] Setting no-op after-new-window hook" >> /tmp/tmux-worktree-debug.log
+tmux set-hook -g after-new-window 'run-shell "true"'
 
 # Create new session attached (not detached) with first window
 tmux new-session -s "$TICKET" -n "claude" -c "$WORKTREE_PATH" -d "cd '$WORKTREE_PATH' && exec $SHELL"
@@ -64,7 +62,5 @@ for window in 1 2 3; do
 done
 
 # Restore the after-new-window hook
-if [ -n "$SAVED_HOOK" ]; then
-    tmux set-hook -g after-new-window "$SAVED_HOOK"
-    echo "[DEBUG] Hook restored" >> /tmp/tmux-worktree-debug.log
-fi
+tmux set-hook -g after-new-window 'run-shell -b "~/.config/tmux/scripts/create-bottom-pane-for-window.sh #{session_name}:#{window_index}"'
+echo "[DEBUG] Hook restored" >> /tmp/tmux-worktree-debug.log
