@@ -26,11 +26,16 @@ if git rev-parse --git-dir > /dev/null 2>&1; then
             source ~/.config/tmux/scripts/worktree-metadata.sh
             save_session_metadata "$REPO_NAME" "base" "$MAIN_REPO" "master" "base"
             
+            # Ensure bottom panes are properly sized
+            for window in 1 2 3; do
+                tmux resize-pane -t "base:$window.2" -y 1 2>/dev/null
+            done
+            
             # Attach to the new session
             exec tmux attach-session -t "base"
         fi
     fi
 fi
 
-# Not in base repo, use regular tmux command
-exec tmux "$@"
+# Not in base repo, use regular tmux command directly
+exec command tmux "$@"
