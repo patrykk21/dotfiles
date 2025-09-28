@@ -22,11 +22,14 @@ ORIGINAL_WINDOW=$(tmux display-message -p "#{session_name}:#{window_index}")
 tmux select-window -t "$TARGET_WINDOW"
 
 # Now create the bottom pane in the current (target) window
-BOTTOM_PANE=$(tmux split-window -v -l $PANE_HEIGHT -d -P -F "#{pane_id}" \
+BOTTOM_PANE=$(tmux split-window -v -d -P -F "#{pane_id}" \
     "~/.config/tmux/scripts/bottom-pane-display.sh")
 
 # Set a unique pane title to identify it
 tmux select-pane -t "$BOTTOM_PANE" -T "__tmux_status_bar__"
+
+# Immediately resize to 1 line
+tmux resize-pane -t "$BOTTOM_PANE" -y 1
 
 # Configure the bottom pane to be non-selectable
 tmux set-option -t "$BOTTOM_PANE" -p window-style 'bg=colour235,fg=colour250'
