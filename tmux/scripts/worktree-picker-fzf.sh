@@ -158,6 +158,12 @@ if [ -n "$selected" ]; then
                 tmux new-session -d -s "$ticket" -n "claude" -c "$worktree_path" "cd '$worktree_path' && exec $SHELL"
                 tmux new-window -t "$ticket:2" -n "server" -c "$worktree_path"
                 tmux new-window -t "$ticket:3" -n "commands" -c "$worktree_path"
+                
+                # Create bottom pane for each window
+                ~/.config/tmux/scripts/create-bottom-pane-for-window.sh "$ticket:1"
+                ~/.config/tmux/scripts/create-bottom-pane-for-window.sh "$ticket:2"
+                ~/.config/tmux/scripts/create-bottom-pane-for-window.sh "$ticket:3"
+                
                 tmux select-window -t "$ticket:1"
                 
                 # Update last accessed time
@@ -168,6 +174,12 @@ if [ -n "$selected" ]; then
                 tmux new-session -d -s "$ticket" -n "claude" -c "$worktree_path" "cd '$worktree_path' && exec $SHELL"
                 tmux new-window -t "$ticket:2" -n "server" -c "$worktree_path"
                 tmux new-window -t "$ticket:3" -n "commands" -c "$worktree_path"
+                
+                # Create bottom pane for each window
+                ~/.config/tmux/scripts/create-bottom-pane-for-window.sh "$ticket:1"
+                ~/.config/tmux/scripts/create-bottom-pane-for-window.sh "$ticket:2"
+                ~/.config/tmux/scripts/create-bottom-pane-for-window.sh "$ticket:3"
+                
                 tmux select-window -t "$ticket:1"
                 
                 # Save metadata
