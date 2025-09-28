@@ -15,11 +15,14 @@ if [ -n "$EXISTING_BOTTOM" ]; then
     exit 0
 fi
 
-# Save current pane
-ORIGINAL_PANE=$(tmux display-message -p "#{pane_id}")
+# Save current window
+ORIGINAL_WINDOW=$(tmux display-message -p "#{session_name}:#{window_index}")
 
-# Create bottom pane in the target window
-BOTTOM_PANE=$(tmux split-window -t "$TARGET_WINDOW" -v -l $PANE_HEIGHT -d -P -F "#{pane_id}" \
+# Switch to the target window first
+tmux select-window -t "$TARGET_WINDOW"
+
+# Now create the bottom pane in the current (target) window
+BOTTOM_PANE=$(tmux split-window -v -l $PANE_HEIGHT -d -P -F "#{pane_id}" \
     "~/.config/tmux/scripts/bottom-pane-display.sh")
 
 # Set a unique pane title to identify it
@@ -38,5 +41,7 @@ tmux set-option -t "$BOTTOM_PANE" -p remain-on-exit on
 # Disable all input to this pane
 tmux set-option -t "$BOTTOM_PANE" -p synchronize-panes off
 
-# Make sure we return to the original pane
-tmux select-pane -t "$ORIGINAL_PANE" -e
+# Switch back to the original window if different
+if [ "$ORIGINAL_WINDOW" != "$TARGET_WINDOW" ]; then
+    tmux select-window -t "$ORIGINAL_WINDOW"
+fi
