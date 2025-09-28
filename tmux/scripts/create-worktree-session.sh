@@ -45,13 +45,16 @@ for window in 1 2 3; do
         # Switch to the window first before creating the pane
         tmux select-window -t "$TICKET:$window"
         
-        # Create bottom pane for this specific window (1 line = ~2% of window)
-        tmux split-window -t "$TICKET:$window.1" -v -p 2 "~/.config/tmux/scripts/bottom-pane-display.sh"
+        # Create bottom pane for this specific window
+        tmux split-window -t "$TICKET:$window.1" -v "~/.config/tmux/scripts/bottom-pane-display.sh"
         
         # Get the new pane ID and set its title
         BOTTOM_PANE=$(tmux list-panes -t "$TICKET:$window" -F "#{pane_id}" | tail -1)
         echo "[DEBUG] Setting title for pane $BOTTOM_PANE" >> /tmp/tmux-worktree-debug.log
         tmux select-pane -t "$BOTTOM_PANE" -T "__tmux_status_bar__"
+        
+        # Resize the bottom pane to exactly 1 line
+        tmux resize-pane -t "$TICKET:$window.2" -y 1
         
         # Return to the main pane
         tmux select-pane -t "$TICKET:$window.1"

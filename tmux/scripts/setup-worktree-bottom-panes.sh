@@ -22,8 +22,10 @@ for window in 1 2 3; do
     EXISTING=$(tmux list-panes -t "$SESSION:$window" -F "#{pane_title}" 2>/dev/null | grep -c "__tmux_status_bar__")
     
     if [ "$EXISTING" -eq 0 ]; then
-        # Create bottom pane for this window (2% of window height)
-        tmux split-window -t "$SESSION:$window.1" -v -p 2 -d "~/.config/tmux/scripts/bottom-pane-display.sh"
+        # Create bottom pane for this window
+        tmux split-window -t "$SESSION:$window.1" -v -d "~/.config/tmux/scripts/bottom-pane-display.sh"
         tmux select-pane -t "$SESSION:$window.2" -T "__tmux_status_bar__"
+        # Resize to exactly 1 line
+        tmux resize-pane -t "$SESSION:$window.2" -y 1
     fi
 done
