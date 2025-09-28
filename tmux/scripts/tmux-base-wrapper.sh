@@ -29,7 +29,11 @@ if git rev-parse --git-dir > /dev/null 2>&1; then
             # Final resize before attaching
             sleep 0.1
             for window in 1 2 3; do
-                tmux resize-pane -t "base:$window.2" -y 1 2>/dev/null
+                # Find the pane with the status bar title
+                STATUS_PANE=$(tmux list-panes -t "base:$window" -F "#{pane_id}:#{pane_title}" 2>/dev/null | grep "__tmux_status_bar__" | cut -d: -f1)
+                if [ -n "$STATUS_PANE" ]; then
+                    tmux resize-pane -t "$STATUS_PANE" -y 1 2>/dev/null
+                fi
             done
             
             # Attach to the new session

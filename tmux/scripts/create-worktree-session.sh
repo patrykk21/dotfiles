@@ -54,7 +54,11 @@ for window in 1 2 3; do
         tmux select-pane -t "$BOTTOM_PANE" -T "__tmux_status_bar__"
         
         # Immediately resize to 1 line
-        tmux resize-pane -t "$TICKET:$window.2" -y 1
+        # Find the pane with the status bar title
+        STATUS_PANE=$(tmux list-panes -t "$TICKET:$window" -F "#{pane_id}:#{pane_title}" | grep "__tmux_status_bar__" | cut -d: -f1)
+        if [ -n "$STATUS_PANE" ]; then
+            tmux resize-pane -t "$STATUS_PANE" -y 1
+        fi
         
         # Return to the main pane
         tmux select-pane -t "$TICKET:$window.1"
@@ -67,6 +71,10 @@ tmux select-window -t "$TICKET:1"
 # Final resize to ensure bottom panes are 1 line
 for window in 1 2 3; do
     if tmux list-windows -t "$TICKET" -F "#{window_index}" 2>/dev/null | grep -q "^${window}$"; then
-        tmux resize-pane -t "$TICKET:$window.2" -y 1 2>/dev/null
+        # Find the pane with the status bar title
+        STATUS_PANE=$(tmux list-panes -t "$TICKET:$window" -F "#{pane_id}:#{pane_title}" 2>/dev/null | grep "__tmux_status_bar__" | cut -d: -f1)
+        if [ -n "$STATUS_PANE" ]; then
+            tmux resize-pane -t "$STATUS_PANE" -y 1 2>/dev/null
+        fi
     fi
 done
