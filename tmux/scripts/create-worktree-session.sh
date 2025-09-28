@@ -45,8 +45,8 @@ for window in 1 2 3; do
         # Switch to the window first before creating the pane
         tmux select-window -t "$TICKET:$window"
         
-        # Create bottom pane for this specific window
-        tmux split-window -t "$TICKET:$window.1" -v -l 1 "~/.config/tmux/scripts/bottom-pane-display.sh"
+        # Create bottom pane for this specific window (1 line = ~2% of window)
+        tmux split-window -t "$TICKET:$window.1" -v -p 2 "~/.config/tmux/scripts/bottom-pane-display.sh"
         
         # Get the new pane ID and set its title
         BOTTOM_PANE=$(tmux list-panes -t "$TICKET:$window" -F "#{pane_id}" | tail -1)
