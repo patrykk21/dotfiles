@@ -152,6 +152,9 @@ selected=$(get_worktrees | fzf-tmux -p 80%,60% \
 
 # If a worktree was selected (Enter pressed), switch to it
 if [ -n "$selected" ]; then
+    # Debug tmux environment
+    echo "[PICKER DEBUG] TMUX env: '$TMUX'" >> /tmp/tmux-worktree-debug.log
+    echo "[PICKER DEBUG] TMUX_PANE: '$TMUX_PANE'" >> /tmp/tmux-worktree-debug.log
     echo "[PICKER DEBUG] Selected: '$selected'" >> /tmp/tmux-worktree-debug.log
     
     # Debug the raw selected line
@@ -214,13 +217,15 @@ if [ -n "$selected" ]; then
         local first_session=$(tmux list-sessions -F "#{session_name}" 2>/dev/null | grep -E '^[0-9]+$' | head -1)
         if [ -n "$first_session" ]; then
             echo "[PICKER DEBUG] Switching to base session: $first_session" >> /tmp/tmux-worktree-debug.log
-            tmux switch-client -t "$first_session"
+            echo "$first_session" > /tmp/tmux-switch-to-session
+            exit 0
         else
             # No numeric session found, try any first session
             first_session=$(tmux list-sessions -F "#{session_name}" 2>/dev/null | head -1)
             if [ -n "$first_session" ]; then
                 echo "[PICKER DEBUG] Switching to first session: $first_session" >> /tmp/tmux-worktree-debug.log
-                tmux switch-client -t "$first_session"
+                echo "$first_session" > /tmp/tmux-switch-to-session
+                exit 0
             else
                 echo "[PICKER DEBUG] No sessions found" >> /tmp/tmux-worktree-debug.log
             fi
@@ -236,8 +241,11 @@ if [ -n "$selected" ]; then
         # Check if session exists
         if tmux has-session -t "$name" 2>/dev/null; then
             echo "[PICKER DEBUG] Session $name already exists, switching" >> /tmp/tmux-worktree-debug.log
-            # Session exists, just switch to it
-            tmux switch-client -t "$name"
+            # Write session name to temp file for tmux to read
+            echo "$name" > /tmp/tmux-switch-to-session
+            # Send keys to tmux to execute the switch
+            tmux send-keys -t $TMUX_PANE Escape
+            exit 0
         else
             # Check if we have metadata for this worktree
             if session_exists_in_metadata "$REPO_NAME" "$name"; then
@@ -260,8 +268,9 @@ if [ -n "$selected" ]; then
                 # Update last accessed time
                 update_session_access "$REPO_NAME" "$name"
                 
-                # Switch to the session
-                tmux switch-client -t "$name"
+                # Write session name for tmux to switch to
+                echo "$name" > /tmp/tmux-switch-to-session
+                exit 0
             else
                 # No metadata, create new session with defaults
                 echo "[PICKER DEBUG] Creating new session for $name at $worktree_path" >> /tmp/tmux-worktree-debug.log
@@ -279,12 +288,10 @@ if [ -n "$selected" ]; then
                 local branch=$(git -C "$worktree_path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
                 save_session_metadata "$REPO_NAME" "$name" "$worktree_path" "$branch" "$name"
                 
-                # Switch to the session
-                tmux switch-client -t "$name"
+                # Write session name for tmux to switch to
+                echo "$name" > /tmp/tmux-switch-to-session
+                exit 0
             fi
-            
-            # Switch to the session (only reached if session creation was skipped)
-            tmux switch-client -t "$name"
         fi
     fi
 fi
