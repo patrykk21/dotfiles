@@ -18,7 +18,7 @@ if git rev-parse --git-dir > /dev/null 2>&1; then
             # Attach to existing base session
             exec tmux attach-session -t "base"
         else
-            # Create new base session with proper setup
+            # Create new base session in detached mode first
             ~/.config/tmux/scripts/create-worktree-session.sh "base" "$MAIN_REPO"
             
             # Save metadata for the base session
@@ -26,10 +26,8 @@ if git rev-parse --git-dir > /dev/null 2>&1; then
             source ~/.config/tmux/scripts/worktree-metadata.sh
             save_session_metadata "$REPO_NAME" "base" "$MAIN_REPO" "master" "base"
             
-            # Set up a one-time hook to resize after client attaches
-            tmux set-hook -t "base" client-attached 'run-shell "~/.config/tmux/scripts/resize-all-status-bars.sh base"'
             
-            # Attach to the new session
+            # Now attach to the already-configured session
             exec tmux attach-session -t "base"
         fi
     fi

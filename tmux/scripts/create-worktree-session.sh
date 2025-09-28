@@ -3,8 +3,6 @@
 # Create a worktree session with proper window setup
 # This mimics manual tab creation
 
-# Debug logging
-echo "[DEBUG] create-worktree-session.sh called with: $1 $2" >> /tmp/tmux-worktree-debug.log
 
 TICKET="$1"
 WORKTREE_PATH="$2"
@@ -14,12 +12,9 @@ if [ -z "$TICKET" ] || [ -z "$WORKTREE_PATH" ]; then
     exit 1
 fi
 
-# Don't try to unset hook - it gets reinstalled by tmux.conf
-# Instead, we'll check for existing panes before creating new ones
-echo "[DEBUG] Creating session with hook check" >> /tmp/tmux-worktree-debug.log
 
-# Create new session and windows one by one (compound command seems to still trigger hooks)
-tmux new-session -s "$TICKET" -n "claude" -c "$WORKTREE_PATH" -d "cd '$WORKTREE_PATH' && exec $SHELL"
+# Create new session with explicit size (90 lines to accommodate 89+1 split)
+tmux new-session -s "$TICKET" -n "claude" -c "$WORKTREE_PATH" -d -x 120 -y 90 "cd '$WORKTREE_PATH' && exec $SHELL"
 tmux new-window -t "$TICKET:2" -n "server" -c "$WORKTREE_PATH"
 tmux new-window -t "$TICKET:3" -n "commands" -c "$WORKTREE_PATH"
 
@@ -46,6 +41,8 @@ for window in 1 2 3; do
         # No status pane exists, create one
         BOTTOM_PANE=$(tmux split-window -t "$TICKET:$window" -v -d -l 1 -P -F "#{pane_id}" "~/.config/tmux/scripts/bottom-pane-display.sh")
         tmux select-pane -t "$BOTTOM_PANE" -T "__tmux_status_bar__"
+        # Force correct sizes - bottom pane is already 1 line from split -l 1
+        # Main pane will auto-adjust
     elif [ "$STATUS_COUNT" -gt 1 ]; then
         # Multiple status panes exist, keep only the last one and kill others
         KEEP_PANE=$(echo "$STATUS_PANES" | tail -1)
@@ -55,7 +52,7 @@ for window in 1 2 3; do
         # Resize the kept pane
         tmux resize-pane -t "$KEEP_PANE" -y 1
     else
-        # Exactly one status pane exists, just resize it
+        # Exactly one status pane exists, just resize it  
         tmux resize-pane -t "$STATUS_PANES" -y 1
     fi
     
@@ -66,12 +63,3 @@ done
 # Return to first window
 tmux select-window -t "$TICKET:1"
 
-# Log final state (simplified)
-echo "[DEBUG] Final pane heights for session $TICKET:" >> /tmp/tmux-worktree-debug.log
-for window in 1 2 3; do
-    HEIGHTS=$(tmux list-panes -t "$TICKET:$window" -F "#{pane_height}" | tr '\n' ',' | sed 's/,$//')
-    echo "  Window $window: $HEIGHTS" >> /tmp/tmux-worktree-debug.log
-done
-
-# Hook is already set by tmux.conf, no need to restore
-echo "[DEBUG] Session creation complete" >> /tmp/tmux-worktree-debug.log

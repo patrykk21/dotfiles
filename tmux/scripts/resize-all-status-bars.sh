@@ -14,6 +14,3 @@ for window in $WINDOWS; do
         tmux resize-pane -t "$pane" -y 1 2>/dev/null || true
     done
 done
-
-# Remove the hook after running
-tmux set-hook -t "$SESSION" -u client-attached 2>/dev/null || true
