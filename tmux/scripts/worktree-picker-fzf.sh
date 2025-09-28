@@ -159,16 +159,32 @@ if [ -n "$selected" ]; then
                 tmux new-window -t "$ticket:2" -n "server" -c "$worktree_path"
                 tmux new-window -t "$ticket:3" -n "commands" -c "$worktree_path"
                 
-                # Create bottom pane for each window
-                # Run them sequentially to ensure proper creation
-                ~/.config/tmux/scripts/create-bottom-pane-for-window.sh "$ticket:1" && \
-                ~/.config/tmux/scripts/create-bottom-pane-for-window.sh "$ticket:2" && \
-                ~/.config/tmux/scripts/create-bottom-pane-for-window.sh "$ticket:3"
+                tmux select-window -t "$ticket:1"
                 
+                # Switch to the new session first, then create bottom panes
+                tmux switch-client -t "$ticket"
+                
+                # Now create bottom panes for each window in the correct session context
+                tmux select-window -t "$ticket:1"
+                tmux split-window -v -l 1 -d "~/.config/tmux/scripts/bottom-pane-display.sh"
+                tmux select-pane -t "$ticket:1.2" -T "__tmux_status_bar__"
+                
+                tmux select-window -t "$ticket:2"
+                tmux split-window -v -l 1 -d "~/.config/tmux/scripts/bottom-pane-display.sh"
+                tmux select-pane -t "$ticket:2.2" -T "__tmux_status_bar__"
+                
+                tmux select-window -t "$ticket:3"
+                tmux split-window -v -l 1 -d "~/.config/tmux/scripts/bottom-pane-display.sh"
+                tmux select-pane -t "$ticket:3.2" -T "__tmux_status_bar__"
+                
+                # Go back to first window
                 tmux select-window -t "$ticket:1"
                 
                 # Update last accessed time
                 update_session_access "$REPO_NAME" "$ticket"
+                
+                # Exit early since we already switched
+                exit 0
             else
                 # No metadata, create new session with defaults
                 # Use explicit cd in the command to ensure directory is set
@@ -176,19 +192,36 @@ if [ -n "$selected" ]; then
                 tmux new-window -t "$ticket:2" -n "server" -c "$worktree_path"
                 tmux new-window -t "$ticket:3" -n "commands" -c "$worktree_path"
                 
-                # Create bottom pane for each window
-                # Run them sequentially to ensure proper creation
-                ~/.config/tmux/scripts/create-bottom-pane-for-window.sh "$ticket:1" && \
-                ~/.config/tmux/scripts/create-bottom-pane-for-window.sh "$ticket:2" && \
-                ~/.config/tmux/scripts/create-bottom-pane-for-window.sh "$ticket:3"
+                tmux select-window -t "$ticket:1"
                 
+                # Switch to the new session first, then create bottom panes
+                tmux switch-client -t "$ticket"
+                
+                # Now create bottom panes for each window in the correct session context
+                tmux select-window -t "$ticket:1"
+                tmux split-window -v -l 1 -d "~/.config/tmux/scripts/bottom-pane-display.sh"
+                tmux select-pane -t "$ticket:1.2" -T "__tmux_status_bar__"
+                
+                tmux select-window -t "$ticket:2"
+                tmux split-window -v -l 1 -d "~/.config/tmux/scripts/bottom-pane-display.sh"
+                tmux select-pane -t "$ticket:2.2" -T "__tmux_status_bar__"
+                
+                tmux select-window -t "$ticket:3"
+                tmux split-window -v -l 1 -d "~/.config/tmux/scripts/bottom-pane-display.sh"
+                tmux select-pane -t "$ticket:3.2" -T "__tmux_status_bar__"
+                
+                # Go back to first window
                 tmux select-window -t "$ticket:1"
                 
                 # Save metadata
                 local branch=$(git -C "$worktree_path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
                 save_session_metadata "$REPO_NAME" "$ticket" "$worktree_path" "$branch" "$ticket"
+                
+                # Exit early since we already switched
+                exit 0
             fi
             
+            # This line is now unreachable for new sessions
             tmux switch-client -t "$ticket"
         fi
     fi
