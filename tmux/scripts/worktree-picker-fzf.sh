@@ -52,7 +52,7 @@ get_worktrees() {
         # Check if this is the main repository (base)
         if (path !~ worktrees_base) {
             type_text = "[BASE]"
-            ticket = "base"
+            ticket = safe_repo_name "-base"
         } else {
             # This is a worktree
             # Check if this is under our worktrees structure
