@@ -135,9 +135,10 @@ get_worktrees() {
         port_text = "-"
         if (type_text == "[WORKTREE]" && session_text != "[NO SESSION]") {
             # Read port from metadata file
-            port_cmd = "test -f " worktrees_base "/" repo_name "/.worktree-meta/sessions/" ticket ".json && jq -r '.port // \"-\"' " worktrees_base "/" repo_name "/.worktree-meta/sessions/" ticket ".json 2>/dev/null || echo -"
-            port_cmd | getline port_text
-            close(port_cmd)
+            metadata_file = worktrees_base "/" repo_name "/.worktree-meta/sessions/" ticket ".json"
+            cmd = "test -f " metadata_file " && jq -r \".port // \\\"-\\\"\" " metadata_file " 2>/dev/null || echo \"-\""
+            cmd | getline port_text
+            close(cmd)
         }
         
         # Output format with type column and port
