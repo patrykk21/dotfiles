@@ -17,7 +17,7 @@ CURRENT_SESSION=$(tmux display-message -p "#{session_name}")
 
 # Get list of worktrees with metadata-enhanced info
 get_worktrees() {
-    # Print header
+    # Print header (without delimiter so it shows in fzf)
     printf "%-4s %-15s %-12s %-30s %s\n" "" "TICKET" "SESSION" "BRANCH" "PATH"
     printf "%-4s %-15s %-12s %-30s %s\n" "" "------" "-------" "------" "----"
     
@@ -84,7 +84,8 @@ get_worktrees() {
             }
         }
         
-        # Format output
+        # Format output with hidden data fields
+        # Format: VISIBLE|HIDDEN_TICKET|HIDDEN_PATH
         if (path == current) {
             # Current worktree - show with arrow
             if (session_status == "active") {
@@ -100,6 +101,7 @@ get_worktrees() {
             }
         }
         
+        # Output normal format (no hidden fields)
         printf "%s%-15s %-12s %-30s %s\n", status_icon, ticket, session_text, branch, path
     }'
 }
@@ -131,14 +133,26 @@ selected=$(get_worktrees | fzf-tmux -p 80%,60% \
 if [ -n "$selected" ]; then
     echo "[PICKER DEBUG] Selected: '$selected'" >> /tmp/tmux-worktree-debug.log
     
-    # Extract fields - handle the status icons correctly
-    # Remove only the leading spaces and status icon (→, ○, or ●)
-    local clean_line=$(echo "$selected" | sed 's/^[[:space:]]*[→○●][[:space:]]*//')
-    echo "[PICKER DEBUG] Clean line: '$clean_line'" >> /tmp/tmux-worktree-debug.log
+    # Extract fields from the formatted output
+    # The line format is: "  ● ticket         [STATUS]     branch                         path"
+    # We need to handle variable spacing
     
-    # Extract ticket (first field) and path (last field) from clean line
-    local ticket=$(echo "$clean_line" | awk '{print $1}')
-    local worktree_path=$(echo "$clean_line" | awk '{print $NF}')
+    # First, normalize spaces and extract fields
+    local normalized=$(echo "$selected" | tr -s ' ')
+    echo "[PICKER DEBUG] Normalized: '$normalized'" >> /tmp/tmux-worktree-debug.log
+    
+    # Extract ticket (skip icon, get next field)
+    local ticket=$(echo "$normalized" | awk '{
+        for (i=1; i<=NF; i++) {
+            if ($i ~ /^[→○●]$/) {
+                print $(i+1)
+                exit
+            }
+        }
+    }')
+    
+    # Extract path (always the last field)
+    local worktree_path=$(echo "$selected" | awk '{print $NF}')
     
     echo "[PICKER DEBUG] Ticket: '$ticket', Path: '$worktree_path'" >> /tmp/tmux-worktree-debug.log
     
