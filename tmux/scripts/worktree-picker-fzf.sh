@@ -45,8 +45,13 @@ get_worktrees() {
         session_text = "[NO SESSION]"
         
         # Check if this is under our worktrees structure
-        if (match(path, worktrees_base "/" repo_name "/([^/]+)$", m)) {
-            ticket = m[1]
+        pattern = worktrees_base "/" repo_name "/"
+        if (index(path, pattern) > 0) {
+            # Extract the ticket from the path
+            path_copy = path
+            sub(".*" worktrees_base "/" repo_name "/", "", path_copy)
+            sub("/.*", "", path_copy)
+            ticket = path_copy
         } else if (match(branch, /[A-Z]+-[0-9]+/)) {
             ticket = substr(branch, RSTART, RLENGTH)
         } else if (match(dirname, /[A-Z]+-[0-9]+/)) {
