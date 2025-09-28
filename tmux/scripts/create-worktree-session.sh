@@ -3,6 +3,8 @@
 # Create a worktree session with proper window setup
 # This mimics manual tab creation
 
+# Source metadata functions
+source "$(dirname "$0")/worktree-metadata.sh"
 
 TICKET="$1"
 WORKTREE_PATH="$2"
@@ -12,11 +14,36 @@ if [ -z "$TICKET" ] || [ -z "$WORKTREE_PATH" ]; then
     exit 1
 fi
 
+# Get repository name from worktree path
+MAIN_REPO=$(cd "$WORKTREE_PATH" 2>/dev/null && git worktree list | head -1 | awk '{print $1}')
+REPO_NAME=$(basename "$MAIN_REPO")
+
+# Get port from metadata if this is a worktree (not base)
+SERVER_PORT=""
+if [[ ! "$TICKET" =~ -base$ ]]; then
+    # Try to get existing port from metadata
+    SERVER_PORT=$(get_session_metadata "$REPO_NAME" "$TICKET" "port")
+    
+    # If no port exists, this will be generated when metadata is saved
+    if [ -z "$SERVER_PORT" ]; then
+        SERVER_PORT=$(generate_worktree_port)
+    fi
+fi
 
 # Create new session with explicit size (90 lines to accommodate 89+1 split)
-tmux new-session -s "$TICKET" -n "claude" -c "$WORKTREE_PATH" -d -x 120 -y 90 "cd '$WORKTREE_PATH' && exec $SHELL"
-tmux new-window -t "$TICKET:2" -n "server" -c "$WORKTREE_PATH"
-tmux new-window -t "$TICKET:3" -n "commands" -c "$WORKTREE_PATH"
+# Set SERVER_PORT environment variable if we have one
+if [ -n "$SERVER_PORT" ]; then
+    tmux new-session -s "$TICKET" -n "claude" -c "$WORKTREE_PATH" -d -x 120 -y 90 \
+        "export SERVER_PORT=$SERVER_PORT && cd '$WORKTREE_PATH' && exec $SHELL"
+    tmux new-window -t "$TICKET:2" -n "server" -c "$WORKTREE_PATH" \
+        "export SERVER_PORT=$SERVER_PORT && cd '$WORKTREE_PATH' && exec $SHELL"
+    tmux new-window -t "$TICKET:3" -n "commands" -c "$WORKTREE_PATH" \
+        "export SERVER_PORT=$SERVER_PORT && cd '$WORKTREE_PATH' && exec $SHELL"
+else
+    tmux new-session -s "$TICKET" -n "claude" -c "$WORKTREE_PATH" -d -x 120 -y 90 "cd '$WORKTREE_PATH' && exec $SHELL"
+    tmux new-window -t "$TICKET:2" -n "server" -c "$WORKTREE_PATH"
+    tmux new-window -t "$TICKET:3" -n "commands" -c "$WORKTREE_PATH"
+fi
 
 # Go back to first window
 tmux select-window -t "$TICKET:1"
@@ -39,7 +66,11 @@ for window in 1 2 3; do
     
     if [ "$STATUS_COUNT" -eq 0 ]; then
         # No status pane exists, create one
-        BOTTOM_PANE=$(tmux split-window -t "$TICKET:$window" -v -d -l 1 -P -F "#{pane_id}" "~/.config/tmux/scripts/bottom-pane-display.sh")
+        if [ -n "$SERVER_PORT" ]; then
+            BOTTOM_PANE=$(tmux split-window -t "$TICKET:$window" -v -d -l 1 -P -F "#{pane_id}" "export SERVER_PORT=$SERVER_PORT && ~/.config/tmux/scripts/bottom-pane-display.sh")
+        else
+            BOTTOM_PANE=$(tmux split-window -t "$TICKET:$window" -v -d -l 1 -P -F "#{pane_id}" "~/.config/tmux/scripts/bottom-pane-display.sh")
+        fi
         tmux select-pane -t "$BOTTOM_PANE" -T "__tmux_status_bar__"
         # Force correct sizes - bottom pane is already 1 line from split -l 1
         # Main pane will auto-adjust
