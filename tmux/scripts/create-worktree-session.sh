@@ -14,14 +14,14 @@ if [ -z "$TICKET" ] || [ -z "$WORKTREE_PATH" ]; then
     exit 1
 fi
 
-# Temporarily set a no-op hook to prevent conflicts
-echo "[DEBUG] Setting no-op after-new-window hook" >> /tmp/tmux-worktree-debug.log
-tmux set-hook -g after-new-window ''
+# Unset the hook completely to prevent conflicts
+echo "[DEBUG] Unsetting after-new-window hook" >> /tmp/tmux-worktree-debug.log
+tmux set-hook -gu after-new-window
 
-# Create new session with all windows at once to avoid hook triggers
-tmux new-session -s "$TICKET" -n "claude" -c "$WORKTREE_PATH" -d "cd '$WORKTREE_PATH' && exec $SHELL" \; \
-    new-window -t "$TICKET:2" -n "server" -c "$WORKTREE_PATH" \; \
-    new-window -t "$TICKET:3" -n "commands" -c "$WORKTREE_PATH"
+# Create new session and windows one by one (compound command seems to still trigger hooks)
+tmux new-session -s "$TICKET" -n "claude" -c "$WORKTREE_PATH" -d "cd '$WORKTREE_PATH' && exec $SHELL"
+tmux new-window -t "$TICKET:2" -n "server" -c "$WORKTREE_PATH"
+tmux new-window -t "$TICKET:3" -n "commands" -c "$WORKTREE_PATH"
 
 # Go back to first window
 tmux select-window -t "$TICKET:1"
@@ -32,17 +32,25 @@ for window in 1 2 3; do
     # Switch to the window
     tmux select-window -t "$TICKET:$window"
     
-    # Create bottom pane exactly like the hook does - without initial size
-    BOTTOM_PANE=$(tmux split-window -t "$TICKET:$window" -v -d -P -F "#{pane_id}" "~/.config/tmux/scripts/bottom-pane-display.sh")
+    # Check if bottom pane already exists (in case hook ran)
+    EXISTING_BOTTOM=$(tmux list-panes -t "$TICKET:$window" -F "#{pane_id} #{pane_title}" | grep "__tmux_status_bar__" | awk '{print $1}')
     
-    # Set the title
-    tmux select-pane -t "$BOTTOM_PANE" -T "__tmux_status_bar__"
-    
-    # Small delay to ensure pane is ready
-    sleep 0.1
-    
-    # Immediately resize to 1 line (like the hook does)
-    tmux resize-pane -t "$BOTTOM_PANE" -y 1
+    if [ -z "$EXISTING_BOTTOM" ]; then
+        # Create bottom pane only if it doesn't exist
+        BOTTOM_PANE=$(tmux split-window -t "$TICKET:$window" -v -d -P -F "#{pane_id}" "~/.config/tmux/scripts/bottom-pane-display.sh")
+        
+        # Set the title
+        tmux select-pane -t "$BOTTOM_PANE" -T "__tmux_status_bar__"
+        
+        # Small delay to ensure pane is ready
+        sleep 0.1
+        
+        # Immediately resize to 1 line (like the hook does)
+        tmux resize-pane -t "$BOTTOM_PANE" -y 1
+    else
+        # Just resize existing pane
+        tmux resize-pane -t "$EXISTING_BOTTOM" -y 1
+    fi
     
     # Return focus to main pane
     tmux select-pane -t "$TICKET:$window.1"
