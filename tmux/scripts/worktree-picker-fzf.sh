@@ -158,70 +158,36 @@ if [ -n "$selected" ]; then
                 tmux new-session -d -s "$ticket" -n "claude" -c "$worktree_path" "cd '$worktree_path' && exec $SHELL"
                 tmux new-window -t "$ticket:2" -n "server" -c "$worktree_path"
                 tmux new-window -t "$ticket:3" -n "commands" -c "$worktree_path"
-                
-                tmux select-window -t "$ticket:1"
-                
-                # Switch to the new session first, then create bottom panes
-                tmux switch-client -t "$ticket"
-                
-                # Now create bottom panes for each window in the correct session context
-                tmux select-window -t "$ticket:1"
-                tmux split-window -v -l 1 -d "~/.config/tmux/scripts/bottom-pane-display.sh"
-                tmux select-pane -t "$ticket:1.2" -T "__tmux_status_bar__"
-                
-                tmux select-window -t "$ticket:2"
-                tmux split-window -v -l 1 -d "~/.config/tmux/scripts/bottom-pane-display.sh"
-                tmux select-pane -t "$ticket:2.2" -T "__tmux_status_bar__"
-                
-                tmux select-window -t "$ticket:3"
-                tmux split-window -v -l 1 -d "~/.config/tmux/scripts/bottom-pane-display.sh"
-                tmux select-pane -t "$ticket:3.2" -T "__tmux_status_bar__"
-                
-                # Go back to first window
                 tmux select-window -t "$ticket:1"
                 
                 # Update last accessed time
                 update_session_access "$REPO_NAME" "$ticket"
                 
-                # Exit early since we already switched
-                exit 0
+                # Switch to the session
+                tmux switch-client -t "$ticket"
+                
+                # Setup bottom panes after switching (run in background like normal tmux startup)
+                tmux run-shell -b "~/.config/tmux/scripts/setup-worktree-bottom-panes.sh '$ticket'"
             else
                 # No metadata, create new session with defaults
                 # Use explicit cd in the command to ensure directory is set
                 tmux new-session -d -s "$ticket" -n "claude" -c "$worktree_path" "cd '$worktree_path' && exec $SHELL"
                 tmux new-window -t "$ticket:2" -n "server" -c "$worktree_path"
                 tmux new-window -t "$ticket:3" -n "commands" -c "$worktree_path"
-                
-                tmux select-window -t "$ticket:1"
-                
-                # Switch to the new session first, then create bottom panes
-                tmux switch-client -t "$ticket"
-                
-                # Now create bottom panes for each window in the correct session context
-                tmux select-window -t "$ticket:1"
-                tmux split-window -v -l 1 -d "~/.config/tmux/scripts/bottom-pane-display.sh"
-                tmux select-pane -t "$ticket:1.2" -T "__tmux_status_bar__"
-                
-                tmux select-window -t "$ticket:2"
-                tmux split-window -v -l 1 -d "~/.config/tmux/scripts/bottom-pane-display.sh"
-                tmux select-pane -t "$ticket:2.2" -T "__tmux_status_bar__"
-                
-                tmux select-window -t "$ticket:3"
-                tmux split-window -v -l 1 -d "~/.config/tmux/scripts/bottom-pane-display.sh"
-                tmux select-pane -t "$ticket:3.2" -T "__tmux_status_bar__"
-                
-                # Go back to first window
                 tmux select-window -t "$ticket:1"
                 
                 # Save metadata
                 local branch=$(git -C "$worktree_path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
                 save_session_metadata "$REPO_NAME" "$ticket" "$worktree_path" "$branch" "$ticket"
                 
-                # Exit early since we already switched
-                exit 0
+                # Switch to the session
+                tmux switch-client -t "$ticket"
+                
+                # Setup bottom panes after switching (run in background like normal tmux startup)
+                tmux run-shell -b "~/.config/tmux/scripts/setup-worktree-bottom-panes.sh '$ticket'"
             fi
             
-            # This line is now unreachable for new sessions
+            # Switch to the session (only reached if session creation was skipped)
             tmux switch-client -t "$ticket"
         fi
     fi
