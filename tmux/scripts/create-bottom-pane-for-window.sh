@@ -21,26 +21,15 @@ ORIGINAL_WINDOW=$(tmux display-message -p "#{session_name}:#{window_index}")
 # Switch to the target window first
 tmux select-window -t "$TARGET_WINDOW"
 
-# Log before creation
-echo "[DEBUG] Hook creating bottom pane for $TARGET_WINDOW" >> /tmp/tmux-worktree-debug.log
-tmux list-panes -t "$TARGET_WINDOW" -F "#{pane_index}:#{pane_height}" >> /tmp/tmux-worktree-debug.log
-
 # Now create the bottom pane in the current (target) window
 BOTTOM_PANE=$(tmux split-window -v -d -P -F "#{pane_id}" \
     "~/.config/tmux/scripts/bottom-pane-display.sh")
-
-# Log after creation
-echo "[DEBUG] Hook created bottom pane $BOTTOM_PANE" >> /tmp/tmux-worktree-debug.log
-tmux list-panes -t "$TARGET_WINDOW" -F "#{pane_index}:#{pane_height}:#{pane_id}" >> /tmp/tmux-worktree-debug.log
 
 # Set a unique pane title to identify it
 tmux select-pane -t "$BOTTOM_PANE" -T "__tmux_status_bar__"
 
 # Immediately resize to 1 line
 tmux resize-pane -t "$BOTTOM_PANE" -y 1
-
-echo "[DEBUG] After resize" >> /tmp/tmux-worktree-debug.log
-tmux list-panes -t "$TARGET_WINDOW" -F "#{pane_index}:#{pane_height}:#{pane_id}" >> /tmp/tmux-worktree-debug.log
 
 # Configure the bottom pane to be non-selectable
 tmux set-option -t "$BOTTOM_PANE" -p window-style 'bg=colour235,fg=colour250'

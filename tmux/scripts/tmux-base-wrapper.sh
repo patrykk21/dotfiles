@@ -26,11 +26,11 @@ if git rev-parse --git-dir > /dev/null 2>&1; then
             source ~/.config/tmux/scripts/worktree-metadata.sh
             save_session_metadata "$REPO_NAME" "base" "$MAIN_REPO" "master" "base"
             
-            # Force resize all bottom panes before attaching
+            # Force resize all bottom panes before attaching (with proper error handling)
             for window in 1 2 3; do
                 STATUS_PANE=$(tmux list-panes -t "base:$window" -F "#{pane_id}:#{pane_title}" 2>/dev/null | grep "__tmux_status_bar__" | cut -d: -f1)
                 if [ -n "$STATUS_PANE" ]; then
-                    tmux resize-pane -t "$STATUS_PANE" -y 1
+                    tmux resize-pane -t "$STATUS_PANE" -y 1 2>/dev/null || true
                 fi
             done
             
