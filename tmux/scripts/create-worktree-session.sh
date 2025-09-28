@@ -14,9 +14,9 @@ if [ -z "$TICKET" ] || [ -z "$WORKTREE_PATH" ]; then
     exit 1
 fi
 
-# Unset the hook completely to prevent conflicts
-echo "[DEBUG] Unsetting after-new-window hook" >> /tmp/tmux-worktree-debug.log
-tmux set-hook -gu after-new-window
+# Don't try to unset hook - it gets reinstalled by tmux.conf
+# Instead, we'll check for existing panes before creating new ones
+echo "[DEBUG] Creating session with hook check" >> /tmp/tmux-worktree-debug.log
 
 # Create new session and windows one by one (compound command seems to still trigger hooks)
 tmux new-session -s "$TICKET" -n "claude" -c "$WORKTREE_PATH" -d "cd '$WORKTREE_PATH' && exec $SHELL"
@@ -26,25 +26,33 @@ tmux new-window -t "$TICKET:3" -n "commands" -c "$WORKTREE_PATH"
 # Go back to first window
 tmux select-window -t "$TICKET:1"
 
-# The after-new-window hook won't trigger for these initial windows, so create bottom panes manually
-# Create bottom panes with proper sizing for each window
+# Wait a moment for hooks to complete
+sleep 0.5
+
+# Clean up any extra panes and ensure correct sizing
 for window in 1 2 3; do
     # Switch to the window
     tmux select-window -t "$TICKET:$window"
     
-    # Check if bottom pane already exists (in case hook ran)
-    EXISTING_BOTTOM=$(tmux list-panes -t "$TICKET:$window" -F "#{pane_id} #{pane_title}" | grep "__tmux_status_bar__" | awk '{print $1}')
+    # Find all status bar panes
+    STATUS_PANES=$(tmux list-panes -t "$TICKET:$window" -F "#{pane_id} #{pane_title}" | grep "__tmux_status_bar__" | awk '{print $1}')
+    STATUS_COUNT=$(echo "$STATUS_PANES" | grep -c '^%' || echo 0)
     
-    if [ -z "$EXISTING_BOTTOM" ]; then
-        # Create bottom pane only if it doesn't exist
-        # Use -l 1 to set size at creation time
+    if [ "$STATUS_COUNT" -eq 0 ]; then
+        # No status pane exists, create one
         BOTTOM_PANE=$(tmux split-window -t "$TICKET:$window" -v -d -l 1 -P -F "#{pane_id}" "~/.config/tmux/scripts/bottom-pane-display.sh")
-        
-        # Set the title
         tmux select-pane -t "$BOTTOM_PANE" -T "__tmux_status_bar__"
+    elif [ "$STATUS_COUNT" -gt 1 ]; then
+        # Multiple status panes exist, keep only the last one and kill others
+        KEEP_PANE=$(echo "$STATUS_PANES" | tail -1)
+        echo "$STATUS_PANES" | head -n -1 | while read PANE; do
+            tmux kill-pane -t "$PANE" 2>/dev/null || true
+        done
+        # Resize the kept pane
+        tmux resize-pane -t "$KEEP_PANE" -y 1
     else
-        # Just resize existing pane
-        tmux resize-pane -t "$EXISTING_BOTTOM" -y 1
+        # Exactly one status pane exists, just resize it
+        tmux resize-pane -t "$STATUS_PANES" -y 1
     fi
     
     # Return focus to main pane
@@ -61,6 +69,5 @@ for window in 1 2 3; do
     echo "  Window $window: $HEIGHTS" >> /tmp/tmux-worktree-debug.log
 done
 
-# Restore the after-new-window hook
-tmux set-hook -g after-new-window 'run-shell -b "~/.config/tmux/scripts/create-bottom-pane-for-window.sh #{session_name}:#{window_index}"'
-echo "[DEBUG] Hook restored" >> /tmp/tmux-worktree-debug.log
+# Hook is already set by tmux.conf, no need to restore
+echo "[DEBUG] Session creation complete" >> /tmp/tmux-worktree-debug.log
