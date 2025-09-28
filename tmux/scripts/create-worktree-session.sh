@@ -26,19 +26,31 @@ tmux new-window -t "$TICKET:3" -n "commands" -c "$WORKTREE_PATH"
 tmux select-window -t "$TICKET:1"
 
 # The after-new-window hook won't trigger for these initial windows, so create bottom panes manually
-# Wait for windows to be fully created
-sleep 0.2
-
-# Create bottom panes for each window
+# Create bottom panes with proper sizing for each window
 for window in 1 2 3; do
-    ~/.config/tmux/scripts/create-bottom-pane-for-window.sh "$TICKET:$window"
+    # Switch to the window
+    tmux select-window -t "$TICKET:$window"
+    
+    # Log before creation
+    echo "[DEBUG] Before creating bottom pane for window $window" >> /tmp/tmux-worktree-debug.log
+    tmux list-panes -t "$TICKET:$window" -F "#{pane_index}:#{pane_height}" >> /tmp/tmux-worktree-debug.log
+    
+    # Create bottom pane exactly like the hook does - without initial size
+    BOTTOM_PANE=$(tmux split-window -t "$TICKET:$window" -v -d -P -F "#{pane_id}" "~/.config/tmux/scripts/bottom-pane-display.sh")
+    
+    # Log after creation
+    echo "[DEBUG] After creating bottom pane $BOTTOM_PANE" >> /tmp/tmux-worktree-debug.log
+    tmux list-panes -t "$TICKET:$window" -F "#{pane_index}:#{pane_height}:#{pane_id}" >> /tmp/tmux-worktree-debug.log
+    
+    # Set the title
+    tmux select-pane -t "$BOTTOM_PANE" -T "__tmux_status_bar__"
+    
+    # Immediately resize to 1 line (like the hook does)
+    tmux resize-pane -t "$BOTTOM_PANE" -y 1
+    
+    # Return focus to main pane
+    tmux select-pane -t "$TICKET:$window.1"
 done
 
-# Force resize after creation
-sleep 0.1
-for window in 1 2 3; do
-    STATUS_PANE=$(tmux list-panes -t "$TICKET:$window" -F "#{pane_id}:#{pane_title}" 2>/dev/null | grep "__tmux_status_bar__" | cut -d: -f1)
-    if [ -n "$STATUS_PANE" ]; then
-        tmux resize-pane -t "$STATUS_PANE" -y 1
-    fi
-done
+# Return to first window
+tmux select-window -t "$TICKET:1"
