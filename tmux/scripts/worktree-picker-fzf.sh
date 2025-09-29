@@ -171,9 +171,17 @@ LONGEST_VISUAL_LENGTH=$(echo "$WORKTREE_DATA" | awk '
     print length(line)
 }' | sort -nr | head -1)
 
-# Pad only the data rows to match visual width (+1 for cleaner ending)
-TARGET_VISUAL_WIDTH=$((LONGEST_VISUAL_LENGTH + 1))
-WORKTREE_DATA=$(echo "$WORKTREE_DATA" | awk -v target_width="$TARGET_VISUAL_WIDTH" '
+# Create separator for the popup first to know the target width
+# Adjust based on the fixed width
+FIXED_WIDTH=140  # Desired fixed width in characters
+SEPARATOR_WIDTH=$((FIXED_WIDTH - 6))
+
+# Create separator line
+SEPARATOR=$(printf '─%.0s' $(seq 1 $SEPARATOR_WIDTH))
+
+# Pad only the data rows to match the full popup width (separator + 2)
+TARGET_WIDTH=$((SEPARATOR_WIDTH + 2))
+WORKTREE_DATA=$(echo "$WORKTREE_DATA" | awk -v target_width="$TARGET_WIDTH" '
 NR <= 2 {
     # Keep header lines as-is
     print $0
@@ -193,14 +201,6 @@ NR > 2 {
     }
     print $0
 }')
-
-# Create separator for the popup
-# Adjust based on the fixed width
-FIXED_WIDTH=140  # Desired fixed width in characters
-SEPARATOR_WIDTH=$((FIXED_WIDTH - 6))
-
-# Create separator line
-SEPARATOR=$(printf '─%.0s' $(seq 1 $SEPARATOR_WIDTH))
 
 # Calculate popup width for fixed character width
 TERM_WIDTH=$(tput cols)
