@@ -172,7 +172,8 @@ LONGEST_VISUAL_LENGTH=$(echo "$WORKTREE_DATA" | awk '
 }' | sort -nr | head -1)
 
 # Pad only the data rows to match visual width (+1 for cleaner ending)
-WORKTREE_DATA=$(echo "$WORKTREE_DATA" | awk -v target_width="$((LONGEST_VISUAL_LENGTH + 1))" '
+TARGET_VISUAL_WIDTH=$((LONGEST_VISUAL_LENGTH + 1))
+WORKTREE_DATA=$(echo "$WORKTREE_DATA" | awk -v target_width="$TARGET_VISUAL_WIDTH" '
 NR <= 2 {
     # Keep header lines as-is
     print $0
@@ -193,15 +194,28 @@ NR > 2 {
     print $0
 }')
 
-# Create separator that extends to the full popup width
-# Use the visual length for separator calculation
-SEPARATOR_WIDTH=$((LONGEST_VISUAL_LENGTH + 12))
+# Create separator for the popup
+# Adjust based on the fixed width
+FIXED_WIDTH=140  # Desired fixed width in characters
+SEPARATOR_WIDTH=$((FIXED_WIDTH - 4))
 
 # Create separator line
 SEPARATOR=$(printf '─%.0s' $(seq 1 $SEPARATOR_WIDTH))
 
+# Calculate popup width for fixed character width
+TERM_WIDTH=$(tput cols)
+
+# Calculate percentage needed to achieve fixed character width
+POPUP_PERCENT=$(( (FIXED_WIDTH * 100) / TERM_WIDTH ))
+
+# Ensure it doesn't exceed 100%
+if [ $POPUP_PERCENT -gt 100 ]; then
+    POPUP_PERCENT=100
+fi
+
 # Use fzf-tmux to select a worktree
-selected=$(echo "$WORKTREE_DATA" | fzf-tmux -p 80%,60% \
+# Try using explicit positioning to force exact width
+selected=$(echo "$WORKTREE_DATA" | fzf-tmux -p -x C -w $FIXED_WIDTH -h 60% \
     --prompt=" Select worktree: " \
     --header=$'\n'"$SEPARATOR"$'\n    ● Active   ○ Inactive   → Current   [SESSION] Active   [METADATA] Saved\n'"$SEPARATOR"$'\n    ↵ switch   ctrl-x delete   ctrl-k kill session   ctrl-r reload' \
     --header-lines=2 \
@@ -209,8 +223,7 @@ selected=$(echo "$WORKTREE_DATA" | fzf-tmux -p 80%,60% \
     --border=rounded \
     --border-label=" Git Worktrees " \
     --bind "ctrl-x:execute-silent(~/.config/tmux/scripts/worktree-delete-from-picker.sh {})+accept" \
-    --bind "ctrl-k:execute-silent(~/.config/tmux/scripts/worktree-kill-session.sh {})+reload(~/.config/tmux/scripts/worktree-picker-fzf.sh reload)" \
-    --bind "ctrl-r:reload(~/.config/tmux/scripts/worktree-picker-fzf.sh reload)")
+    --bind "ctrl-k:execute-silent(~/.config/tmux/scripts/worktree-kill-session.sh {})+reload(~/.config/tmux/scripts/worktree-picker-fzf.sh reload)")
 
 # Check if deletion was requested
 if [ -f /tmp/tmux-worktree-delete-requested ]; then
@@ -350,8 +363,6 @@ if [ -n "$selected" ]; then
             echo "[PICKER DEBUG] Session $name already exists, switching" >> /tmp/tmux-worktree-debug.log
             # Write session name to temp file for tmux to read
             echo "$name" > /tmp/tmux-switch-to-session
-            # Send keys to tmux to execute the switch
-            tmux send-keys -t $TMUX_PANE Escape
             exit 0
         else
             # Check if we have metadata for this worktree
