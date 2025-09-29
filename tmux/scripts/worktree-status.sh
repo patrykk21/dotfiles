@@ -9,10 +9,13 @@ CURRENT_DIR=$(tmux display-message -p '#{pane_current_path}')
 # Source metadata functions
 source /Users/vigenerr/.config/tmux/scripts/worktree-metadata.sh
 
-# Determine if we're in a base repo or worktree
+# Get SERVER_PORT from metadata based on session name
+# The session name is the ticket (e.g., ECH-123)
 SERVER_PORT=""
+
+# First check if we're in a worktree by path
 if [[ "$CURRENT_DIR" == "$WORKTREES_BASE/"* ]]; then
-    # This is a worktree - get metadata
+    # Extract repo and ticket from path
     WORKTREE_INFO=$(get_worktree_info_from_path "$CURRENT_DIR")
     if [ -n "$WORKTREE_INFO" ]; then
         REPO_NAME=$(echo "$WORKTREE_INFO" | cut -d'|' -f1)
@@ -20,8 +23,23 @@ if [[ "$CURRENT_DIR" == "$WORKTREES_BASE/"* ]]; then
         SERVER_PORT=$(get_session_metadata "$REPO_NAME" "$TICKET" "port")
     fi
 else
-    # This is a base repo - no SERVER_PORT
-    SERVER_PORT=""
+    # Not in worktree directory, but might still be a worktree session
+    # Use session name to lookup metadata
+    if [[ "$SESSION" =~ -base$ ]]; then
+        # Base session - no SERVER_PORT
+        SERVER_PORT=""
+    else
+        # Try to find repo by checking git remote
+        if git -C "$CURRENT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+            REPO_URL=$(git -C "$CURRENT_DIR" remote get-url origin 2>/dev/null)
+            REPO_NAME=$(basename "$REPO_URL" .git 2>/dev/null)
+            
+            if [ -n "$REPO_NAME" ]; then
+                # Use session name as ticket
+                SERVER_PORT=$(get_session_metadata "$REPO_NAME" "$SESSION" "port")
+            fi
+        fi
+    fi
 fi
 
 # Check if we're in a git repository
