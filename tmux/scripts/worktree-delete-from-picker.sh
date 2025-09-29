@@ -24,8 +24,8 @@ MAIN_REPO=$(git worktree list | head -1 | awk '{print $1}')
 REPO_NAME=$(basename "$MAIN_REPO")
 
 # Write deletion info to a temp file for confirmation
-TEMP_DELETE_FILE="/tmp/tmux-worktree-delete-$$"
+TEMP_DELETE_FILE="/tmp/tmux-worktree-delete-pending"
 echo "$TICKET|$WORKTREE_PATH|$REPO_NAME" > "$TEMP_DELETE_FILE"
 
-# Exit to close current fzf and trigger confirmation
-exit 99
+# Create a marker that we want to delete something
+touch /tmp/tmux-worktree-delete-requested
