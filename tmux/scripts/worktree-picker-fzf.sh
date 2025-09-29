@@ -197,7 +197,7 @@ NR > 2 {
 # Create separator for the popup
 # Adjust based on the fixed width
 FIXED_WIDTH=140  # Desired fixed width in characters
-SEPARATOR_WIDTH=$((FIXED_WIDTH - 4))
+SEPARATOR_WIDTH=$((FIXED_WIDTH - 6))
 
 # Create separator line
 SEPARATOR=$(printf '─%.0s' $(seq 1 $SEPARATOR_WIDTH))
