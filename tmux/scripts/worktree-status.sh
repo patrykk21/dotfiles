@@ -26,7 +26,7 @@ if ! git -C "$CURRENT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     
     # Add SERVER_PORT if it exists
     if [ -n "$SERVER_PORT" ]; then
-        OUTPUT="$OUTPUT #[fg=colour239] • #[fg=colour214]$SERVER_PORT"
+        OUTPUT="$OUTPUT #[fg=colour239] • #[fg=colour214] $SERVER_PORT"
     fi
     
     echo "$OUTPUT "
@@ -47,7 +47,7 @@ if [ "$WORKTREE_PATH" = "$MAIN_REPO" ]; then
     
     # Add SERVER_PORT if it exists
     if [ -n "$SERVER_PORT" ]; then
-        OUTPUT="$OUTPUT #[fg=colour239] • #[fg=colour214]$SERVER_PORT"
+        OUTPUT="$OUTPUT #[fg=colour239] • #[fg=colour214] $SERVER_PORT"
     fi
     
     echo "$OUTPUT "
@@ -72,7 +72,7 @@ else
     
     # Add SERVER_PORT if it exists
     if [ -n "$SERVER_PORT" ]; then
-        OUTPUT="$OUTPUT #[fg=colour239] • #[fg=colour214]$SERVER_PORT"
+        OUTPUT="$OUTPUT #[fg=colour239] • #[fg=colour214] $SERVER_PORT"
     fi
     
     echo "$OUTPUT "
