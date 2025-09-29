@@ -29,7 +29,7 @@ if ! git -C "$CURRENT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
         OUTPUT="$OUTPUT #[fg=colour239] • #[fg=colour214] $SERVER_PORT"
     fi
     
-    echo "$OUTPUT "
+    echo "$OUTPUT  "
     exit 0
 fi
 
@@ -50,7 +50,7 @@ if [ "$WORKTREE_PATH" = "$MAIN_REPO" ]; then
         OUTPUT="$OUTPUT #[fg=colour239] • #[fg=colour214] $SERVER_PORT"
     fi
     
-    echo "$OUTPUT "
+    echo "$OUTPUT  "
 else
     # In a worktree - extract ticket name from path or session
     WORKTREE_NAME=$(basename "$WORKTREE_PATH")
@@ -75,5 +75,5 @@ else
         OUTPUT="$OUTPUT #[fg=colour239] • #[fg=colour214] $SERVER_PORT"
     fi
     
-    echo "$OUTPUT "
+    echo "$OUTPUT  "
 fi

@@ -1,20 +1,29 @@
 #!/usr/bin/env bash
-# Smart pane selection that skips the bottom status pane
+# Smart pane selection that skips the top and bottom status panes
 
 DIRECTION=$1
 
 # Try to select pane in the requested direction
 tmux select-pane -$DIRECTION
 
-# Check if we landed on the status bar pane
+# Check if we landed on a status bar pane
 CURRENT_PANE_TITLE=$(tmux display-message -p "#{pane_title}")
-if [[ "$CURRENT_PANE_TITLE" == "__tmux_status_bar__" ]]; then
+CURRENT_PANE_CMD=$(tmux display-message -p "#{pane_current_command}")
+
+if [[ "$CURRENT_PANE_TITLE" == "__tmux_status_bar__" ]] || \
+   [[ "$CURRENT_PANE_CMD" == *"bottom-prompt"* ]] || \
+   [[ "$CURRENT_PANE_CMD" == *"top-status-bar"* ]]; then
     # Skip it and try again
     tmux select-pane -$DIRECTION
     
-    # If we're still on the status bar, go back to where we were
+    # Check again if we're still on a status pane
     NEW_PANE_TITLE=$(tmux display-message -p "#{pane_title}")
-    if [[ "$NEW_PANE_TITLE" == "__tmux_status_bar__" ]]; then
+    NEW_PANE_CMD=$(tmux display-message -p "#{pane_current_command}")
+    
+    if [[ "$NEW_PANE_TITLE" == "__tmux_status_bar__" ]] || \
+       [[ "$NEW_PANE_CMD" == *"bottom-prompt"* ]] || \
+       [[ "$NEW_PANE_CMD" == *"top-status-bar"* ]]; then
+        # Go back to where we were
         tmux select-pane -l
     fi
 fi
