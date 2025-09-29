@@ -6,16 +6,21 @@ SESSION=$(tmux display-message -p '#S')
 # Get current directory
 CURRENT_DIR=$(tmux display-message -p '#{pane_current_path}')
 
-# Get SERVER_PORT from the active pane's environment
-SERVER_PORT=$(tmux show-environment -t "$SESSION" SERVER_PORT 2>/dev/null | cut -d= -f2)
+# Source metadata functions
+source /Users/vigenerr/.config/tmux/scripts/worktree-metadata.sh
 
-# If not found in session, try global environment
-if [ -z "$SERVER_PORT" ] || [ "$SERVER_PORT" = "-SERVER_PORT" ]; then
-    SERVER_PORT=$(tmux show-environment -g SERVER_PORT 2>/dev/null | cut -d= -f2)
-fi
-
-# Clear if we got the unset marker
-if [ "$SERVER_PORT" = "-SERVER_PORT" ]; then
+# Determine if we're in a base repo or worktree
+SERVER_PORT=""
+if [[ "$CURRENT_DIR" == "$WORKTREES_BASE/"* ]]; then
+    # This is a worktree - get metadata
+    WORKTREE_INFO=$(get_worktree_info_from_path "$CURRENT_DIR")
+    if [ -n "$WORKTREE_INFO" ]; then
+        REPO_NAME=$(echo "$WORKTREE_INFO" | cut -d'|' -f1)
+        TICKET=$(echo "$WORKTREE_INFO" | cut -d'|' -f2)
+        SERVER_PORT=$(get_session_metadata "$REPO_NAME" "$TICKET" "port")
+    fi
+else
+    # This is a base repo - no SERVER_PORT
     SERVER_PORT=""
 fi
 
