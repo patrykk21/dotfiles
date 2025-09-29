@@ -161,12 +161,13 @@ fi
 # Use fzf-tmux to select a worktree
 selected=$(get_worktrees | fzf-tmux -p 80%,60% \
     --prompt=" Select worktree: " \
-    --header="● = Active | ○ = Inactive | → = Current | [SESSION]=Active | [METADATA]=Saved | [ORPHAN]=No metadata | ↵ switch | ctrl-x delete" \
+    --header="● = Active | ○ = Inactive | → = Current | [SESSION]=Active | [METADATA]=Saved | ↵ switch | ctrl-x delete | ctrl-k kill session" \
     --header-lines=2 \
     --color="fg:250,bg:235,hl:114,fg+:235,bg+:114,hl+:235,prompt:114,pointer:114,header:243" \
     --border=rounded \
     --border-label=" Git Worktrees " \
     --bind "ctrl-x:execute-silent(~/.config/tmux/scripts/worktree-delete-from-picker.sh {})+accept" \
+    --bind "ctrl-k:execute-silent(~/.config/tmux/scripts/worktree-kill-session.sh {})+reload(~/.config/tmux/scripts/worktree-picker-fzf.sh reload)" \
     --bind "ctrl-r:reload(~/.config/tmux/scripts/worktree-picker-fzf.sh reload)")
 
 # Check if deletion was requested
