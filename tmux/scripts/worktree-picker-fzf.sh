@@ -166,8 +166,15 @@ selected=$(get_worktrees | fzf-tmux -p 80%,60% \
     --color="fg:250,bg:235,hl:114,fg+:235,bg+:114,hl+:235,prompt:114,pointer:114,header:243" \
     --border=rounded \
     --border-label=" Git Worktrees " \
-    --bind "ctrl-x:execute-silent(~/.config/tmux/scripts/worktree-delete-from-picker.sh {})+reload(~/.config/tmux/scripts/worktree-picker-fzf.sh reload)" \
+    --bind "ctrl-x:execute-silent(~/.config/tmux/scripts/worktree-delete-from-picker.sh {})+accept" \
     --bind "ctrl-r:reload(~/.config/tmux/scripts/worktree-picker-fzf.sh reload)")
+
+# Check if deletion was requested
+if [ -f /tmp/tmux-worktree-delete-requested ]; then
+    rm -f /tmp/tmux-worktree-delete-requested
+    # Exit with special code to trigger deletion confirmation
+    exit 99
+fi
 
 # If a worktree was selected (Enter pressed), switch to it
 if [ -n "$selected" ]; then
