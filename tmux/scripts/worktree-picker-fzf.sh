@@ -158,10 +158,52 @@ if [ "$1" = "reload" ]; then
     exit 0
 fi
 
+# Get the worktree data
+WORKTREE_DATA=$(get_worktrees)
+
+# Find the longest visual line for consistent padding
+# The arrow → is 3 bytes but 1 visual character, so we need to handle this
+LONGEST_VISUAL_LENGTH=$(echo "$WORKTREE_DATA" | awk '
+{
+    line = $0
+    # Replace multi-byte arrow with single char for visual length
+    gsub(/→/, "X", line)
+    print length(line)
+}' | sort -nr | head -1)
+
+# Pad only the data rows to match visual width (+1 for cleaner ending)
+WORKTREE_DATA=$(echo "$WORKTREE_DATA" | awk -v target_width="$((LONGEST_VISUAL_LENGTH + 1))" '
+NR <= 2 {
+    # Keep header lines as-is
+    print $0
+}
+NR > 2 {
+    # Calculate visual length for this line
+    visual_line = $0
+    gsub(/→/, "X", visual_line)
+    visual_len = length(visual_line)
+    
+    # Add padding to reach target width
+    padding = target_width - visual_len
+    if (padding > 0) {
+        for (i = 0; i < padding; i++) {
+            $0 = $0 " "
+        }
+    }
+    print $0
+}')
+
+# Create separator that extends to the full popup width
+# Use the visual length for separator calculation
+SEPARATOR_WIDTH=$((LONGEST_VISUAL_LENGTH + 12))
+
+# Create separator line
+SEPARATOR=$(printf '─%.0s' $(seq 1 $SEPARATOR_WIDTH))
+
 # Use fzf-tmux to select a worktree
-selected=$(get_worktrees | fzf-tmux -p 80%,60% \
+selected=$(echo "$WORKTREE_DATA" | fzf-tmux -p 80%,60% \
     --prompt=" Select worktree: " \
-    --header="● = Active | ○ = Inactive | → = Current | [SESSION]=Active | [METADATA]=Saved | ↵ switch | ctrl-x delete | ctrl-k kill session" \
+    --header=$'\n'"$SEPARATOR"$'\n    ● Active   ○ Inactive   → Current   [SESSION] Active   [METADATA] Saved\n'"$SEPARATOR"$'\n    ↵ switch   ctrl-x delete   ctrl-k kill session   ctrl-r reload' \
     --header-lines=2 \
     --color="fg:250,bg:235,hl:114,fg+:235,bg+:114,hl+:235,prompt:114,pointer:114,header:243" \
     --border=rounded \
