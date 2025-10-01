@@ -2,7 +2,7 @@
 # Toggle server in "server" tab
 
 # Source metadata functions to get SERVER_PORT
-source /Users/vigenerr/.config/tmux/scripts/worktree-metadata.sh
+source ~/.config/tmux/scripts/worktree-metadata.sh
 
 # Get current session
 SESSION=$(tmux display-message -p '#S')

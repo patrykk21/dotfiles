@@ -80,7 +80,18 @@ chmod +x ~/.config/tmux/scripts/*.sh
 chmod +x ~/.config/tmux/plugins/tmux-bottom-bar/scripts/*.sh
 ```
 
-### Step 5: Start Tmux and Install Plugins
+### Step 5: Set Up Environment (Optional)
+```bash
+# Set up worktree base directory for git worktree integration
+mkdir -p ~/worktrees
+
+# Add to your shell rc file (~/.zshrc, ~/.bashrc) for worktree features
+echo 'export WORKTREES_BASE="$HOME/worktrees"' >> ~/.zshrc
+# or for bash:
+# echo 'export WORKTREES_BASE="$HOME/worktrees"' >> ~/.bashrc
+```
+
+### Step 6: Start Tmux and Install Plugins
 ```bash
 tmux
 # Inside tmux, press: Ctrl-Space + I

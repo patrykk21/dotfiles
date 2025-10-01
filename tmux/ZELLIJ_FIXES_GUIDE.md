@@ -181,7 +181,7 @@ bind-key -T session-mode Escape switch-client -T root \; refresh-client -S
 ## Additional Required Scripts
 
 ### Session Picker Script
-Create `/Users/vigenerr/.config/tmux/scripts/session-picker.sh`:
+Create `~/.config/tmux/scripts/session-picker.sh`:
 
 ```bash
 #!/bin/bash
@@ -203,7 +203,7 @@ chmod +x ~/.config/tmux/scripts/session-picker.sh
 ```
 
 ### Updated Status Bar Script
-Update the session-mode section in `/Users/vigenerr/.config/tmux/scripts/status-bar.sh` (line 34-37):
+Update the session-mode section in `~/.config/tmux/scripts/status-bar.sh` (line 34-37):
 
 ```bash
     "session-mode")

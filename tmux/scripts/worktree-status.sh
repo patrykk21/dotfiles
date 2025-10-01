@@ -7,7 +7,7 @@ SESSION=$(tmux display-message -p '#S')
 CURRENT_DIR=$(tmux display-message -p '#{pane_current_path}')
 
 # Source metadata functions
-source /Users/vigenerr/.config/tmux/scripts/worktree-metadata.sh
+source ~/.config/tmux/scripts/worktree-metadata.sh
 
 # Get SERVER_PORT from metadata based on session name
 # The session name is the ticket (e.g., ECH-123)
