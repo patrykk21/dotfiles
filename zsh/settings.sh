@@ -1,0 +1,7 @@
+# export DISPLAY=:0.0
+# Blur {{{
+# if [[ $(ps -p $PPID -o comm=) =~ '^yakuake|kitty$' ]]; then
+#   for wid in $(xdotool search --pid $PPID); do
+#     xprop -f _KDE_NET_WM_BLUR_BEHIND_REGION 32c -set _KDE_NET_WM_BLUR_BEHIND_REGION 0 -id $wid; done
+# fi
+# }}}
