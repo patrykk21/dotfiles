@@ -9,4 +9,10 @@
 !tmux/
 !tmux/**
 
+# Exclude TPM plugins (should be installed locally, not committed)
+tmux/plugins/tmux-continuum/
+tmux/plugins/tmux-resurrect/
+tmux/plugins/tmux-sensible/
+tmux/plugins/tpm/
+
 !starship.toml
