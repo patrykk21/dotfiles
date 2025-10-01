@@ -2,8 +2,8 @@
 # Initialize shell environment for new tmux windows/panes
 
 # Source metadata functions safely
-if [ -f /Users/vigenerr/.config/tmux/scripts/worktree-metadata.sh ]; then
-    source /Users/vigenerr/.config/tmux/scripts/worktree-metadata.sh 2>/dev/null || true
+if [ -f ~/.config/tmux/scripts/worktree-metadata.sh ]; then
+    source ~/.config/tmux/scripts/worktree-metadata.sh 2>/dev/null || true
 fi
 
 # Get current directory

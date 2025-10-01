@@ -5,7 +5,7 @@ WINDOW_TARGET="$1"
 SESSION=$(echo "$WINDOW_TARGET" | cut -d':' -f1)
 
 # Source metadata functions
-source /Users/vigenerr/.config/tmux/scripts/worktree-metadata.sh
+source ~/.config/tmux/scripts/worktree-metadata.sh
 
 # Get current directory from the window
 CURRENT_DIR=$(tmux display-message -t "$WINDOW_TARGET" -p '#{pane_current_path}' 2>/dev/null)
