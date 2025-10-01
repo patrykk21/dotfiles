@@ -31,6 +31,7 @@ while true; do
             -e 's/#\[bg=colour168,fg=colour235,bold\]/\\033[48;5;168m\\033[38;5;235m\\033[1m/g' \
             -e 's/#\[bg=colour176,fg=colour235,bold\]/\\033[48;5;176m\\033[38;5;235m\\033[1m/g' \
             -e 's/#\[bg=colour73,fg=colour235,bold\]/\\033[48;5;73m\\033[38;5;235m\\033[1m/g' \
+            -e 's/#\[bg=colour174,fg=colour235,bold\]/\\033[48;5;174m\\033[38;5;235m\\033[1m/g' \
             -e 's/#\[bg=colour75,fg=colour235\]/\\033[48;5;75m\\033[38;5;235m/g' \
             -e 's/#\[bg=default,fg=colour75\]/\\033[49m\\033[38;5;75m/g' \
             -e 's/#\[bg=colour114,fg=colour235\]/\\033[48;5;114m\\033[38;5;235m/g' \
@@ -43,9 +44,13 @@ while true; do
             -e 's/#\[bg=default,fg=colour176\]/\\033[49m\\033[38;5;176m/g' \
             -e 's/#\[bg=colour73,fg=colour235\]/\\033[48;5;73m\\033[38;5;235m/g' \
             -e 's/#\[bg=default,fg=colour73\]/\\033[49m\\033[38;5;73m/g' \
+            -e 's/#\[bg=colour174,fg=colour235\]/\\033[48;5;174m\\033[38;5;235m/g' \
+            -e 's/#\[bg=default,fg=colour174\]/\\033[49m\\033[38;5;174m/g' \
+            -e 's/#\[bg=default,fg=red\]/\\033[49m\\033[31m/g' \
             -e 's/#\[bg=colour235,fg=colour\([0-9]*\)\]/\\033[48;5;235m\\033[38;5;\1m/g' \
             -e 's/#\[bg=colour240,fg=colour250\]/\\033[48;5;240m\\033[38;5;250m/g' \
             -e 's/#\[fg=colour\([0-9]*\)\]/\\033[38;5;\1m/g' \
+            -e 's/#\[fg=red\]/\\033[31m/g' \
             -e 's/#\[bold\]/\\033[1m/g' \
             -e 's/#\[bg=default\]/\\033[49m/g' \
             -e 's/#\[fg=default\]/\\033[39m/g' \

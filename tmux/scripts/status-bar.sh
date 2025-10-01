@@ -17,7 +17,7 @@ MODE=$(tmux display-message -p '#{client_key_table}')
 case "$MODE" in
     "root")
         # Main menu with OneDark colored pills and matching text
-        echo "  #[bg=colour75,fg=colour235] C-S-p #[bg=default,fg=colour75] PANE  #[bg=colour114,fg=colour235] C-S-t #[bg=default,fg=colour114] TAB  #[bg=colour180,fg=colour235] C-S-r #[bg=default,fg=colour180] RESIZE  #[bg=colour168,fg=colour235] C-S-o #[bg=default,fg=colour168] SESSION  #[bg=colour176,fg=colour235] C-S-m #[bg=default,fg=colour176] SCROLL  #[bg=colour73,fg=colour235] C-S-w #[bg=default,fg=colour73] WORKTREE"
+        echo "  #[bg=colour75,fg=colour235] C-S-p #[bg=default,fg=colour75] PANE  #[bg=colour114,fg=colour235] C-S-t #[bg=default,fg=colour114] TAB  #[bg=colour180,fg=colour235] C-S-r #[bg=default,fg=colour180] RESIZE  #[bg=colour174,fg=colour235] C-S-m #[bg=default,fg=colour174] SCROLL  #[bg=colour168,fg=colour235] C-S-o #[bg=default,fg=colour168] SESSION  #[bg=colour176,fg=colour235] C-S-w #[bg=default,fg=colour176] WORKTREE  #[bg=colour73,fg=colour235] C-S-x #[bg=default,fg=colour73] LAUNCH"
         ;;
     "pane-mode")
         # Pane submenu with organized keybinds
@@ -37,7 +37,7 @@ case "$MODE" in
         ;;
     "scroll-mode")
         # Scroll submenu with organized keybinds
-        echo "#[bg=colour176,fg=colour235,bold] ◆ SCROLL #[bg=colour235,fg=colour176]  #[fg=colour250]search #[fg=colour176]s  #[fg=colour250]edit #[fg=colour176]e  #[fg=colour250]exit #[fg=colour176]C-c  #[bg=colour235,fg=colour243] ESC to exit"
+        echo "#[bg=colour174,fg=colour235,bold] ◆ SCROLL #[bg=colour235,fg=colour174]  #[fg=colour250]search #[fg=colour174]s  #[fg=colour250]edit #[fg=colour174]e  #[fg=colour250]exit #[fg=colour174]C-c  #[bg=colour235,fg=colour243] ESC to exit"
         ;;
     "tmux-mode")
         # Tmux submenu with organized keybinds
@@ -45,7 +45,11 @@ case "$MODE" in
         ;;
     "worktree-mode")
         # Worktree submenu with organized keybinds
-        echo "#[bg=colour73,fg=colour235,bold] ◆ WORKTREE #[bg=colour235,fg=colour73]  #[fg=colour250]list/switch #[fg=colour73]w  #[fg=colour250]create #[fg=colour73]c  #[fg=colour250]delete #[fg=colour73]x  #[bg=colour235,fg=colour243] ESC to exit"
+        echo "#[bg=colour176,fg=colour235,bold] ◆ WORKTREE #[bg=colour235,fg=colour176]  #[fg=colour250]list/switch #[fg=colour176]w  #[fg=colour250]create #[fg=colour176]c  #[fg=colour250]delete #[fg=colour176]x  #[bg=colour235,fg=colour243] ESC to exit"
+        ;;
+    "launch-mode")
+        # Launch submenu with organized keybinds
+        echo "#[bg=colour73,fg=colour235,bold] ▶ LAUNCH #[bg=colour235,fg=colour73]  #[fg=colour250]cursor #[fg=colour73]c  #[fg=colour250]jira #[fg=colour73]j  #[fg=colour250]server #[fg=colour73]s  #[fg=colour250]pr #[fg=colour73]p  #[fg=colour250]repo #[fg=colour73]r  #[bg=colour235,fg=colour243] ESC to exit"
         ;;
     *)
         echo "#[bg=colour240,fg=colour250] MODE: $MODE"
