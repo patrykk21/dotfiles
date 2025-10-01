@@ -8,9 +8,15 @@ A modern tmux configuration featuring Zellij-style keybindings, borderless panes
 # Install tmux
 brew install tmux
 
-# Copy configuration
-git clone https://github.com/patrykk21/dotfiles.git ~/.config
-cd ~/.config/tmux
+# Clone just the tmux configuration
+git clone --no-checkout https://github.com/patrykk21/dotfiles.git temp-dotfiles
+cd temp-dotfiles
+git sparse-checkout init --cone
+git sparse-checkout set tmux
+git checkout
+mkdir -p ~/.config
+mv tmux ~/.config/
+cd .. && rm -rf temp-dotfiles
 
 # Install TPM (Tmux Plugin Manager)
 git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
@@ -51,12 +57,21 @@ git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
 
 ### Step 3: Copy Configuration Files
 ```bash
-# Clone the entire dotfiles repository
-git clone https://github.com/patrykk21/dotfiles.git ~/.config
+# Clone just the tmux configuration using sparse-checkout
+git clone --no-checkout https://github.com/patrykk21/dotfiles.git temp-dotfiles
+cd temp-dotfiles
+git sparse-checkout init --cone
+git sparse-checkout set tmux
+git checkout
+mkdir -p ~/.config
+mv tmux ~/.config/
+cd .. && rm -rf temp-dotfiles
 
-# Or just copy the tmux directory
-mkdir -p ~/.config/tmux
-cp -r /path/to/this/tmux/config/* ~/.config/tmux/
+# Alternative: Download specific files manually
+# mkdir -p ~/.config/tmux/scripts
+# curl -o ~/.config/tmux/tmux.conf https://raw.githubusercontent.com/patrykk21/dotfiles/master/tmux/tmux.conf
+# curl -o ~/.config/tmux/scripts/init-shell-env.sh https://raw.githubusercontent.com/patrykk21/dotfiles/master/tmux/scripts/init-shell-env.sh
+# ... (continue for other needed files)
 ```
 
 ### Step 4: Make Scripts Executable
@@ -285,8 +300,15 @@ fi
 
 ### Pull Latest Changes
 ```bash
-cd ~/.config
-git pull origin main
+# Re-download tmux configuration
+git clone --no-checkout https://github.com/patrykk21/dotfiles.git temp-dotfiles
+cd temp-dotfiles
+git sparse-checkout init --cone
+git sparse-checkout set tmux
+git checkout
+rm -rf ~/.config/tmux
+mv tmux ~/.config/
+cd .. && rm -rf temp-dotfiles
 ```
 
 ### Reload Configuration
