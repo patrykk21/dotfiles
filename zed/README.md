@@ -4,6 +4,8 @@ This directory contains configuration for the [Zed editor](https://zed.dev/).
 
 ## Setup on a New Machine
 
+### macOS / Linux
+
 1. **Backup existing config** (if you have one):
    ```bash
    mv ~/.config/zed ~/.config/zed.backup
@@ -18,9 +20,32 @@ This directory contains configuration for the [Zed editor](https://zed.dev/).
    # ln -sf ~/dotfiles/zed ~/.config/zed
    ```
 
+### Windows
+
+1. **Backup existing config** (if you have one):
+   - Navigate to `%APPDATA%\Zed` (type in Windows Explorer or Run dialog)
+   - Rename the folder to `Zed.backup`
+
+2. **Create symlink** to dotfiles:
+   ```powershell
+   # Open PowerShell as Administrator
+   # Assuming your dotfiles are in C:\Users\YourUsername\.config
+
+   # Remove existing Zed folder if present
+   Remove-Item -Path "$env:APPDATA\Zed" -Recurse -Force -ErrorAction SilentlyContinue
+
+   # Create symlink (adjust source path to match your dotfiles location)
+   New-Item -ItemType SymbolicLink -Path "$env:APPDATA\Zed" -Target "$env:USERPROFILE\.config\zed"
+   ```
+
+   **Note:** On Windows, Zed config is in `%APPDATA%\Zed` which expands to:
+   `C:\Users\YourUsername\AppData\Roaming\Zed`
+
+### All Platforms
+
 3. **Install required extensions** in Zed:
    - Open Zed
-   - Press `Cmd+Shift+P` (or `Ctrl+Shift+P` on Linux)
+   - Press `Cmd+Shift+P` (macOS) or `Ctrl+Shift+P` (Windows/Linux)
    - Type "zed: extensions"
    - Install the following:
      - **Tokyo Night** (theme)
@@ -49,8 +74,11 @@ This directory contains configuration for the [Zed editor](https://zed.dev/).
 ## Troubleshooting
 
 **Settings not applying?**
-- Ensure the symlink is correct: `ls -la ~/.config/zed`
-- Should show: `zed -> /path/to/your/dotfiles/zed`
+- **macOS/Linux:** Ensure the symlink is correct: `ls -la ~/.config/zed`
+  - Should show: `zed -> /path/to/your/dotfiles/zed`
+- **Windows:** Check symlink in PowerShell: `Get-Item "$env:APPDATA\Zed" | Select-Object LinkType, Target`
+  - LinkType should be "SymbolicLink"
+  - Target should point to your dotfiles zed directory
 
 **Theme not working?**
 - Install Tokyo Night extension from Zed's extension marketplace
@@ -59,3 +87,4 @@ This directory contains configuration for the [Zed editor](https://zed.dev/).
 **Inline git blame showing despite being disabled?**
 - Make sure you're reading from the correct config
 - Check: `zed: open settings` should show your settings.json content
+- Verify symlink is pointing to the correct location
