@@ -1,0 +1,151 @@
+{
+  // Theme & Appearance (matching Neovim onedark)
+  "agent_servers": {
+    "claude": {
+      "default_model": "sonnet[1m]"
+    }
+  },
+  "agent": {
+    "default_model": {
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-thinking-latest"
+    },
+    "inline_assistant_model": {
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-5-latest"
+    },
+    "notify_when_agent_waiting": "never",
+    "model_parameters": []
+  },
+  "theme": "Tokyo Night",
+  "ui_font_size": 15,
+  "buffer_font_size": 13,
+  "agent_ui_font_size": 15,
+  "agent_buffer_font_size": 13,
+  "buffer_font_family": "Menlo",
+  "ui_font_family": "Menlo",
+
+  // Vim Mode (ESSENTIAL)
+  "vim_mode": true,
+  "vim": {
+    "use_system_clipboard": "always",
+    "use_smartcase_find": true
+  },
+
+  // Editor Settings (matching Neovim)
+  "cursor_blink": false,
+  "relative_line_numbers": "enabled",
+  "tab_size": 2,
+  "hard_tabs": false,
+  "soft_wrap": "none",
+  "show_whitespaces": "none",
+  "preferred_line_length": 120,
+  "format_on_save": "off",
+  "autosave": "off",
+  "ensure_final_newline_on_save": true,
+  "remove_trailing_whitespace_on_save": true,
+
+  // UI Elements (matching Neovim minimal UI)
+  "tab_bar": {
+    "show": false
+  },
+  "toolbar": {
+    "breadcrumbs": true,
+    "quick_actions": false
+  },
+  "scrollbar": {
+    "show": "auto"
+  },
+  "vertical_scroll_margin": 4,
+  "scroll_beyond_last_line": "one_page",
+
+  // Git (matching Neovim gitsigns)
+  "git": {
+    "inline_blame": {
+      "enabled": false
+    },
+    "git_gutter": "tracked_files"
+  },
+
+  // Diagnostics (matching Neovim inline diagnostics)
+  "diagnostics": {
+    "inline": {
+      "enabled": true
+    }
+  },
+
+  // Inlay Hints
+  "inlay_hints": {
+    "enabled": true,
+    "show_type_hints": false,
+    "show_parameter_hints": false,
+    "show_other_hints": true,
+    "edit_debounce_ms": 700,
+    "scroll_debounce_ms": 50
+  },
+
+  // Telemetry
+  "telemetry": {
+    "diagnostics": false,
+    "metrics": false
+  },
+
+  // File Settings
+  "file_scan_exclusions": [
+    "**/.git",
+    "**/.svn",
+    "**/.hg",
+    "**/CVS",
+    "**/.DS_Store",
+    "**/Thumbs.db",
+    "**/.classpath",
+    "**/.settings",
+    "**/node_modules",
+    "**/.next",
+    "**/dist",
+    "**/build",
+    "**/.turbo"
+  ],
+
+  // Preview Tabs (disabled to match Neovim behavior)
+  "preview_tabs": {
+    "enabled": false,
+    "enable_preview_from_file_finder": false,
+    "enable_preview_from_code_navigation": false
+  },
+
+  // Tabs
+  "tabs": {
+    "git_status": true,
+    "file_icons": true,
+    "close_position": "right"
+  },
+
+  // Hover popover
+  "hover_popover_enabled": true,
+
+  // Ligatures (disabled like Neovim)
+  "ui_font_features": {
+    "calt": true,
+    "liga": false
+  },
+  "buffer_font_features": {
+    "calt": true,
+    "liga": false
+  },
+
+  // Indent Guides (matching indent-blankline)
+  "indent_guides": {
+    "enabled": true,
+    "line_width": 1,
+    "active_line_width": 1,
+    "coloring": "indent_aware",
+    "background_coloring": "disabled"
+  },
+
+  // Vim-specific settings
+  "always_treat_brackets_as_autoclosed": false,
+
+  // Formatter
+  "formatter": "language_server"
+}

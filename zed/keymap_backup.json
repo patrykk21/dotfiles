@@ -1,0 +1,201 @@
+[
+  // Vim mode: Space as leader key
+  {
+    "context": "VimControl && !menu",
+    "bindings": {
+      "space": ["workspace::SendKeystrokes", "leader"]
+    }
+  },
+
+  // Save file (Ctrl+S in all modes)
+  {
+    "context": "Editor && vim_mode == normal",
+    "bindings": {
+      "ctrl-s": "workspace::Save"
+    }
+  },
+  {
+    "context": "Editor && vim_mode == insert",
+    "bindings": {
+      "ctrl-s": "workspace::Save"
+    }
+  },
+  {
+    "context": "Editor && vim_mode == visual",
+    "bindings": {
+      "ctrl-s": "workspace::Save"
+    }
+  },
+
+  // Buffer Management (Leader + w = close, Leader + nb = new)
+  {
+    "context": "Editor && vim_mode == normal",
+    "bindings": {
+      "leader w": "pane::CloseActiveItem",
+      "leader n b": "workspace::NewFile",
+      "ctrl-shift-t": "pane::ReopenClosedItem"
+    }
+  },
+
+  // File Finding (Telescope equivalents - Leader + f)
+  {
+    "context": "Editor && vim_mode == normal",
+    "bindings": {
+      "leader f f": "file_finder::Toggle",
+      "leader f a": ["file_finder::Toggle", { "include_ignored": true, "include_hidden": true }],
+      "leader f w": "pane::DeploySearch",
+      "leader f b": "tab_switcher::Toggle",
+      "leader f z": "buffer_search::Deploy",
+      "leader space": "command_palette::Toggle"
+    }
+  },
+
+  // Git Commands (Leader + g, Leader + c)
+  {
+    "context": "Editor && vim_mode == normal",
+    "bindings": {
+      "leader g s": "editor::ToggleGitBlame",
+      "leader g t": "editor::ToggleGitDiff"
+    }
+  },
+
+  // Project/File Explorer (Leader + e, Ctrl+n)
+  {
+    "context": "Editor && vim_mode == normal",
+    "bindings": {
+      "leader e": "project_panel::RevealInProjectPanel",
+      "ctrl-n": "workspace::ToggleLeftDock"
+    }
+  },
+
+  // LSP Actions (matching Neovim LSP keybinds)
+  {
+    "context": "Editor && vim_mode == normal",
+    "bindings": {
+      "g d": "editor::GoToDefinition",
+      "g D": "editor::GoToDeclaration",
+      "g i": "editor::GoToImplementation",
+      "g r": "editor::FindAllReferences",
+      "K": "editor::Hover",
+      "leader c a": "editor::ToggleCodeActions",
+      "leader r a": "editor::Rename",
+      "leader f m": "editor::Format",
+      "leader s h": "editor::ShowSignatureHelp",
+      "leader D": "editor::GoToTypeDefinition"
+    }
+  },
+
+  // Diagnostics (Leader + d)
+  {
+    "context": "Editor && vim_mode == normal",
+    "bindings": {
+      "leader d o": "diagnostics::Deploy",
+      "leader d j": "editor::GoToDiagnostic",
+      "leader d k": "editor::GoToPrevDiagnostic",
+      "leader d a": "diagnostics::Deploy"
+    }
+  },
+
+  // Window/Pane Navigation (Ctrl+h/j/k/l like smart-splits)
+  {
+    "context": "Editor && vim_mode == normal",
+    "bindings": {
+      "ctrl-h": ["workspace::ActivatePaneInDirection", "Left"],
+      "ctrl-j": ["workspace::ActivatePaneInDirection", "Down"],
+      "ctrl-k": ["workspace::ActivatePaneInDirection", "Up"],
+      "ctrl-l": ["workspace::ActivatePaneInDirection", "Right"]
+    }
+  },
+
+  // Window Resizing (Alt+h/j/k/l)
+  {
+    "context": "Editor && vim_mode == normal",
+    "bindings": {
+      "alt-h": ["workspace::ResizePaneLeft"],
+      "alt-j": ["workspace::ResizePaneDown"],
+      "alt-k": ["workspace::ResizePaneUp"],
+      "alt-l": ["workspace::ResizePaneRight"]
+    }
+  },
+
+  // Window Swapping (Leader Leader + h/j/k/l)
+  {
+    "context": "Editor && vim_mode == normal",
+    "bindings": {
+      "leader leader h": ["workspace::SwapPaneInDirection", "Left"],
+      "leader leader j": ["workspace::SwapPaneInDirection", "Down"],
+      "leader leader k": ["workspace::SwapPaneInDirection", "Up"],
+      "leader leader l": ["workspace::SwapPaneInDirection", "Right"]
+    }
+  },
+
+  // Folding (matching ufo.nvim - zR, zM, zk)
+  {
+    "context": "Editor && vim_mode == normal",
+    "bindings": {
+      "z R": "editor::UnfoldAll",
+      "z M": "editor::FoldAll",
+      "z r": "editor::UnfoldRecursively",
+      "z m": "editor::FoldRecursively",
+      "z k": "editor::Hover"
+    }
+  },
+
+  // Symbol/Outline Navigation (Leader + s)
+  {
+    "context": "Editor && vim_mode == normal",
+    "bindings": {
+      "leader s f": "outline::Toggle",
+      "leader s K": "command_palette::Toggle"
+    }
+  },
+
+  // Terminal (if needed)
+  {
+    "context": "Editor && vim_mode == normal",
+    "bindings": {
+      "ctrl-`": "terminal_panel::ToggleFocus"
+    }
+  },
+
+  // Flash-like navigation (s for search)
+  {
+    "context": "Editor && vim_mode == normal",
+    "bindings": {
+      "s": "buffer_search::Deploy"
+    }
+  },
+
+  // Assistant (matching Claude keybind)
+  {
+    "context": "Editor && vim_mode == normal",
+    "bindings": {
+      "leader c c": "assistant::ToggleFocus"
+    }
+  },
+
+  // Tab navigation
+  {
+    "context": "Workspace",
+    "bindings": {
+      "ctrl-tab": "pane::ActivateNextItem",
+      "ctrl-shift-tab": "pane::ActivatePrevItem"
+    }
+  },
+
+  // Escape to dismiss panels
+  {
+    "context": "ProjectPanel",
+    "bindings": {
+      "escape": "workspace::ToggleLeftDock"
+    }
+  },
+
+  // Vim visual mode paste without yanking
+  {
+    "context": "Editor && vim_mode == visual",
+    "bindings": {
+      "p": ["vim::Paste", { "preserve_clipboard": true }]
+    }
+  }
+]

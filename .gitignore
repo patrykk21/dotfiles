@@ -3,6 +3,8 @@
 !kitty/
 !nvim/
 !zsh/
+!zed/
+!zed/**
 !ghostty/
 !aerospace/
 !zellij/
@@ -14,5 +16,11 @@ tmux/plugins/tmux-continuum/
 tmux/plugins/tmux-resurrect/
 tmux/plugins/tmux-sensible/
 tmux/plugins/tpm/
+
+# Exclude Zed runtime and cache files
+zed/.tmp*
+zed/conversations/
+zed/embeddings/
+zed/prompts/
 
 !starship.toml
