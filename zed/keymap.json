@@ -1,0 +1,180 @@
+[
+  {
+    "context": "VimControl && !menu",
+    "bindings": {
+      "space": [
+        "workspace::SendKeystrokes",
+        "leader"
+      ]
+    }
+  },
+  {
+    "context": "Editor && vim_mode == normal",
+    "bindings": {
+      "ctrl-s": "workspace::Save"
+    }
+  },
+  {
+    "context": "Editor && vim_mode == insert",
+    "bindings": {
+      "ctrl-s": "workspace::Save"
+    }
+  },
+  {
+    "context": "Editor && vim_mode == visual",
+    "bindings": {
+      "ctrl-s": "workspace::Save"
+    }
+  },
+  {
+    "context": "Editor && vim_mode == normal",
+    "bindings": {
+      "leader w": "pane::CloseActiveItem",
+      "leader n b": "workspace::NewFile",
+      "ctrl-shift-t": "pane::ReopenClosedItem"
+    }
+  },
+  {
+    "context": "Editor && vim_mode == normal",
+    "bindings": {
+      "leader f f": "file_finder::Toggle",
+      "leader f w": "pane::DeploySearch",
+      "leader f b": "tab_switcher::Toggle",
+      "leader f z": "buffer_search::Deploy",
+      "leader space": "command_palette::Toggle"
+    }
+  },
+  {
+    "context": "Editor && vim_mode == normal",
+    "bindings": {
+      "leader g s": "git::Blame"
+    }
+  },
+  {
+    "context": "Editor && vim_mode == normal",
+    "bindings": {
+      "leader e": "pane::RevealInProjectPanel",
+      "ctrl-n": "workspace::ToggleLeftDock"
+    }
+  },
+  {
+    "context": "Editor && vim_mode == normal",
+    "bindings": {
+      "g d": "editor::GoToDefinition",
+      "g D": "editor::GoToDeclaration",
+      "g i": "editor::GoToImplementation",
+      "g r": "editor::FindAllReferences",
+      "K": "editor::Hover",
+      "leader c a": "editor::ToggleCodeActions",
+      "leader r a": "editor::Rename",
+      "leader f m": "editor::Format",
+      "leader s h": "editor::ShowSignatureHelp",
+      "leader D": "editor::GoToTypeDefinition"
+    }
+  },
+  {
+    "context": "Editor && vim_mode == normal",
+    "bindings": {
+      "leader d o": "diagnostics::Deploy",
+      "leader d j": "editor::GoToDiagnostic",
+      "leader d k": "editor::GoToPreviousDiagnostic",
+      "leader d a": "diagnostics::Deploy"
+    }
+  },
+  {
+    "context": "Editor && vim_mode == normal",
+    "bindings": {
+      "ctrl-h": "workspace::ActivatePaneLeft",
+      "ctrl-j": "workspace::ActivatePaneDown",
+      "ctrl-k": "workspace::ActivatePaneUp",
+      "ctrl-l": "workspace::ActivatePaneRight"
+    }
+  },
+
+  {
+    "context": "Editor && vim_mode == normal",
+    "bindings": {
+      "leader s h": "workspace::SwapPaneLeft",
+      "leader s j": "workspace::SwapPaneDown",
+      "leader s k": "workspace::SwapPaneUp",
+      "leader s l": "workspace::SwapPaneRight"
+    }
+  },
+  {
+    "context": "Editor && vim_mode == normal",
+    "bindings": {
+      "z R": "editor::UnfoldAll",
+      "z M": "editor::FoldAll",
+      "z k": "editor::Hover"
+    }
+  },
+  {
+    "context": "Editor && vim_mode == normal",
+    "bindings": {
+      "leader s f": "outline::Toggle",
+      "leader s K": "command_palette::Toggle"
+    }
+  },
+  {
+    "context": "Editor && vim_mode == normal",
+    "bindings": {
+      "ctrl-`": "terminal_panel::ToggleFocus"
+    }
+  },
+  {
+    "context": "Editor && vim_mode == normal",
+    "bindings": {
+      "s": "buffer_search::Deploy"
+    }
+  },
+  {
+    "context": "Editor && vim_mode == normal",
+    "bindings": {
+      "leader c c": "agent::ToggleFocus"
+    }
+  },
+  {
+    "context": "Editor && vim_mode == visual",
+    "bindings": {
+      "leader c s": "agent::AddSelectionToThread"
+    }
+  },
+  {
+    "context": "Workspace",
+    "bindings": {
+      "ctrl-tab": "pane::ActivateNextItem",
+      "ctrl-shift-tab": "pane::ActivatePreviousItem",
+      "ctrl-r": "projects::OpenRecent"
+    }
+  },
+  {
+    "context": "ProjectPanel",
+    "bindings": {
+      "escape": "workspace::ToggleLeftDock",
+      "ctrl-h": "workspace::ActivatePaneLeft",
+      "ctrl-j": "workspace::ActivatePaneDown",
+      "ctrl-k": "workspace::ActivatePaneUp",
+      "ctrl-l": "workspace::ActivatePaneRight"
+    }
+  },
+  {
+    "context": "Editor && vim_mode == visual",
+    "bindings": {
+      "p": [
+        "vim::Paste",
+        {
+          "preserve_clipboard": true
+        }
+      ]
+    }
+  },
+  {
+    "context": "AgentPanel",
+    "bindings": {
+      "ctrl-h": "workspace::ActivatePaneLeft",
+      "ctrl-j": "workspace::ActivatePaneDown",
+      "ctrl-k": "workspace::ActivatePaneUp",
+      "ctrl-l": "workspace::ActivatePaneRight"
+    }
+  }
+]

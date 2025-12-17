@@ -1,0 +1,45 @@
+// Zed settings
+//
+// For information on how to configure Zed, see the Zed
+// documentation: https://zed.dev/docs/configuring-zed
+//
+// To see all of Zed's default settings without changing your
+// custom settings, run the `open default settings` command
+// from the command palette or from `Zed` application menu.
+{
+  "features": {
+    "edit_prediction_provider": "zed"
+  },
+  "theme": "Tokyo Night",
+  "vim_mode": true,
+  "ui_font_size": 16,
+  "buffer_font_size": 13,
+  "cursor_blink": false,
+  "relative_line_numbers": true,
+  "scrollbar": {
+    "show": "auto"
+  },
+  // allow cursor to reach edges of screen
+  "vertical_scroll_margin": 0,
+  "tab_size": 2,
+  "tabs": {
+    "git_status": true
+  },
+  "ui_font_features": {
+    "calt": true,
+    "liga": false
+  },
+  "buffer_font_features": {
+    "calt": true,
+    "liga": false
+  },
+  "languages": {
+    "YAML": {
+      "tab_size": 2,
+      "format_on_save": "off"
+    },
+    "C++": {
+      "format_on_save": "off"
+    }
+  }
+}
