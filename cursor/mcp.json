@@ -31,8 +31,8 @@
       "env": {
         "TEMPO_API_TOKEN": "<TEMPO_API_TOKEN>",
         "JIRA_API_TOKEN": "<JIRA_API_TOKEN>",
-        "JIRA_EMAIL": "c_pkotarski@groupon.com",
-        "JIRA_BASE_URL": "https://groupondev.atlassian.net"
+        "JIRA_EMAIL": "<JIRA_EMAIL>",
+        "JIRA_BASE_URL": "<JIRA_BASE_URL>"
       }
     },
     "github-work": {
