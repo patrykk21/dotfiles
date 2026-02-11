@@ -49,7 +49,7 @@ case "$MODE" in
         ;;
     "launch-mode")
         # Launch submenu with organized keybinds
-        echo "#[bg=colour73,fg=colour235,bold] ▶ LAUNCH #[bg=colour235,fg=colour73]  #[fg=colour250]cursor #[fg=colour73]c  #[fg=colour250]jira #[fg=colour73]j  #[fg=colour250]server #[fg=colour73]s  #[fg=colour250]pr #[fg=colour73]p  #[fg=colour250]repo #[fg=colour73]r  #[bg=colour235,fg=colour243] ESC to exit"
+        echo "#[bg=colour73,fg=colour235,bold] ▶ LAUNCH #[bg=colour235,fg=colour73]  #[fg=colour250]cursor #[fg=colour73]c  #[fg=colour250]jira #[fg=colour73]j  #[fg=colour250]server #[fg=colour73]s  #[fg=colour250]localhost #[fg=colour73]o  #[fg=colour250]pr #[fg=colour73]p  #[fg=colour250]repo #[fg=colour73]r  #[bg=colour235,fg=colour243] ESC to exit"
         ;;
     *)
         echo "#[bg=colour240,fg=colour250] MODE: $MODE"

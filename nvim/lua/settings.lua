@@ -2,6 +2,15 @@ local opt = vim.opt
 local o = vim.o
 local g = vim.g
 
+-- Enable inline diagnostics (disabled by default in Neovim 0.11)
+vim.diagnostic.config({
+  virtual_text = true,
+  signs = true,
+  underline = true,
+  update_in_insert = false,
+  severity_sort = true,
+})
+
 o.laststatus = 3
 o.showmode = false
 
@@ -56,6 +65,10 @@ vim.env.PATH = table.concat({ vim.fn.stdpath "data", "mason", "bin" }, sep) .. d
 opt.relativenumber = true
 opt.swapfile = false
 opt.termguicolors = true
+
+-- Cursor shape configuration
+-- Block cursor in normal mode, thin line in insert mode
+opt.guicursor = "n-v-c:block,i-ci-ve:ver25,r-cr:hor20,o:hor50"
 
 o.foldcolumn = "1"
 o.foldlevel = 99

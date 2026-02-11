@@ -18,12 +18,12 @@ while true; do
             IFS='|' read -r TICKET WORKTREE_PATH REPO_NAME <<< "$DELETE_INFO"
             
             # Show confirmation dialog
-            confirm=$(printf "NO - Cancel\nYES - Delete worktree '$TICKET'" | fzf-tmux -p 50%,30% \
+            confirm=$(printf "NO - Cancel\nYES - Delete worktree '$TICKET'" | fzf \
                 --prompt=" Delete worktree '$TICKET'? " \
                 --header="This will permanently delete the worktree and its session" \
                 --header-lines=0 \
                 --no-sort \
-                --color="fg:250,bg:235,hl:168,fg+:235,bg+:168,hl+:235,prompt:168,pointer:168,header:180" \
+                --color="fg:250,bg:235,hl:168,fg+:235,bg+:168,hl+:235,prompt:168,pointer:168,header:180,border:168" \
                 --border=rounded \
                 --border-label=" ⚠️  Confirm Deletion " \
                 --no-multi)
@@ -31,7 +31,8 @@ while true; do
             # Check if user confirmed deletion
             if [[ "$confirm" == "YES"* ]]; then
                 # Source metadata functions
-                source "$(dirname "$0")/worktree-metadata.sh"
+                SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+                source "$SCRIPT_DIR/worktree-metadata.sh"
                 
                 # Kill tmux session if it exists
                 tmux has-session -t "$TICKET" 2>/dev/null && tmux kill-session -t "$TICKET" 2>/dev/null

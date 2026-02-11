@@ -1,22 +1,17 @@
 #!/usr/bin/env bash
-# Set SERVER_PORT environment variable for new tmux windows
-
-WINDOW_TARGET="$1"
-SESSION=$(echo "$WINDOW_TARGET" | cut -d':' -f1)
+# Launch localhost with current SERVER_PORT in browser
 
 # Source metadata functions
 source ~/.config/tmux/scripts/worktree-metadata.sh
 
-# Get current directory from the window
-CURRENT_DIR=$(tmux display-message -t "$WINDOW_TARGET" -p '#{pane_current_path}' 2>/dev/null)
+# Get current directory and session
+CURRENT_DIR=$(tmux display-message -p '#{pane_current_path}')
+SESSION=$(tmux display-message -p '#S')
 
-if [ -z "$CURRENT_DIR" ]; then
-    exit 0
-fi
-
+# Get SERVER_PORT using the unified function
 SERVER_PORT=""
 
-# Check if we're in a worktree
+# First check if we're in a worktree by path
 if [[ "$CURRENT_DIR" == "$WORKTREES_BASE/"* ]]; then
     # Extract repo and ticket from path
     WORKTREE_INFO=$(get_worktree_info_from_path "$CURRENT_DIR")
@@ -27,8 +22,12 @@ if [[ "$CURRENT_DIR" == "$WORKTREES_BASE/"* ]]; then
         SERVER_PORT=$(ensure_and_get_server_port "$REPO_NAME" "$TICKET")
     fi
 else
+    # Not in worktree directory, but might still be a worktree session
     # Use session name to lookup metadata
-    if ! [[ "$SESSION" =~ -base$ ]]; then
+    if [[ "$SESSION" =~ -base$ ]]; then
+        # Base session - no SERVER_PORT, use default
+        SERVER_PORT=""
+    else
         # Try to find repo by checking git remote
         if git -C "$CURRENT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
             REPO_URL=$(git -C "$CURRENT_DIR" remote get-url origin 2>/dev/null)
@@ -42,7 +41,26 @@ else
     fi
 fi
 
-# Set SERVER_PORT in tmux environment (will be inherited by new shells)
-if [ -n "$SERVER_PORT" ]; then
-    tmux setenv -t "$SESSION" SERVER_PORT "$SERVER_PORT"
+# If no SERVER_PORT found, default to 3000
+if [ -z "$SERVER_PORT" ]; then
+    SERVER_PORT="3000"
+    PORT_SOURCE="default"
+else
+    PORT_SOURCE="metadata"
+fi
+
+# Construct localhost URL
+LOCALHOST_URL="http://localhost:$SERVER_PORT"
+
+# Open in browser
+if command -v open >/dev/null 2>&1; then
+    open "$LOCALHOST_URL"
+    if [ "$PORT_SOURCE" = "metadata" ]; then
+        tmux display-message "Opened localhost:$SERVER_PORT (from $SESSION metadata)"
+    else
+        tmux display-message "Opened localhost:$SERVER_PORT (default port)"
+    fi
+else
+    tmux display-message "Cannot open browser: 'open' command not found"
+    exit 1
 fi

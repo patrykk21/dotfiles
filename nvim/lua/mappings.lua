@@ -4,7 +4,10 @@ local map = vim.keymap.set
 map("n", "<C-d>", "<C-d>zz")
 map("n", "<C-u>", "<C-u>zz")
 map({ "n", "i", "v" }, "<C-s>", function()
-  vim.cmd("w")
+  -- Only save if buffer is modifiable and not a special buffer
+  if vim.bo.buftype == "" and vim.bo.modifiable then
+    vim.cmd("w")
+  end
 end)
 -- map("v", "p", '"_dP')
 

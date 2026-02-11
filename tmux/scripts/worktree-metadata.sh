@@ -174,3 +174,52 @@ get_worktree_info_from_path() {
         echo "$repo_name|$ticket"
     fi
 }
+
+# Unified function to ensure metadata exists and get SERVER_PORT
+# This is the single source of truth for all SERVER_PORT resolution
+ensure_and_get_server_port() {
+    local repo_name="$1"
+    local ticket="$2"
+    
+    # Skip port assignment for base sessions
+    if [[ "$ticket" =~ -base$ ]]; then
+        return 0
+    fi
+    
+    ensure_metadata_dirs "$repo_name"
+    
+    local metadata_file="$WORKTREES_BASE/$repo_name/.worktree-meta/sessions/${ticket}.json"
+    
+    # Check if metadata file exists and has a port
+    if [ -f "$metadata_file" ]; then
+        local existing_port=$(jq -r '.port // empty' "$metadata_file" 2>/dev/null)
+        if [ -n "$existing_port" ] && [ "$existing_port" != "null" ]; then
+            echo "$existing_port"
+            return 0
+        fi
+    fi
+    
+    # No metadata or no port - need to ensure complete metadata exists
+    # This handles cases where session was created outside normal flow
+    
+    # Try to gather information about the worktree
+    local worktree_path="$WORKTREES_BASE/$repo_name/$ticket"
+    local branch=""
+    
+    # Try to get branch from git if worktree exists
+    if [ -d "$worktree_path" ] && git -C "$worktree_path" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        branch=$(git -C "$worktree_path" branch --show-current 2>/dev/null || echo "unknown")
+    else
+        # Fallback: use ticket name as branch name
+        branch="$ticket"
+    fi
+    
+    # Generate and save complete metadata
+    save_session_metadata "$repo_name" "$ticket" "$worktree_path" "$branch" "$ticket"
+    
+    # Now read the port from the newly created metadata
+    local new_port=$(jq -r '.port // empty' "$metadata_file" 2>/dev/null)
+    if [ -n "$new_port" ] && [ "$new_port" != "null" ]; then
+        echo "$new_port"
+    fi
+}

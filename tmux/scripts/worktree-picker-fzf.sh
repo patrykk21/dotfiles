@@ -4,16 +4,22 @@
 # Shows all git worktrees with metadata-based session status
 
 # Source metadata functions
-source "$(dirname "$0")/worktree-metadata.sh"
-
-# Get the main repository path
-MAIN_REPO=$(git worktree list | head -1 | awk '{print $1}')
-REPO_NAME=$(basename "$MAIN_REPO")
-# Sanitize repo name - replace dots and other special chars with underscores
-SAFE_REPO_NAME=$(echo "$REPO_NAME" | sed 's/[^a-zA-Z0-9-]/_/g')
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/worktree-metadata.sh"
 
 # Get current directory to identify current worktree
 CURRENT_DIR=$(tmux display-message -p "#{pane_current_path}")
+cd "$CURRENT_DIR" 2>/dev/null || cd "$HOME"
+
+# Get the main repository path
+MAIN_REPO=$(git worktree list 2>/dev/null | head -1 | awk '{print $1}')
+if [ -z "$MAIN_REPO" ]; then
+    echo "Error: Not in a git repository" >&2
+    exit 1
+fi
+REPO_NAME=$(basename "$MAIN_REPO")
+# Sanitize repo name - replace dots and other special chars with underscores
+SAFE_REPO_NAME=$(echo "$REPO_NAME" | sed 's/[^a-zA-Z0-9-]/_/g')
 CURRENT_WORKTREE=$(cd "$CURRENT_DIR" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null)
 CURRENT_SESSION=$(tmux display-message -p "#{session_name}")
 
@@ -213,13 +219,13 @@ if [ $POPUP_PERCENT -gt 100 ]; then
     POPUP_PERCENT=100
 fi
 
-# Use fzf-tmux to select a worktree
-# Try using explicit positioning to force exact width
-selected=$(echo "$WORKTREE_DATA" | fzf-tmux -p -x C -w $FIXED_WIDTH -h 60% \
+# Use fzf (tmux display-popup creates the popup window)
+selected=$(echo "$WORKTREE_DATA" | fzf \
     --prompt=" Select worktree: " \
     --header=$'\n'"$SEPARATOR"$'\n    ● Active   ○ Inactive   → Current   [SESSION] Active   [METADATA] Saved\n'"$SEPARATOR"$'\n    ↵ switch   ctrl-x delete   ctrl-k kill session   ctrl-r reload' \
     --header-lines=2 \
-    --color="fg:250,bg:235,hl:114,fg+:235,bg+:114,hl+:235,prompt:114,pointer:114,header:243" \
+    --ansi \
+    --color="fg:250,bg:235,hl:114,fg+:235,bg+:114,hl+:235,prompt:114,pointer:114,header:243,border:114" \
     --border=rounded \
     --border-label=" Git Worktrees " \
     --bind "ctrl-x:execute-silent(~/.config/tmux/scripts/worktree-delete-from-picker.sh {})+accept" \
@@ -245,7 +251,6 @@ if [ -n "$selected" ]; then
     echo "[PICKER DEBUG] Length: ${#selected}" >> /tmp/tmux-worktree-debug.log
     
     # Parse using a single awk command to avoid subshell issues
-    local parsed_fields
     parsed_fields=$(echo "$selected" | awk '
     {
         # Save original line
@@ -292,9 +297,8 @@ if [ -n "$selected" ]; then
         # Output as tab-separated values
         print icon "\t" name "\t" type "\t" session "\t" port "\t" branch "\t" path "\t" has_arrow
     }')
-    
+
     # Parse the tab-separated values
-    local icon name type session port branch worktree_path has_arrow session_name
     IFS=$'\t' read -r icon name type session port branch worktree_path has_arrow <<< "$parsed_fields"
     
     echo "[PICKER DEBUG] Parsed - icon:'$icon' name:'$name' type:'$type' session:'$session' path:'$worktree_path'" >> /tmp/tmux-worktree-debug.log
@@ -320,8 +324,8 @@ if [ -n "$selected" ]; then
             # Check if we have metadata for base
             if session_exists_in_metadata "$REPO_NAME" "$session_name"; then
                 # Restore from metadata
-                local stored_path=$(get_session_metadata "$REPO_NAME" "$session_name" "worktree_path")
-                local tabs=$(get_session_metadata "$REPO_NAME" "$session_name" "tabs")
+                stored_path=$(get_session_metadata "$REPO_NAME" "$session_name" "worktree_path")
+                tabs=$(get_session_metadata "$REPO_NAME" "$session_name" "tabs")
                 
                 # Use main repo path
                 worktree_path="$MAIN_REPO"
@@ -352,7 +356,6 @@ if [ -n "$selected" ]; then
         fi
     else
         # This is a worktree, use the name as ticket
-        local ticket
         ticket="$name"
         
         # Debug ticket value
@@ -368,8 +371,8 @@ if [ -n "$selected" ]; then
             # Check if we have metadata for this worktree
             if session_exists_in_metadata "$REPO_NAME" "$name"; then
                 # Restore from metadata
-                local stored_path=$(get_session_metadata "$REPO_NAME" "$name" "worktree_path")
-                local tabs=$(get_session_metadata "$REPO_NAME" "$name" "tabs")
+                stored_path=$(get_session_metadata "$REPO_NAME" "$name" "worktree_path")
+                tabs=$(get_session_metadata "$REPO_NAME" "$name" "tabs")
                 
                 # Use stored path if available, otherwise use detected path
                 [ -n "$stored_path" ] && worktree_path="$stored_path"
@@ -401,9 +404,9 @@ if [ -n "$selected" ]; then
                 
                 # Create session using dedicated script
                 ~/.config/tmux/scripts/create-worktree-session.sh "$name" "$worktree_path"
-                
+
                 # Save metadata
-                local branch=$(git -C "$worktree_path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+                branch=$(git -C "$worktree_path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
                 save_session_metadata "$REPO_NAME" "$name" "$worktree_path" "$branch" "$name"
                 
                 # Write session name for tmux to switch to

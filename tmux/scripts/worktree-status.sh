@@ -9,7 +9,7 @@ CURRENT_DIR=$(tmux display-message -p '#{pane_current_path}')
 # Source metadata functions
 source ~/.config/tmux/scripts/worktree-metadata.sh
 
-# Get SERVER_PORT from metadata based on session name
+# Get SERVER_PORT from metadata using unified function
 # The session name is the ticket (e.g., ECH-123)
 SERVER_PORT=""
 
@@ -20,7 +20,8 @@ if [[ "$CURRENT_DIR" == "$WORKTREES_BASE/"* ]]; then
     if [ -n "$WORKTREE_INFO" ]; then
         REPO_NAME=$(echo "$WORKTREE_INFO" | cut -d'|' -f1)
         TICKET=$(echo "$WORKTREE_INFO" | cut -d'|' -f2)
-        SERVER_PORT=$(get_session_metadata "$REPO_NAME" "$TICKET" "port")
+        # Use unified function to ensure metadata exists and get port
+        SERVER_PORT=$(ensure_and_get_server_port "$REPO_NAME" "$TICKET")
     fi
 else
     # Not in worktree directory, but might still be a worktree session
@@ -35,8 +36,8 @@ else
             REPO_NAME=$(basename "$REPO_URL" .git 2>/dev/null)
             
             if [ -n "$REPO_NAME" ]; then
-                # Use session name as ticket
-                SERVER_PORT=$(get_session_metadata "$REPO_NAME" "$SESSION" "port")
+                # Use unified function to ensure metadata exists and get port
+                SERVER_PORT=$(ensure_and_get_server_port "$REPO_NAME" "$SESSION")
             fi
         fi
     fi

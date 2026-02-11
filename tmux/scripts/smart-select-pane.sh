@@ -3,27 +3,35 @@
 
 DIRECTION=$1
 
-# Try to select pane in the requested direction
-tmux select-pane -$DIRECTION
+# Get the target pane ID in the requested direction BEFORE moving
+TARGET_PANE=$(tmux display-message -p "#{pane_id}")
 
-# Check if we landed on a status bar pane
-CURRENT_PANE_TITLE=$(tmux display-message -p "#{pane_title}")
-CURRENT_PANE_CMD=$(tmux display-message -p "#{pane_current_command}")
+# Try to move in the direction to see what the target would be
+case "$DIRECTION" in
+    L) TARGET_PANE=$(tmux display-message -p -t "{left-of}" "#{pane_id}" 2>/dev/null) ;;
+    R) TARGET_PANE=$(tmux display-message -p -t "{right-of}" "#{pane_id}" 2>/dev/null) ;;
+    U) TARGET_PANE=$(tmux display-message -p -t "{up-of}" "#{pane_id}" 2>/dev/null) ;;
+    D) TARGET_PANE=$(tmux display-message -p -t "{down-of}" "#{pane_id}" 2>/dev/null) ;;
+esac
 
-if [[ "$CURRENT_PANE_TITLE" == "__tmux_status_bar__" ]] || \
-   [[ "$CURRENT_PANE_CMD" == *"bottom-prompt"* ]] || \
-   [[ "$CURRENT_PANE_CMD" == *"top-status-bar"* ]]; then
-    # Skip it and try again
-    tmux select-pane -$DIRECTION
-    
-    # Check again if we're still on a status pane
-    NEW_PANE_TITLE=$(tmux display-message -p "#{pane_title}")
-    NEW_PANE_CMD=$(tmux display-message -p "#{pane_current_command}")
-    
-    if [[ "$NEW_PANE_TITLE" == "__tmux_status_bar__" ]] || \
-       [[ "$NEW_PANE_CMD" == *"bottom-prompt"* ]] || \
-       [[ "$NEW_PANE_CMD" == *"top-status-bar"* ]]; then
-        # Go back to where we were
-        tmux select-pane -l
-    fi
+# If no target pane in that direction, do nothing
+if [[ -z "$TARGET_PANE" ]]; then
+    exit 0
 fi
+
+# Check if target pane is a status bar
+TARGET_TITLE=$(tmux display-message -p -t "$TARGET_PANE" "#{pane_title}")
+TARGET_CMD=$(tmux display-message -p -t "$TARGET_PANE" "#{pane_current_command}")
+TARGET_HEIGHT=$(tmux display-message -p -t "$TARGET_PANE" "#{pane_height}")
+
+# Don't move if target is a status bar (check title, command, or if it's only 1 line tall)
+if [[ "$TARGET_TITLE" == "__tmux_status_bar__" ]] || \
+   [[ "$TARGET_CMD" == *"bottom-prompt"* ]] || \
+   [[ "$TARGET_CMD" == *"status-bar"* ]] || \
+   [[ "$TARGET_HEIGHT" == "1" ]]; then
+    # Don't move - just stay in current pane
+    exit 0
+fi
+
+# Safe to move - select the target pane
+tmux select-pane -$DIRECTION

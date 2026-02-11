@@ -1,0 +1,61 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "@playwright/mcp@latest"
+      ],
+      "env": {}
+    },
+    "Ref": {
+      "url": "https://api.ref.tools/mcp?apiKey=<REF_API_KEY>"
+    },
+    "cclsp": {
+      "command": "npx",
+      "args": [
+        "cclsp@latest"
+      ],
+      "env": {
+        "CCLSP_CONFIG_PATH": "/Users/vigenerr/.claude/cclsp.json"
+      }
+    },
+    "atlassian-remote": {
+      "url": "https://mcp.atlassian.com/v1/sse"
+    },
+    "tempo": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@ivelin-web/tempo-mcp-server"
+      ],
+      "env": {
+        "TEMPO_API_TOKEN": "<TEMPO_API_TOKEN>",
+        "JIRA_API_TOKEN": "<JIRA_API_TOKEN>",
+        "JIRA_EMAIL": "c_pkotarski@groupon.com",
+        "JIRA_BASE_URL": "https://groupondev.atlassian.net"
+      }
+    },
+    "github-work": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "GITHUB_PERSONAL_ACCESS_TOKEN",
+        "ghcr.io/github/github-mcp-server"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "<GITHUB_PERSONAL_ACCESS_TOKEN>"
+      }
+    },
+    "Figma": {
+      "url": "https://mcp.figma.com/mcp",
+      "headers": {}
+    },
+    "ClickUp": {
+      "url": "https://mcp.clickup.com/mcp",
+      "headers": {}
+    }
+  }
+}

@@ -1,5 +1,7 @@
 return {
 	"nvchad/ui",
+	-- Disable in VSCode - use VSCode UI
+	enabled = not vim.g.vscode,
 	dependencies = {
 		"nvchad/base46",
 	},

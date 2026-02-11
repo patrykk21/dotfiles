@@ -10,7 +10,7 @@ fi
 CURRENT_DIR="$PWD"
 
 # Only try to set SERVER_PORT if we have the metadata functions
-if command -v get_worktree_info_from_path >/dev/null 2>&1 && command -v get_session_metadata >/dev/null 2>&1; then
+if command -v get_worktree_info_from_path >/dev/null 2>&1 && command -v ensure_and_get_server_port >/dev/null 2>&1; then
     # Check if we're in a worktree
     if [[ "$CURRENT_DIR" == "$WORKTREES_BASE/"* ]]; then
         # Extract worktree info
@@ -19,8 +19,8 @@ if command -v get_worktree_info_from_path >/dev/null 2>&1 && command -v get_sess
             REPO_NAME=$(echo "$WORKTREE_INFO" | cut -d'|' -f1)
             TICKET=$(echo "$WORKTREE_INFO" | cut -d'|' -f2)
             
-            # Get SERVER_PORT from metadata
-            SERVER_PORT=$(get_session_metadata "$REPO_NAME" "$TICKET" "port" 2>/dev/null)
+            # Get SERVER_PORT using unified function (ensures metadata exists)
+            SERVER_PORT=$(ensure_and_get_server_port "$REPO_NAME" "$TICKET" 2>/dev/null)
             
             if [ -n "$SERVER_PORT" ]; then
                 export SERVER_PORT="$SERVER_PORT"
@@ -37,7 +37,8 @@ if command -v get_worktree_info_from_path >/dev/null 2>&1 && command -v get_sess
                     REPO_NAME=$(basename "$REPO_URL" .git 2>/dev/null)
                     
                     if [ -n "$REPO_NAME" ]; then
-                        SERVER_PORT=$(get_session_metadata "$REPO_NAME" "$SESSION" "port" 2>/dev/null)
+                        # Use unified function for consistency
+                        SERVER_PORT=$(ensure_and_get_server_port "$REPO_NAME" "$SESSION" 2>/dev/null)
                         if [ -n "$SERVER_PORT" ]; then
                             export SERVER_PORT="$SERVER_PORT"
                         fi

@@ -1,5 +1,7 @@
 return {
 	"lukas-reineke/indent-blankline.nvim",
+	-- Disable in VSCode - VSCode has its own indent guides
+	enabled = not vim.g.vscode,
 	event = "User FilePost",
 	opts = {
 		indent = { char = "│", highlight = "IblChar" },

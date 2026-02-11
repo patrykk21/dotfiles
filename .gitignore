@@ -8,6 +8,16 @@
 !ghostty/
 !aerospace/
 !zellij/
+!.claude/
+!.claude/**
+!cursor/
+!cursor/**
+
+# Exclude machine-specific Claude files
+.claude/settings.local.json
+.claude/score.json
+.claude/cclsp.json
+
 !tmux/
 !tmux/**
 

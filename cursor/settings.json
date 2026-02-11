@@ -1,0 +1,203 @@
+{
+  // Visual Settings
+  "workbench.iconTheme": "vs-minimal",
+  "editor.fontSize": 12,
+  "editor.fontFamily": "Menlo, Monaco, 'Courier New', monospace",
+  "terminal.integrated.fontSize": 13,
+  "terminal.integrated.fontFamily": "Menlo",
+
+  // VSCode Neovim Extension Configuration
+  "vscode-neovim.neovimExecutablePaths.darwin": "/opt/homebrew/bin/nvim",
+  "vscode-neovim.neovimInitVimPaths.darwin": "~/.config/nvim/vscode-complete.lua",
+
+  // Neovim-specific settings for proper cursor behavior
+  "vscode-neovim.revealCursorScrollLine": true,
+  "vscode-neovim.cursorStylePerMode.insert": "line-thin",
+  "vscode-neovim.cursorStylePerMode.normal": "block",
+  "vscode-neovim.cursorStylePerMode.visual": "block",
+  "vscode-neovim.cursorStylePerMode.visualline": "block",
+  "vscode-neovim.cursorStylePerMode.visualblock": "block",
+  "vscode-neovim.cursorStylePerMode.replace": "underline-thin",
+  "vscode-neovim.ctrlKeysForNormalMode": ["d", "u", "o", "i"],
+  "vscode-neovim.ctrlKeysForInsertMode": [],
+
+  // Editor Settings optimized for vim mode
+  "editor.lineNumbers": "relative",
+  "editor.cursorBlinking": "solid",
+  "editor.cursorStyle": "line",
+  "editor.renderWhitespace": "none",
+  "editor.smoothScrolling": true,
+  "editor.scrollBeyondLastLine": false,
+  "editor.wordWrap": "off",
+  "editor.folding": true,
+  "editor.foldingStrategy": "indentation",
+  "editor.showFoldingControls": "always",
+  "editor.tabSize": 2,
+  "editor.insertSpaces": true,
+  "editor.detectIndentation": false,
+  "editor.autoIndent": "full",
+  "editor.rulers": [],
+  "editor.renderLineHighlight": "all",
+  "editor.cursorSurroundingLines": 4,
+
+  // Scrollbar overview with errors (no minimap sidebar)
+  "editor.minimap.enabled": false,
+  "editor.overviewRulerLanes": 3,
+  "editor.hideCursorInOverviewRuler": false,
+  "editor.overviewRulerBorder": false,
+
+  // File Explorer
+  "explorer.confirmDragAndDrop": false,
+  "explorer.confirmDelete": false,
+  "explorer.compactFolders": false,
+  "explorer.autoReveal": true,
+
+  // Search
+  "search.smartCase": true,
+  "search.useIgnoreFiles": true,
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/bower_components": true,
+    "**/.git": true,
+    "**/.svn": true,
+    "**/.hg": true,
+    "**/CVS": true,
+    "**/.DS_Store": true,
+    "**/Thumbs.db": true
+  },
+
+  // Configure search behavior
+  "search.useIgnoreFiles": true,
+  "search.useGitIgnore": true,
+  "files.watcherExclude": {
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true,
+    "**/node_modules/**": true
+  },
+
+  // Terminal
+  "terminal.integrated.cursorStyle": "line",
+  "terminal.integrated.cursorBlinking": false,
+  "terminal.integrated.scrollback": 10000,
+
+  // Git
+  "git.enableSmartCommit": true,
+  "git.confirmSync": false,
+  "git.autofetch": true,
+
+  // Files
+  "files.autoSave": "off",
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "files.trimFinalNewlines": true,
+
+  // Window Management
+  "window.titleBarStyle": "custom",
+  "window.commandCenter": true,
+  "workbench.editor.enablePreview": false,
+  "workbench.editor.showTabs": "single",
+  "workbench.sideBar.location": "left",
+
+  // Breadcrumbs
+  "breadcrumbs.enabled": true,
+  "breadcrumbs.filePath": "on",
+  "breadcrumbs.symbolPath": "on",
+
+  // IntelliSense
+  "editor.quickSuggestions": {
+    "other": true,
+    "comments": false,
+    "strings": false
+  },
+  "editor.suggestSelection": "first",
+  "editor.acceptSuggestionOnCommitCharacter": true,
+  "editor.acceptSuggestionOnEnter": "on",
+  "editor.parameterHints.enabled": true,
+  "editor.hover.enabled": true,
+  "editor.hover.delay": 300,
+
+  // Formatting
+  "editor.formatOnSave": false,
+  "editor.formatOnPaste": false,
+  "editor.formatOnType": false,
+
+  // Disable VSCode behaviors that conflict with Neovim
+  "editor.find.cursorMoveOnType": false,
+  "editor.multiCursorModifier": "ctrlCmd",
+  "editor.scrollbar.verticalScrollbarSize": 14,
+  "editor.scrollbar.horizontalScrollbarSize": 10,
+  "editor.scrollbar.vertical": "visible",
+  "editor.scrollbar.horizontal": "visible",
+  "editor.cursorSmoothCaretAnimation": "off",
+
+  // Let Neovim handle these (recommended by vscode-neovim docs)
+  "keyboard.dispatch": "keyCode",
+  "editor.dragAndDrop": false,
+  "workbench.list.automaticKeyboardNavigation": false,
+
+  // Disable VSCode's default Ctrl-D behavior
+  "editor.action.addSelectionToNextFindMatch": null,
+  "vscode-neovim.useCtrlKeys": true,
+  "vscode-neovim.handleKeys": {
+    "<C-d>": true,
+    "<C-u>": true,
+    "<C-f>": true,
+    "<C-b>": true
+  },
+
+  // Hybrid Approach: Cursor handles LSP, Neovim handles editing
+  "typescript.suggest.enabled": true,
+  "typescript.validate.enable": true,
+  "javascript.suggest.enabled": true,
+  "javascript.validate.enable": true,
+  "typescript.surveys.enabled": false,
+  "javascript.surveys.enabled": false,
+  "typescript.preferences.includePackageJsonAutoImports": "auto",
+
+  // Enhanced LSP experience
+  "editor.suggest.showWords": true,
+  "editor.wordBasedSuggestions": "currentDocument",
+  "editor.quickSuggestions": {
+    "other": true,
+    "comments": false,
+    "strings": true
+  },
+  "editor.inlayHints.enabled": "off",
+  "typescript.inlayHints.parameterNames.enabled": "none",
+  "typescript.inlayHints.functionLikeReturnTypes.enabled": false,
+  "typescript.inlayHints.variableTypes.enabled": false,
+
+  // Better integration with vscode-neovim
+  "editor.semanticHighlighting.enabled": false,
+  "editor.bracketPairColorization.enabled": true,
+  "editor.guides.bracketPairs": false,
+  "editor.guides.indentation": true,
+  "editor.rulers": [],
+  "workbench.colorCustomizations": {
+    "editorIndentGuide.background": "#404040",
+    "editorIndentGuide.activeBackground": "#404040",
+    "editorIndentGuide.background1": "#404040",
+    "editorIndentGuide.background2": "#404040",
+    "editorIndentGuide.background3": "#404040",
+    "editorIndentGuide.background4": "#404040",
+    "editorIndentGuide.background5": "#404040",
+    "editorIndentGuide.background6": "#404040"
+  },
+  "extensions.experimental.affinity": {
+    "asvetliakov.vscode-neovim": 1
+  },
+  "claudeCode.selectedModel": "sonnet[1m]",
+  "gitlens.ai.model": "gitkraken",
+  "gitlens.ai.gitkraken.model": "gemini:gemini-2.0-flash",
+  "gitlens.views.commitDetails.files.layout": "tree",
+  "gitlens.views.searchAndCompare.files.layout": "tree",
+  "gitlens.views.searchAndCompare.files.compact": false,
+  "gitlens.currentLine.enabled": false,
+  "diffEditor.renderSideBySide": false,
+  "claudeCode.preferredLocation": "panel",
+  "git.openRepositoryInParentFolders": "never",
+  "workbench.colorTheme": "Tokyo Night",
+  "editor.accessibilitySupport": "off",
+  "cursor.composer.shouldChimeAfterChatFinishes": true,
+  "claudeCode.allowDangerouslySkipPermissions": true
+}

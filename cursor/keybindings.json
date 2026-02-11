@@ -1,0 +1,77 @@
+// Minimal keybindings for Cursor with VSCode Neovim
+// Most keybindings are handled by Neovim itself through vscode-init.lua
+[
+  // Disable conflicting VSCode defaults that would interfere with Neovim
+  {
+    "key": "ctrl+d",
+    "command": "-editor.action.addSelectionToNextFindMatch"
+  },
+  {
+    "key": "ctrl+u",
+    "command": "-cursorColumnSelectUp",
+    "when": "editorTextFocus"
+  },
+  {
+    "key": "ctrl+u",
+    "command": "-deleteLeft",
+    "when": "inputFocus && !editorReadonly"
+  },
+  {
+    "key": "ctrl+h",
+    "command": "-editor.action.startFindReplaceAction"
+  },
+  {
+    "key": "ctrl+w",
+    "command": "-workbench.action.closeActiveEditor"
+  },
+  {
+    "key": "ctrl+a",
+    "command": "-editor.action.selectAll",
+    "when": "editorTextFocus && vim.mode != 'Insert'"
+  },
+  {
+    "key": "ctrl+f",
+    "command": "-actions.find",
+    "when": "vim.mode != 'Insert'"
+  },
+  {
+    "key": "ctrl+o",
+    "command": "-workbench.action.files.openFile"
+  },
+  {
+    "key": "ctrl+j",
+    "command": "-workbench.action.togglePanel"
+  },
+  {
+    "key": "ctrl+k",
+    "command": "-workbench.action.showCommands",
+    "when": "vim.mode != 'Insert'"
+  },
+  {
+    "key": "ctrl+l",
+    "command": "-expandLineSelection"
+  },
+
+  // Contextual left navigation - try focusing left group, fallback to sidebar
+  {
+    "key": "ctrl+shift+h",
+    "command": "workbench.action.focusLeftGroup",
+    "when": "editorTextFocus && editorGroupCount > 1"
+  },
+  {
+    "key": "ctrl+shift+h",
+    "command": "workbench.action.focusSideBar",
+    "when": "editorTextFocus && editorGroupCount == 1"
+  },
+
+  // Only Cursor AI commands (not handled by vim)
+  {
+    "key": "cmd+k",
+    "command": "cursor.action.generateCode",
+    "when": "editorTextFocus"
+  },
+  {
+    "key": "ctrl+alt+cmd+c",
+    "command": "workbench.view.extension.coderabbit-vscode-sidebar-view"
+  }
+]

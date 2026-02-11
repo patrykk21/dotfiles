@@ -14,6 +14,7 @@ M.base46 = {
 M.ui = {
   hl_override = {
     Visual = {
+      sdlkfjsdlkjflksdjlkfjsd
       -- fg = "sun",
     },
     FoldColumn = {
@@ -49,6 +50,10 @@ M.ui = {
   tabufline = {
     enabled = false,
   },
+}
+
+M.colorify = {
+  enabled = false, -- Disable to prevent LSP buffer number error
 }
 
 return M

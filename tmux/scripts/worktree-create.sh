@@ -29,6 +29,14 @@ fi
 
 REPO_NAME=$(basename "$MAIN_REPO")
 
+# Get the current branch to use as starting point
+# This will be the branch of the current worktree or main repo
+CURRENT_BRANCH=$(git branch --show-current)
+if [ -z "$CURRENT_BRANCH" ]; then
+    # If we're in a detached HEAD state, get the commit SHA
+    CURRENT_BRANCH=$(git rev-parse HEAD)
+fi
+
 # Use centralized worktrees directory with repo subdirectory
 WORKTREES_BASE="$HOME/worktrees"
 REPO_WORKTREES_DIR="$WORKTREES_BASE/$REPO_NAME"
@@ -36,7 +44,7 @@ mkdir -p "$REPO_WORKTREES_DIR"
 
 # Define paths
 WORKTREE_PATH="$REPO_WORKTREES_DIR/$TICKET"
-BRANCH_NAME="feature/$TICKET"
+BRANCH_NAME="$TICKET"
 
 # Register repository in metadata if not already done
 register_repo "$REPO_NAME" "$MAIN_REPO"
@@ -54,11 +62,11 @@ if tmux has-session -t "$TICKET" 2>/dev/null; then
 fi
 
 # Create the worktree
-tmux display-message -d 1000 "Creating worktree for $TICKET..."
+tmux display-message -d 1000 "Creating worktree for $TICKET from branch '$CURRENT_BRANCH'..."
 
-# Create worktree with new branch
-if ! git worktree add "$WORKTREE_PATH" -b "$BRANCH_NAME" 2>/dev/null; then
-    # If branch already exists, just check it out
+# Create worktree with new branch starting from current branch
+if ! git worktree add "$WORKTREE_PATH" -b "$BRANCH_NAME" "$CURRENT_BRANCH" 2>/dev/null; then
+    # If branch already exists, try to check it out
     git worktree add "$WORKTREE_PATH" "$BRANCH_NAME" 2>/dev/null || {
         tmux display-message -d 2000 "Error: Failed to create worktree"
         exit 1
@@ -123,4 +131,4 @@ sleep 0.5
 tmux switch-client -t "$SESSION_NAME"
 
 # Display success message
-tmux display-message -d 2000 "✓ Created worktree $TICKET in ~/worktrees/$REPO_NAME/ with session"
+tmux display-message -d 3000 "✓ Created worktree $TICKET from branch '$CURRENT_BRANCH' in ~/worktrees/$REPO_NAME/"

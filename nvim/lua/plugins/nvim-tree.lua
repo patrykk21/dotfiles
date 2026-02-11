@@ -34,7 +34,9 @@ local options = {
 
 return {
 	"nvim-tree/nvim-tree.lua",
-	cmd = { "NvimTreeToggle", "NvimTreeFocus" },
+	-- Disable in VSCode - use VSCode's file explorer
+	enabled = not vim.g.vscode,
+	cmd = { "NvimTreeToggle", "NvimTreeFocus", "NvimTreeFindFile" },
 	config = function()
 		dofile(vim.g.base46_cache .. "nvimtree")
 
