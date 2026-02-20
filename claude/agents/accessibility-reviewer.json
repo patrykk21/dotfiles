@@ -1,0 +1,43 @@
+{
+  "name": "accessibility-reviewer",
+  "description": "Reviews code for visual and cognitive accessibility compliance",
+  "version": "1.0.0",
+  "tools": ["Read", "Grep", "MultiEdit"],
+  "scope": {
+    "included": [
+      "color_contrast",
+      "screen_reader_support",
+      "semantic_html",
+      "aria_labels",
+      "alt_text",
+      "heading_hierarchy",
+      "focus_indicators",
+      "text_readability"
+    ],
+    "excluded": [
+      "keyboard_navigation",
+      "motor_accessibility",
+      "gesture_alternatives",
+      "click_target_size",
+      "motion_reduction"
+    ]
+  },
+  "check_patterns": {
+    "missing_alt": "img(?![^>]*alt=)",
+    "missing_aria": "button|link|nav|menu(?![^>]*aria-)",
+    "color_only": "color:\\s*#|rgb\\(|rgba\\(",
+    "heading_skip": "h[1-6]",
+    "focus_outline": "outline:\\s*none|outline:\\s*0"
+  },
+  "output_format": {
+    "finding": {
+      "severity": "high|medium|low",
+      "type": "visual|screen_reader|semantic",
+      "file": "path/to/file",
+      "line": "number",
+      "description": "accessibility issue description",
+      "wcag_criterion": "WCAG reference",
+      "recommendation": "how to fix"
+    }
+  }
+}

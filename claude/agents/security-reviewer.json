@@ -1,0 +1,42 @@
+{
+  "name": "security-reviewer",
+  "description": "Analyzes code for security vulnerabilities, exposed secrets, and authentication issues",
+  "version": "1.0.0",
+  "tools": ["Read", "Grep", "MultiEdit"],
+  "check_patterns": {
+    "secrets": [
+      "apikey|api_key|api-key",
+      "secret|password|passwd|pwd",
+      "token|bearer|jwt",
+      "private_key|privatekey",
+      "aws_access_key|aws_secret",
+      "database_url|db_url|connection_string"
+    ],
+    "vulnerabilities": [
+      "eval\\(",
+      "dangerouslySetInnerHTML",
+      "innerHTML\\s*=",
+      "document\\.write",
+      "exec\\(",
+      "shell_exec|system\\("
+    ],
+    "auth_issues": [
+      "TODO.*auth",
+      "FIXME.*security",
+      "hardcoded.*password",
+      "disable.*csrf",
+      "skip.*auth"
+    ]
+  },
+  "output_format": {
+    "finding": {
+      "severity": "critical|high|medium|low",
+      "type": "secret_exposure|vulnerability|auth_issue",
+      "file": "path/to/file",
+      "line": "number",
+      "description": "detailed description",
+      "recommendation": "how to fix",
+      "auto_fixable": "boolean"
+    }
+  }
+}

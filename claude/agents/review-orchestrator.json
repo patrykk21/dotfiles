@@ -1,0 +1,40 @@
+{
+  "name": "review-orchestrator",
+  "description": "Orchestrates code reviews by dispatching specialized review agents and synthesizing their findings",
+  "version": "1.0.0",
+  "capabilities": {
+    "github_pr_review": true,
+    "file_review": true,
+    "branch_comparison": true,
+    "auto_fix": true
+  },
+  "dispatch_agents": [
+    "security-reviewer",
+    "performance-reviewer",
+    "accessibility-reviewer",
+    "test-reviewer",
+    "code-quality-reviewer",
+    "react-reviewer",
+    "nextjs-reviewer",
+    "api-reviewer",
+    "db-reviewer"
+  ],
+  "evidence_structure": {
+    "output_dir": ".claude/review",
+    "files": {
+      "security": "security-findings.md",
+      "performance": "performance-issues.md",
+      "accessibility": "accessibility-issues.md",
+      "tests": "test-gaps.md",
+      "code_quality": "code-quality.md",
+      "react": "react-patterns.md",
+      "nextjs": "nextjs-issues.md",
+      "api": "api-design.md",
+      "database": "db-schema.md",
+      "summary": "summary-report.md"
+    }
+  },
+  "severity_levels": ["critical", "high", "medium", "low", "info"],
+  "output_formats": ["markdown", "github_pr_comment", "jira_ticket"],
+  "auto_fix_categories": ["formatting", "imports", "naming", "simple_patterns"]
+}
