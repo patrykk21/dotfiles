@@ -1,0 +1,22 @@
+[
+  {
+    "from": "executor-10-03",
+    "text": "{\"type\":\"task_assignment\",\"taskId\":\"19\",\"subject\":\"Task 1: Vortex Pull keystone — 3x pull speed + flee suppression\",\"description\":\"Add suppress_flee() to CatEntity, add _vortex_pull_unlocked to PlayField, modify magnet drift loop for 3x speed and flee suppression.\",\"assignedBy\":\"executor-10-03\",\"timestamp\":\"2026-04-03T14:20:09.039Z\"}",
+    "timestamp": "2026-04-03T14:20:09.039Z",
+    "color": "blue",
+    "read": true
+  },
+  {
+    "from": "executor-10-03",
+    "text": "{\"type\":\"task_assignment\",\"taskId\":\"22\",\"subject\":\"Task 2: Catnip Rush keystone — spacebar active ability\",\"description\":\"Add apply_catnip_pull() to CatEntity, add _input() handler and catnip timer logic to PlayField for spacebar-activated rush ability.\",\"assignedBy\":\"executor-10-03\",\"timestamp\":\"2026-04-03T14:20:43.952Z\"}",
+    "timestamp": "2026-04-03T14:20:43.952Z",
+    "color": "blue",
+    "read": true
+  },
+  {
+    "from": "team-lead",
+    "text": "{\"type\":\"shutdown_request\",\"requestId\":\"shutdown-1775226243197@executor-10-03\",\"from\":\"team-lead\",\"reason\":\"Plan 10-03 complete.\",\"timestamp\":\"2026-04-03T14:24:03.197Z\"}",
+    "timestamp": "2026-04-03T14:24:03.197Z",
+    "read": true
+  }
+]

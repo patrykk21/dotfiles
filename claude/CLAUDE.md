@@ -90,17 +90,21 @@ GAIN POINTS for:
 - User's professional reputation depends on accurate time logs
 
 ## Git Worktree Workflow (MANDATORY for tickets)
+Uses **Worktrunk** (`wt` / `git-wt`) — config at `.config/wt.toml` per project.
 ```bash
-# From main repo:
-git worktree add ../repo-TICKET-123 -b feature/TICKET-123-desc
-cp -r .claude ../repo-TICKET-123/
-cp .env.local ../repo-TICKET-123/ 2>/dev/null || true
-cd ../repo-TICKET-123
-bun install  # or npm/yarn
+# Create worktree for a ticket (auto-copies .godot, .claude, .planning, etc.):
+wt switch --create feature/TICKET-123-desc
 
-# After merge:
-git worktree remove ../repo-TICKET-123
+# List worktrees:
+wt list
+
+# Merge back to master (squash, rebase, cleanup):
+wt merge
+
+# Remove worktree manually:
+wt remove
 ```
+Binary: `C:/Users/Patryk/AppData/Local/Microsoft/WinGet/Packages/max-sixty.worktrunk_Microsoft.Winget.Source_8wekyb3d8bbwe/git-wt.exe`
 
 ## Specialized Agents (use with Task tool)
 - **general-purpose**: Complex searches, multi-step tasks

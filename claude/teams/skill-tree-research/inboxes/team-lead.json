@@ -1,0 +1,500 @@
+[
+  {
+    "from": "researcher",
+    "text": "Task #1 is complete. I've written a comprehensive research document to `C:\\Users\\Patryk\\Projects\\idle-1\\.planning\\skill-research\\RESEARCH.md`.\n\nThe document covers:\n\n1. **11 idle games analyzed in depth**: Cookie Clicker, Clicker Heroes, Tap Titans 2, Antimatter Dimensions, Realm Grinder, Melvor Idle, Idle Slayer, NGU Idle, AFK Arena, Kittens Game, and Path of Exile (for keystone design patterns)\n\n2. **Psychology deep-dive**: Variable ratio reinforcement, \"just one more turn\" psychology, power spike neurology, compounding returns, near-miss effects, flow state in micro-sessions\n\n3. **9 skill archetypes cataloged**: Multiplicative stacking, proc/chance effects, conditional bonuses, threshold unlocks, cross-branch synergies, risk/reward tradeoffs, temporary power-ups, cascading chain reactions, build-defining keystones\n\n4. **Game feel research**: Optimal juiciness levels (medium-high), number inflation psychology, screen effects, the \"critical mass\" moment engineering\n\n5. **5 anti-patterns identified**: Boring +1% nodes, no meaningful choices, trap nodes, mandatory boring paths, imperceptible stats\n\n6. **Economy balancing principles**: Cost curves, saving psychology, diminishing returns, prestige considerations\n\n7. **Current game assessment + specific gaps identified**:\n   - Missing: conditional bonuses, cross-branch synergies, risk/reward tradeoffs, proc-on-proc cascading, combo thresholds, mutually exclusive choices, build identity, active abilities\n   - Working well: keystones are transformative, combo system, 15-second micro-flow, mix of flat/percentage bonuses\n\n8. **Concrete mechanic recommendations** with specific examples tailored to the cat clicker: combo thresholds, proc chains, conditional skills, cross-branch keystones, risk/reward keystones\n\nAll backed by 30+ sources from game wikis, academic research, industry blogs, and game design publications.",
+    "summary": "Research complete, document written",
+    "timestamp": "2026-04-03T12:44:30.878Z",
+    "color": "blue",
+    "read": true
+  },
+  {
+    "from": "researcher",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"researcher\",\"timestamp\":\"2026-04-03T12:44:34.043Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T12:44:34.043Z",
+    "color": "blue",
+    "read": true
+  },
+  {
+    "from": "researcher",
+    "text": "I received a duplicate assignment for Task #1, but it's already completed. The research document is at `C:\\Users\\Patryk\\Projects\\idle-1\\.planning\\skill-research\\RESEARCH.md`. Let me know if there's anything else you need.",
+    "summary": "Task #1 already completed previously",
+    "timestamp": "2026-04-03T12:44:39.795Z",
+    "color": "blue",
+    "read": true
+  },
+  {
+    "from": "researcher",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"researcher\",\"timestamp\":\"2026-04-03T12:44:43.028Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T12:44:43.028Z",
+    "color": "blue",
+    "read": true
+  },
+  {
+    "from": "researcher",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"researcher\",\"timestamp\":\"2026-04-03T12:44:53.931Z\",\"idleReason\":\"available\",\"summary\":\"[to judge] Task #1 done, Task #2 not mine\"}",
+    "timestamp": "2026-04-03T12:44:53.931Z",
+    "color": "blue",
+    "read": true
+  },
+  {
+    "from": "designer",
+    "text": "Task #2 is complete. The design document is at `C:\\Users\\Patryk\\Projects\\idle-1\\.planning\\skill-research\\SKILL_DESIGN.md`.\n\nSummary of the design:\n- **20 new nodes** (15 standard + 5 keystones), bringing the tree from 23 to 43 total nodes\n- **5 new keystones**: Overclock (burst pulse every 5th hit), Lucky Paws (golden cat triggers 3s 3x value window), Nine Lives (cats survive 3 hits), Purr Resonance (combo count grows pulse radius), Overtime (session extends 5s if combo 10+ at timer end)\n- **6 new stat categories**: golden_cat_chance, multi_hit, earnings_multiplier, cat_attraction, session_reward_bonus, crit_multiplier\n- **3 risk/reward tradeoff nodes**: focused_burst (smaller pulse for chain path), glass_cannon (50% more value but -3s session), small_but_deadly (smaller cats but +15% earnings)\n- **3 cross-branch bridge nodes**: precision_pounce (Pulse->Cat), echo_combo (Session->Pulse), frenzy_combo (Cat->Session)\n- **4 distinct build archetypes**: Speed Demon, Cat Whisperer, Combo Master, Gold Rush\n- **13 new effect classes** specified with exact naming conventions matching the codebase pattern\n\nAll node specs include node_id, parent_id, effect_class, values, costs, and max_level in the exact format matching tree_nodes.csv. Ready for Task #3 (judge review).",
+    "summary": "Task #2 complete: skill tree design document written",
+    "timestamp": "2026-04-03T12:45:06.539Z",
+    "color": "green",
+    "read": true
+  },
+  {
+    "from": "designer",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"designer\",\"timestamp\":\"2026-04-03T12:45:09.798Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T12:45:09.798Z",
+    "color": "green",
+    "read": true
+  },
+  {
+    "from": "researcher",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"researcher\",\"timestamp\":\"2026-04-03T12:45:13.529Z\",\"idleReason\":\"available\",\"summary\":\"[to judge] RESEARCH.md already exists, 36KB\"}",
+    "timestamp": "2026-04-03T12:45:13.529Z",
+    "color": "blue",
+    "read": true
+  },
+  {
+    "from": "judge",
+    "text": "## JUDGE QUALITY REPORT — Skill Tree Research & Design\n\n### SCORECARD\n- Issues found: 7 (3 minor, 3 medium, 1 notable)\n- Critical issues: 0\n- Issues requiring rework: 0 (all addressable as notes)\n\n---\n\n## TASK #1: RESEARCH.md — Rating: 9/10\n\n**VERDICT: APPROVED**\n\n### What I Checked\n- Factual accuracy of game references (verified Cookie Clicker cubic cost curve, Antimatter Dimensions mutually exclusive nodes via web search)\n- Completeness of game analysis (10 games covered, more than sufficient)\n- Psychology section accuracy (variable ratio reinforcement, flow state, near-miss effects — all align with published behavioral psychology and GDKeys/Gamedeveloper.com sources I independently fetched)\n- Relevance of anti-patterns to our specific codebase\n- Quality of actionable insights for the cat clicker\n\n### Strengths\n1. **Outstanding game coverage**: 10 reference games with specific mechanics, not surface-level summaries. Cookie Clicker's cubic formula, Antimatter Dimensions' mutual exclusivity, Melvor's triple-layer mastery — all verified accurate.\n2. **Psychology section is research-grade**: Variable ratio reinforcement, flow state theory, near-miss effects, power spike neurology — properly sourced and applied. Aligns with the CHI 2024 study on juicy feedback and Gamedeveloper.com's power progression article.\n3. **Current state assessment is accurate**: The 8 identified gaps (no conditional bonuses, no cross-branch synergies, no risk/reward tradeoffs, no proc chains, no threshold mechanics, no mutually exclusive choices, limited build identity, no active abilities) directly match my code review findings.\n4. **35+ cited sources** — strong attribution.\n5. **Kittens Game inclusion** is thematically relevant (cat-themed idle game).\n\n### Issues Found\n1. **(Minor)** Section 7 says \"3 branches from root: Pulse Enhancement (wider_pulse), Cat Economy (cat_value_up via wider_pulse), Session/Combo (longer_sessions, faster_pulse)\" — this is slightly imprecise. The CSV shows 3 direct root children: `faster_pulse`, `wider_pulse`, `longer_sessions`. The research groups faster_pulse with Session/Combo, but it's actually a separate Pulse Speed branch. Not wrong, just slightly misleading about the tree topology.\n2. **(Minor)** The research recommends \"allow unlimited purchases but with exponentially increasing cost\" as an alternative to max_level caps. While theoretically interesting, this would require significant rework of the `cost_at_level()` function and the UI level pip display system. Worth noting as a future consideration, not an immediate action.\n3. **(Minor)** No mention of the existing `node_type` field supporting \"milestone\" vs \"standard\" vs \"keystone\" vs \"entry\" — the design document later uses this correctly, so it's fine, but the research could have noted the existing type system as an asset.\n\n---\n\n## TASK #2: SKILL_DESIGN.md — Rating: 9/10\n\n**VERDICT: APPROVED**\n\n### What I Checked\n- Architectural feasibility against existing codebase (TreeRegistry, EffectHandlerBase strategy pattern, TreeNodeData resource schema, CSV import pipeline)\n- Mathematical balance of cost curves and stat values\n- Dopamine design quality (power spikes, meaningful choices, \"just one more\" pull)\n- Synergy matrix viability\n- Build diversity and absence of dominant strategy\n- Session fit (15-second constraint)\n- Innovation vs generic +X% filler\n\n### Strengths\n\n1. **Architecturally sound**: All proposed nodes fit the existing `TreeNodeData` schema. The `value_2` field is already available for dual-stat effects (GlassCannon, SmallButDeadly). New effect handlers follow the existing strategy pattern. New unlock mechanics follow the `is_mechanic_unlocked()` gate pattern. Zero structural changes to the core architecture required.\n\n2. **Outstanding keystone design**: \n   - **Overclock** (burst pulse every 5th consecutive hit) — creates rhythmic gameplay with a skill-expressive hit-streak mechanic. Brilliant for the 15-second format.\n   - **Lucky Paws** (golden cat triggers 3-second scoring frenzy) — leverages variable ratio reinforcement beautifully. The golden-hit-into-scoring-window creates exactly the kind of \"critical mass\" moment the research describes.\n   - **Nine Lives** (cats survive 3 hits with diminishing value) — genuinely transforms the game from \"chase fresh cats\" to \"farm the field.\" This passes the research's \"verb test\" — it changes how you PLAY.\n   - **Purr Resonance** (pulse radius scales with combo) — elegant positive feedback loop that bridges two branches. Self-reinforcing but fragile (combo drop = radius collapse).\n   - **Overtime** (5-second extension at combo 10+, 2x earnings, no new spawns) — creates a dramatic endgame moment every session. The \"no new spawns\" constraint is genius — it prevents infinite farming.\n\n3. **Cross-branch bridges are well-designed**: precision_pounce, echo_combo, and frenzy_combo each logically connect their parent branches' themes. They reward hybrid investment without being mandatory.\n\n4. **Risk/reward tradeoffs create genuine decisions**:\n   - Glass Cannon (-3s session for +50% value): In a 15-second game, losing 3 seconds is a 20% time reduction. Players need >20% more earnings per second to break even. The math is tight.\n   - Small But Deadly (-15% size for +15% earnings): Requires skill or Magnet investment to offset. A real skill-expression node.\n   - Focused Burst (-6% radius per level for Chain Harvest path access): Committing to precision play. Subtle but meaningful.\n\n5. **No \"obviously best build\"**: The synergy matrix shows 7 viable combinations with clear tension points. Speed Demon needs combo investment, Cat Whisperer has slow combos, Combo Master has devastating combo-drop risk, Gold Rush is RNG-dependent. Each build has a clear weakness.\n\n6. **Progression curve is well-paced**: Power spikes at nodes 5/12/20/30/40 align with keystone acquisition timing. The earnings curve (50 -> 180 -> 400 -> 900 -> 3000 -> 10000) shows healthy exponential acceleration without being absurd.\n\n7. **Innovation level is high**: This is NOT generic +X% filler. Out of 20 new nodes, 5 are transformative keystones, 3 are risk/reward tradeoffs, 3 are cross-branch bridges, and the remaining standard nodes serve clear build-enabling purposes. The \"verb test\" from the GDKeys research passes for keystones: Overclock (burst), Lucky Paws (streak), Nine Lives (survive), Purr Resonance (grow), Overtime (extend).\n\n### Issues Found\n\n1. **(Medium) Combo Surge math needs a note**: combo_surge adds +0.03 per combo count per level. At max level 4, that's +0.12 per combo count. Combined with combo_power (+0.05 per combo * 5 levels = +0.25) and base (0.1), total is 0.47 per combo count. At 20 combo = 10.4x multiplier, at 30 combo = 15.1x. This is very powerful. The design acknowledges combo drop is devastating, which is the intended balancing lever. However, reaching 30 combo in 15 seconds with rapid pulse builds is quite achievable (pulse every ~0.3s = 50 pulses per session, each hitting 2-3 cats = 100-150 hits). This could create a runaway effect where Combo Master builds dominate. **Recommendation**: Consider capping Purr Resonance's radius bonus (the document already caps it at +60px at 30 combo — good) and/or adding soft diminishing returns on combo multiplier above combo 30.\n\n2. **(Medium) golden_cat_chance stacking**: With golden_harvest (max 9%) + golden_whiskers (max 6%) + base 5% = 20% golden chance. Combined with Lucky Paws (3s of 3x value on golden hit) and golden value (10x), a single golden hit yields 30x base value during Lucky Streak. At 20% golden chance and fast spawns (Cat Frenzy), expect ~1 golden every 3-4 seconds. This means Lucky Paws is active roughly 75-100% of the time in an optimized Gold Rush build. The design says this is \"highly RNG-dependent\" but with 20% chance and fast spawns, it's actually quite consistent. **Recommendation**: Either reduce the golden chance cap (lower golden_harvest to +2% per level) or make Lucky Paws non-refreshable (the 3-second window doesn't restart on another golden hit during the streak).\n\n3. **(Medium) Overtime keystone interaction with session_duration upgrades**: With longer_sessions (4 levels * 2.5s = 10s) + extra_time (3 levels * 1.5s = 4.5s) + Overtime (5s), a Combo Master session is 15 + 10 + 4.5 + 5 = 34.5 seconds. This is 2.3x the base session length. Overtime's 2x earnings multiplier during those final 5 seconds with a 30+ combo could be extremely lucrative. The design acknowledges this as the \"Marathon Runner\" build's strength. The counterbalance (slow start, combo dependency) is reasonable, but **Recommendation**: Consider whether Overtime's 2x multiplier should apply to the already-multiplied-by-combo value, or whether it should be additive. If multiplicative (2x * 15x combo = 30x), it could be extreme. Clarify the stacking order.\n\n4. **(Notable) Missing: no CSV row entries for new nodes**: The design specifies all fields for new nodes but doesn't provide the actual CSV rows that would be added to `tree_nodes.csv`. The `csv_to_tres.gd` importer needs exact CSV format. **Recommendation**: Add an appendix with the complete CSV rows for all 20 new nodes, matching the existing format: `Node_ID,Parent_ID,Effect_Class,Value_1,Value_2,Value_3,Max_Level,Cost_Base,Cost_Multiplier,Node_Type,Display_Name`.\n\n5. **(Minor) focused_burst uses negative IncreasePulseRadiusPerc**: value_1 = -0.06 to shrink pulse. This works within the existing handler (percentage modifier applied as multiplication), but the display name and tooltip should clearly communicate the REDUCTION. The current tooltip system in tree_node_ui.gd shows `value_current` and `value_next` — a negative value would show something like \"-18%\" which could confuse players. **Recommendation**: Note that tooltip_panel.gd may need special-case text for negative-value nodes (e.g., \"Pulse Radius: -18%\" displayed as a deliberate tradeoff, not a penalty).\n\n6. **(Minor) cat_tornado introduces cat_attraction stat**: This stat (pull cats toward cursor) requires new physics behavior in play_field.gd or cat_entity.gd — cats need a per-frame drift toward the cursor position. This is more complex than a simple stat modifier; it's effectively a new movement behavior. The Magnet keystone (TODO in play_field.gd line 29) is also unimplemented. cat_tornado builds on Magnet, so both need implementation together. **Recommendation**: Note that Magnet + cat_tornado require new code in cat_entity.gd's `_process_wander()` to add cursor-attraction force, not just a stat handler.\n\n7. **(Minor) node_type inconsistency**: New keystones use `node_type: milestone` (matching existing keystones). But the tree_node_ui.gd code has NODE_SIZES for \"keystone\" (54x54) vs \"standard\" (46x46). Existing keystones in CSV use `milestone` as their node_type. The UI code checks `node_type == \"keystone\"` for diamond decorations (line 319). This means existing keystones (labeled \"milestone\") don't get keystone decorations. The design should clarify: are new keystones \"milestone\" or \"keystone\" type? **Recommendation**: Check if existing keystones are intentionally \"milestone\" type or if this is a latent bug. New keystones should match whatever convention is correct.\n\n---\n\n## OVERALL ASSESSMENT\n\n### Research Quality: 9/10\nThorough, well-sourced, accurately reflects the codebase, and provides actionable insights. The 8 identified gaps in the current tree are precisely correct. Minor topology description issue is trivial.\n\n### Design Quality: 9/10\nArchitecturally feasible, mathematically reasonable (with the noted balance points), dopamine-rich (5 transformative keystones, variable ratio via golden cats and crits, combo tension, power spike engineering), and genuinely innovative. The build archetype diversity is excellent — 4 distinct playstyles with clear strengths and weaknesses.\n\n### Dopamine Design: 9/10\nLucky Paws creates the \"golden rush\" variable-ratio excitement. Overclock creates rhythmic flow state. Purr Resonance creates the self-reinforcing-but-fragile combo loop. Overtime creates the dramatic session endgame. Nine Lives transforms the fundamental play pattern. These are not generic stat bumps — they change how the game FEELS.\n\n### Balance: 8/10\nThe main concern is the combo multiplier scaling at high combos (potentially 15x+ with Purr Resonance self-reinforcement) and golden chance consistency undermining the \"unreliable\" framing. Both are addressable with the recommended soft caps. Cost curves follow established idle game patterns (geometric scaling with 30-50% multipliers).\n\n### Architectural Fit: 9/10\nAll proposals fit the existing TreeNodeData schema, effect handler strategy pattern, and CSV import pipeline. The dual-stat effects (GlassCannon, SmallButDeadly) use the already-available value_2 field. New unlock mechanics mirror existing patterns. The only complexity is cat_attraction requiring new physics code.\n\n### FINAL RATING: 9/10 — APPROVED\n\nThe 7 issues found are all addressable as implementation notes — none require fundamental rework. The research is factually sound and the designs are creative, balanced, and architecturally grounded. This meets the quality bar.\n\n### Scorecard Summary\n| Metric | Value |\n|---|---|\n| Issues found | 7 |\n| Critical blockers | 0 |\n| Medium issues (balance notes) | 3 |\n| Minor issues (implementation notes) | 4 |\n| Web searches conducted | 8 |\n| Code files reviewed | 12 |\n| Final rating | 9/10 |\n| Verdict | APPROVED |",
+    "summary": "Complete quality review of research and skill designs",
+    "timestamp": "2026-04-03T12:47:12.757Z",
+    "color": "yellow",
+    "read": true
+  },
+  {
+    "from": "judge",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"judge\",\"timestamp\":\"2026-04-03T12:47:26.602Z\",\"idleReason\":\"available\",\"summary\":\"[to game-designer] Reminder to write SKILL_DESIGN.md file\"}",
+    "timestamp": "2026-04-03T12:47:26.603Z",
+    "color": "yellow",
+    "read": true
+  },
+  {
+    "from": "judge",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"judge\",\"timestamp\":\"2026-04-03T12:47:32.392Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T12:47:32.392Z",
+    "color": "yellow",
+    "read": true
+  },
+  {
+    "from": "judge",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"judge\",\"timestamp\":\"2026-04-03T12:47:37.728Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T12:47:37.728Z",
+    "color": "yellow",
+    "read": true
+  },
+  {
+    "from": "judge",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"judge\",\"timestamp\":\"2026-04-03T12:47:42.089Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T12:47:42.089Z",
+    "color": "yellow",
+    "read": true
+  },
+  {
+    "from": "researcher",
+    "text": "{\"type\":\"shutdown_approved\",\"requestId\":\"shutdown-1775220460239@researcher\",\"from\":\"researcher\",\"timestamp\":\"2026-04-03T12:47:43.545Z\",\"paneId\":\"in-process\",\"backendType\":\"in-process\"}",
+    "timestamp": "2026-04-03T12:47:43.545Z",
+    "color": "blue",
+    "read": true
+  },
+  {
+    "from": "judge",
+    "text": "{\"type\":\"shutdown_approved\",\"requestId\":\"shutdown-1775220461149@judge\",\"from\":\"judge\",\"timestamp\":\"2026-04-03T12:47:45.288Z\",\"paneId\":\"in-process\",\"backendType\":\"in-process\"}",
+    "timestamp": "2026-04-03T12:47:45.288Z",
+    "color": "yellow",
+    "read": true
+  },
+  {
+    "from": "designer",
+    "text": "I've revised the skill design document after reading the research. The updated `SKILL_DESIGN.md` now addresses all the gaps the research identified:\n\n**Key additions from research:**\n1. **Conditional bonuses** (was missing): Added `momentum` (streak-based value scaling), `first_impression` (5x first pulse), `combo_threshold` (breakpoints at combo 5/15/25 with escalating bonuses)\n2. **Proc-on-proc cascading** (was missing): Added `critical_cascade` — chain harvest hits can now crit, creating the spectacle cascade the research recommends\n3. **Active ability** (was missing): Added `catnip_rush` — once-per-session spacebar press pulls all cats toward cursor for 3 seconds. Creates a timing decision within the 15s session\n4. **Combo threshold system** (from Melvor Idle mastery checkpoints): 3 tiers of combo milestones that transform gameplay mid-session\n5. **Magnet capstone**: Added `vortex_pull` — trapped cats can't flee, creating a gravitational trap synergy with Nine Lives\n6. **5th build archetype**: \"Critical Cascade\" — the proc-on-proc chain reaction build\n\n**Revised totals**: 25 new nodes (up from 20), 48 total tree size, 5 build archetypes, 19 new effect classes, 4-wave implementation priority plan.\n\nThe document now explicitly references research findings and cites the specific games/psychology that inspired each design decision. Ready for judge review.",
+    "summary": "Design document revised with research insights, now 25 nodes",
+    "timestamp": "2026-04-03T12:52:39.169Z",
+    "color": "green",
+    "read": true
+  },
+  {
+    "from": "designer",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"designer\",\"timestamp\":\"2026-04-03T12:52:43.231Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T12:52:43.231Z",
+    "color": "green",
+    "read": true
+  },
+  {
+    "from": "designer",
+    "text": "{\"type\":\"shutdown_approved\",\"requestId\":\"shutdown-1775220460696@designer\",\"from\":\"designer\",\"timestamp\":\"2026-04-03T12:52:47.786Z\",\"paneId\":\"in-process\",\"backendType\":\"in-process\"}",
+    "timestamp": "2026-04-03T12:52:47.786Z",
+    "color": "green",
+    "read": true
+  },
+  {
+    "from": "executor-09-01",
+    "text": "## PLAN COMPLETE\n\n**Plan:** 09-01\n**Tasks:** 2/2\n**SUMMARY:** C:/Users/Patryk/Projects/idle-1/.planning/phases/09-per-cat-combo-stats-handlers/09-01-SUMMARY.md\n\n**Commits:**\n- `1ea3199`: feat(09-01): add 6 standard flat effect handlers\n- `3cf431c`: feat(09-01): add dual-stat handlers and register all 8 in TreeRegistry\n\n**Duration:** ~2 min\n\n**Files created:**\n- `effects/increase_crit_multiplier_flat.gd`\n- `effects/increase_golden_cat_chance_flat.gd`\n- `effects/increase_earnings_multiplier_flat.gd`\n- `effects/increase_multi_hit_flat.gd`\n- `effects/increase_cat_attraction_flat.gd`\n- `effects/increase_session_reward_bonus_flat.gd`\n- `effects/glass_cannon.gd`\n- `effects/small_but_deadly.gd`\n\n**Files modified:**\n- `autoloads/tree_registry.gd` (8 new handler registrations, 26 total)\n\n**Deviations:** 1 auto-fix (Rule 3 — blocking): Changed `get_stat()` pass 1 filter from `ends_with(\"Flat\")` to `not ends_with(\"Perc\")` so dual-stat handlers (GlassCannon, SmallButDeadly) and Unlock* handlers are included in the flat accumulation pass. Without this fix, those handlers would never be dispatched.\n\n**Note:** .planning/ is gitignored, so metadata commit (SUMMARY.md, STATE.md, ROADMAP.md, REQUIREMENTS.md) was written to disk but not committed to git. STATE.md and ROADMAP.md were updated by both this executor and the parallel 09-02 executor — the latest disk state reflects 09-02 completion (2/9 plans, 22%).",
+    "summary": "Plan 09-01 execution complete",
+    "timestamp": "2026-04-03T13:34:52.513Z",
+    "color": "purple",
+    "read": true
+  },
+  {
+    "from": "executor-09-01",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"executor-09-01\",\"timestamp\":\"2026-04-03T13:34:56.981Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T13:34:56.981Z",
+    "color": "purple",
+    "read": true
+  },
+  {
+    "from": "executor-09-01",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"executor-09-01\",\"timestamp\":\"2026-04-03T13:35:01.602Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T13:35:01.602Z",
+    "color": "purple",
+    "read": true
+  },
+  {
+    "from": "executor-09-01",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"executor-09-01\",\"timestamp\":\"2026-04-03T13:35:04.666Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T13:35:04.666Z",
+    "color": "purple",
+    "read": true
+  },
+  {
+    "from": "executor-09-01",
+    "text": "{\"type\":\"shutdown_approved\",\"requestId\":\"shutdown-1775223312553@executor-09-01\",\"from\":\"executor-09-01\",\"timestamp\":\"2026-04-03T13:35:15.732Z\",\"paneId\":\"in-process\",\"backendType\":\"in-process\"}",
+    "timestamp": "2026-04-03T13:35:15.732Z",
+    "color": "purple",
+    "read": true
+  },
+  {
+    "from": "executor-09-02",
+    "text": "## PLAN COMPLETE\n\n**Plan:** 09-02\n**Tasks:** 2/2\n**SUMMARY:** `C:/Users/Patryk/Projects/idle-1/.planning/phases/09-per-cat-combo-stats-handlers/09-02-SUMMARY.md`\n\n**Commits:**\n- `93ef03f`: feat(09-02): add per-cat combo tracking to CatEntity with floating ComboLabel\n- `07568f3`: feat(09-02): rewrite PulseSystem for per-cat combo, remove all global combo state\n- `00fadb4`: docs(09-02): complete per-cat combo migration plan\n\n**Duration:** 3 min\n\n**Key changes:**\n- CatEntity now owns combo_count (starts at 1), decay timer, and floating ComboLabel (x2, x3 etc)\n- PulseSystem earnings use per-cat combo multiplier for both primary and chain harvest hits\n- Global combo state fully removed from GameState, EventBus, and HUD (zero orphan references verified)\n- 7 files modified across entities, scenes, autoloads\n- Requirements COMBO-01 through COMBO-07 marked complete",
+    "summary": "Plan 09-02 complete - per-cat combo migration",
+    "timestamp": "2026-04-03T13:36:02.076Z",
+    "color": "orange",
+    "read": true
+  },
+  {
+    "from": "executor-09-02",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"executor-09-02\",\"timestamp\":\"2026-04-03T13:36:04.938Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T13:36:04.938Z",
+    "color": "orange",
+    "read": true
+  },
+  {
+    "from": "executor-09-02",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"executor-09-02\",\"timestamp\":\"2026-04-03T13:36:16.947Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T13:36:16.947Z",
+    "color": "orange",
+    "read": true
+  },
+  {
+    "from": "executor-09-02",
+    "text": "{\"type\":\"shutdown_approved\",\"requestId\":\"shutdown-1775223376114@executor-09-02\",\"from\":\"executor-09-02\",\"timestamp\":\"2026-04-03T13:36:20.682Z\",\"paneId\":\"in-process\",\"backendType\":\"in-process\"}",
+    "timestamp": "2026-04-03T13:36:20.682Z",
+    "color": "orange",
+    "read": true
+  },
+  {
+    "from": "executor-09-03",
+    "text": "## PLAN COMPLETE\n\n**Plan:** 09-03\n**Tasks:** 2/2\n**SUMMARY:** `C:/Users/Patryk/Projects/idle-1/.planning/phases/09-per-cat-combo-stats-handlers/09-03-SUMMARY.md`\n\n**Commits:**\n- `ff0443f`: feat(09-03): wire crit_multiplier, earnings_multiplier, multi_hit into PulseSystem\n- `08397d6`: feat(09-03): wire golden_cat_chance, cat_attraction, session_reward_bonus\n- `6567709`: docs(09-03): complete stat wiring plan\n\n**Duration:** 2 min\n\n**Key changes:**\n- `scenes/session/pulse_system.gd` — 3 new cached stats: _crit_multiplier (replaces hardcoded 2x), _earnings_multiplier (per-hit), _multi_hit_chance (double payout + combo)\n- `scenes/session/play_field.gd` — GOLDEN_CHANCE const removed, replaced with stat-driven _golden_cat_chance; _cat_attraction cached for Phase 10\n- `scenes/reward/session_summary.gd` — session_reward_bonus applied to final_total before reset_session()\n\n**Phase 9 is now complete** (3/3 plans). STATE.md updated to 33% v1.2 progress, ready for Phase 10 keystones.",
+    "summary": "Plan 09-03 complete - stat wiring done",
+    "timestamp": "2026-04-03T13:41:58.960Z",
+    "color": "pink",
+    "read": true
+  },
+  {
+    "from": "executor-09-03",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"executor-09-03\",\"timestamp\":\"2026-04-03T13:42:02.561Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T13:42:02.561Z",
+    "color": "pink",
+    "read": true
+  },
+  {
+    "from": "executor-09-03",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"executor-09-03\",\"timestamp\":\"2026-04-03T13:42:07.692Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T13:42:07.692Z",
+    "color": "pink",
+    "read": true
+  },
+  {
+    "from": "executor-09-03",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"executor-09-03\",\"timestamp\":\"2026-04-03T13:42:10.001Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T13:42:10.001Z",
+    "color": "pink",
+    "read": true
+  },
+  {
+    "from": "executor-09-03",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"executor-09-03\",\"timestamp\":\"2026-04-03T13:42:13.085Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T13:42:13.085Z",
+    "color": "pink",
+    "read": true
+  },
+  {
+    "from": "executor-09-03",
+    "text": "{\"type\":\"shutdown_approved\",\"requestId\":\"shutdown-1775223730561@executor-09-03\",\"from\":\"executor-09-03\",\"timestamp\":\"2026-04-03T13:42:17.210Z\",\"paneId\":\"in-process\",\"backendType\":\"in-process\"}",
+    "timestamp": "2026-04-03T13:42:17.210Z",
+    "color": "pink",
+    "read": true
+  },
+  {
+    "from": "executor-10-01",
+    "text": "## PLAN COMPLETE\n\n**Plan:** 10-01\n**Tasks:** 3/3\n**SUMMARY:** `.planning/phases/10-keystones/10-01-SUMMARY.md`\n\n**Commits:**\n- `062fba2`: feat(10-01): create 11 keystone stub handlers and register all 13 in TreeRegistry\n- `4a6e70a`: feat(10-01): implement Magnet keystone — cat drift toward cursor\n- `78fa758`: feat(10-01): implement Pulse Echo keystone — delayed secondary pulse\n- `12837aa`: docs(10-01): complete stubs + magnet + echo plan\n\n**Duration:** ~3 min\n\n**Deviations:** None — plan executed exactly as written.\n\n**Requirements completed:** KEY-08, KEY-09\n\n**Note:** Node.js was unavailable in the shell (Volta shims not resolving), so STATE.md, ROADMAP.md, and REQUIREMENTS.md were updated manually instead of via gsd-tools.",
+    "summary": "Plan 10-01 complete — 3/3 tasks, 4 commits",
+    "timestamp": "2026-04-03T14:12:47.234Z",
+    "color": "cyan",
+    "read": true
+  },
+  {
+    "from": "executor-10-01",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"executor-10-01\",\"timestamp\":\"2026-04-03T14:12:49.672Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T14:12:49.672Z",
+    "color": "cyan",
+    "read": true
+  },
+  {
+    "from": "executor-10-01",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"executor-10-01\",\"timestamp\":\"2026-04-03T14:12:53.279Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T14:12:53.279Z",
+    "color": "cyan",
+    "read": true
+  },
+  {
+    "from": "executor-10-01",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"executor-10-01\",\"timestamp\":\"2026-04-03T14:12:55.978Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T14:12:55.978Z",
+    "color": "cyan",
+    "read": true
+  },
+  {
+    "from": "executor-10-01",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"executor-10-01\",\"timestamp\":\"2026-04-03T14:12:58.645Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T14:12:58.645Z",
+    "color": "cyan",
+    "read": true
+  },
+  {
+    "from": "executor-10-01",
+    "text": "{\"type\":\"shutdown_approved\",\"requestId\":\"shutdown-1775225578305@executor-10-01\",\"from\":\"executor-10-01\",\"timestamp\":\"2026-04-03T14:13:03.382Z\",\"paneId\":\"in-process\",\"backendType\":\"in-process\"}",
+    "timestamp": "2026-04-03T14:13:03.382Z",
+    "color": "cyan",
+    "read": true
+  },
+  {
+    "from": "executor-10-02",
+    "text": "## PLAN COMPLETE\n\n**Plan:** 10-02\n**Tasks:** 2/2\n**SUMMARY:** C:/Users/Patryk/Projects/idle-1/.planning/phases/10-keystones/10-02-SUMMARY.md\n\n**Commits:**\n- `3789f8c`: feat(10-02): Nine Lives keystone — on_hit returns float, 3-hit survival with opacity fade\n- `bcda08c`: feat(10-02): Lucky Paws, First Impression, Purr Resonance keystones\n- `fe4cf53`: docs(10-02): complete Nine Lives + Lucky Paws + First Impression + Purr Resonance plan\n\n**Duration:** 3 min\n\n**Key changes:**\n- `entities/cat/cat_entity.gd` — on_hit() now returns float value_mult, Nine Lives 3-hit survival with opacity fade, _pool_reset restores lives\n- `scenes/session/pulse_system.gd` — Lucky Paws 3s 3x streak, First Impression 5x first pulse, Purr Resonance +15px max radius from combos, all callers capture value_mult\n\n**Requirements completed:** KEY-02, KEY-03, KEY-04, KEY-12\n**Deviations:** None",
+    "summary": "Plan 10-02 complete — all tasks done",
+    "timestamp": "2026-04-03T14:19:13.766Z",
+    "color": "red",
+    "read": true
+  },
+  {
+    "from": "executor-10-02",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"executor-10-02\",\"timestamp\":\"2026-04-03T14:19:17.015Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T14:19:17.015Z",
+    "color": "red",
+    "read": true
+  },
+  {
+    "from": "executor-10-02",
+    "text": "{\"type\":\"shutdown_approved\",\"requestId\":\"shutdown-1775225964898@executor-10-02\",\"from\":\"executor-10-02\",\"timestamp\":\"2026-04-03T14:19:29.022Z\",\"paneId\":\"in-process\",\"backendType\":\"in-process\"}",
+    "timestamp": "2026-04-03T14:19:29.022Z",
+    "color": "red",
+    "read": true
+  },
+  {
+    "from": "executor-10-03",
+    "text": "## PLAN COMPLETE\n\n**Plan:** 10-03\n**Tasks:** 2/2\n**SUMMARY:** `.planning/phases/10-keystones/10-03-SUMMARY.md`\n\n**Commits:**\n- `008bd1f`: feat(10-03): implement Vortex Pull keystone — 3x magnet speed + flee suppression\n- `3901c2a`: feat(10-03): implement Catnip Rush keystone — spacebar active ability\n\n**Note:** Final docs commit skipped — `.planning/` is in `.gitignore`. STATE.md, ROADMAP.md, and REQUIREMENTS.md updated on disk.\n\n**Duration:** ~2 min\n\n**Key changes:**\n- `entities/cat/cat_entity.gd` — Added `suppress_flee()` and `apply_catnip_pull()` methods\n- `scenes/session/play_field.gd` — Added `_vortex_pull_unlocked`, catnip vars, `_input()` handler with echo guard, modified magnet drift for 3x speed + flee suppression, catnip pull loop in `_process()`\n\n**Requirements completed:** KEY-06, KEY-07",
+    "summary": "Plan 10-03 complete — Vortex Pull + Catnip Rush",
+    "timestamp": "2026-04-03T14:23:51.116Z",
+    "color": "blue",
+    "read": true
+  },
+  {
+    "from": "executor-10-03",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"executor-10-03\",\"timestamp\":\"2026-04-03T14:23:53.915Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T14:23:53.915Z",
+    "color": "blue",
+    "read": true
+  },
+  {
+    "from": "executor-10-03",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"executor-10-03\",\"timestamp\":\"2026-04-03T14:23:57.926Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T14:23:57.926Z",
+    "color": "blue",
+    "read": true
+  },
+  {
+    "from": "executor-10-03",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"executor-10-03\",\"timestamp\":\"2026-04-03T14:24:00.147Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T14:24:00.147Z",
+    "color": "blue",
+    "read": true
+  },
+  {
+    "from": "executor-10-03",
+    "text": "{\"type\":\"shutdown_approved\",\"requestId\":\"shutdown-1775226243197@executor-10-03\",\"from\":\"executor-10-03\",\"timestamp\":\"2026-04-03T14:24:06.839Z\",\"paneId\":\"in-process\",\"backendType\":\"in-process\"}",
+    "timestamp": "2026-04-03T14:24:06.839Z",
+    "color": "blue",
+    "read": true
+  },
+  {
+    "from": "executor-10-04",
+    "text": "## PLAN COMPLETE\n\n**Plan:** 10-04\n**Tasks:** 2/2\n**SUMMARY:** C:/Users/Patryk/Projects/idle-1/.planning/phases/10-keystones/10-04-SUMMARY.md\n\n**Commits:**\n- `17938e7`: feat(10-04): implement Overclock keystone — streak counter + burst pulse\n- `9f1f06c`: feat(10-04): implement Momentum, Combo Threshold, Critical Cascade keystones\n- `231cc90`: docs(10-04): complete Overclock + Momentum + Combo Threshold + Critical Cascade plan\n\n**Duration:** 3 min\n\n**Key changes to `scenes/session/pulse_system.gd`:**\n- Overclock: _overclock_streak tracks consecutive hit-pulses, _fire_burst_pulse() fires at 1.5x radius on 5th hit with orange ring\n- Momentum: stacking +5%/level value bonus per consecutive hit-pulse (max 10 stacks), applied to all earnings\n- Combo Threshold: 3-level breakpoints at combo 2+/3+/4+ (value boost / radius bonus / auto-crit)\n- Critical Cascade: chain harvest hits crit at 15%*level chance (triple-gated on cascade + chain harvest + critical pulse)\n- Ring color system: normal=blue, echo=light-blue, burst=orange\n\n**No deviations from plan.**",
+    "summary": "Plan 10-04 complete — all keystones implemented",
+    "timestamp": "2026-04-03T14:26:10.066Z",
+    "color": "green",
+    "read": true
+  },
+  {
+    "from": "executor-10-04",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"executor-10-04\",\"timestamp\":\"2026-04-03T14:26:13.187Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T14:26:13.187Z",
+    "color": "green",
+    "read": true
+  },
+  {
+    "from": "executor-10-04",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"executor-10-04\",\"timestamp\":\"2026-04-03T14:26:17.075Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T14:26:17.075Z",
+    "color": "green",
+    "read": true
+  },
+  {
+    "from": "executor-10-04",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"executor-10-04\",\"timestamp\":\"2026-04-03T14:26:19.885Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T14:26:19.885Z",
+    "color": "green",
+    "read": true
+  },
+  {
+    "from": "executor-10-04",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"executor-10-04\",\"timestamp\":\"2026-04-03T14:26:22.093Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T14:26:22.093Z",
+    "color": "green",
+    "read": true
+  },
+  {
+    "from": "executor-10-04",
+    "text": "{\"type\":\"shutdown_approved\",\"requestId\":\"shutdown-1775226386121@executor-10-04\",\"from\":\"executor-10-04\",\"timestamp\":\"2026-04-03T14:26:29.704Z\",\"paneId\":\"in-process\",\"backendType\":\"in-process\"}",
+    "timestamp": "2026-04-03T14:26:29.704Z",
+    "color": "green",
+    "read": true
+  },
+  {
+    "from": "executor-10-05",
+    "text": "## PLAN COMPLETE\n\n**Plan:** 10-05\n**Tasks:** 2/2\n**SUMMARY:** C:/Users/Patryk/Projects/idle-1/.planning/phases/10-keystones/10-05-SUMMARY.md\n\n**Commits:**\n- `4207076`: feat(10-05): implement Overtime keystone — 5s session extension with 2x earnings and spawn suppression\n- `1c19dc1`: feat(10-05): add HUD indicators for Overtime and Lucky Streak\n- `7d5ca6c`: docs(10-05): complete Overtime + HUD plan — phase 10 keystones done\n\n**Duration:** ~2 min\n\n**Key files modified:**\n- `autoloads/event_bus.gd` — 3 new signals (overtime_triggered, overtime_spawning_disabled, lucky_streak_started)\n- `scenes/session/session_manager.gd` — Overtime check + 5s extension\n- `scenes/session/pulse_system.gd` — 2x overtime_mult on all earnings paths + lucky_streak_started emit\n- `scenes/session/play_field.gd` — Spawn suppression during overtime\n- `scenes/session/hud/hud.gd` + `hud.tscn` — OvertimeLabel and LuckyLabel display\n\n**Phase 10 (Keystones) is now COMPLETE** — all 5 plans executed. STATE.md and ROADMAP.md updated accordingly.",
+    "summary": "Plan 10-05 complete — Overtime + HUD",
+    "timestamp": "2026-04-03T14:32:43.952Z",
+    "color": "yellow",
+    "read": true
+  },
+  {
+    "from": "executor-10-05",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"executor-10-05\",\"timestamp\":\"2026-04-03T14:32:46.768Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T14:32:46.768Z",
+    "color": "yellow",
+    "read": true
+  },
+  {
+    "from": "executor-10-05",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"executor-10-05\",\"timestamp\":\"2026-04-03T14:32:50.773Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T14:32:50.773Z",
+    "color": "yellow",
+    "read": true
+  },
+  {
+    "from": "executor-10-05",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"executor-10-05\",\"timestamp\":\"2026-04-03T14:32:53.788Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T14:32:53.788Z",
+    "color": "yellow",
+    "read": true
+  },
+  {
+    "from": "executor-10-05",
+    "text": "{\"type\":\"shutdown_approved\",\"requestId\":\"shutdown-1775226775105@executor-10-05\",\"from\":\"executor-10-05\",\"timestamp\":\"2026-04-03T14:32:59.441Z\",\"paneId\":\"in-process\",\"backendType\":\"in-process\"}",
+    "timestamp": "2026-04-03T14:32:59.441Z",
+    "color": "yellow",
+    "read": true
+  },
+  {
+    "from": "executor-11-01",
+    "text": "## PLAN COMPLETE\n\n**Plan:** 11-01\n**Tasks:** 2/2\n**SUMMARY:** `C:/Users/Patryk/Projects/idle-1/.planning/phases/11-tree-data-balance/11-01-SUMMARY.md`\n\n**Commits:**\n- `d7e5ef6`: feat(11-01): add 25 new tree nodes to CSV and create .tres resource files\n- `817eba3`: feat(11-01): update VALID_EFFECT_CLASSES and add save migration v2->v3\n- `7af479d`: docs(11-01): complete CSV + .tres + migration plan\n\n**Duration:** 4 min\n\n**Key results:**\n- 25 new rows in `data/tree_nodes.csv` (49 data rows total)\n- 25 new `.tres` files in `resources/tree_nodes/` (49 total including root)\n- `VALID_EFFECT_CLASSES` expanded to 38 entries in `tools/csv_to_tres.gd`\n- Save migration v2->v3 preserves player node_levels in `autoloads/game_state.gd`\n- Requirements CSV-01 through CSV-04 marked complete\n- STATE.md, ROADMAP.md, REQUIREMENTS.md updated",
+    "summary": "Plan 11-01 complete: CSV + .tres + migration",
+    "timestamp": "2026-04-03T14:53:41.757Z",
+    "color": "purple",
+    "read": true
+  },
+  {
+    "from": "executor-11-01",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"executor-11-01\",\"timestamp\":\"2026-04-03T14:53:44.846Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T14:53:44.846Z",
+    "color": "purple",
+    "read": true
+  },
+  {
+    "from": "executor-11-01",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"executor-11-01\",\"timestamp\":\"2026-04-03T14:53:49.062Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T14:53:49.062Z",
+    "color": "purple",
+    "read": true
+  },
+  {
+    "from": "executor-11-01",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"executor-11-01\",\"timestamp\":\"2026-04-03T14:53:51.698Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T14:53:51.698Z",
+    "color": "purple",
+    "read": true
+  },
+  {
+    "from": "executor-11-01",
+    "text": "{\"type\":\"shutdown_approved\",\"requestId\":\"shutdown-1775228033643@executor-11-01\",\"from\":\"executor-11-01\",\"timestamp\":\"2026-04-03T14:53:57.606Z\",\"paneId\":\"in-process\",\"backendType\":\"in-process\"}",
+    "timestamp": "2026-04-03T14:53:57.606Z",
+    "color": "purple",
+    "read": true
+  },
+  {
+    "from": "executor-11-02",
+    "text": "## PLAN COMPLETE\n\n**Plan:** 11-02\n**Tasks:** 1/1 (+ 1 auto-approved checkpoint)\n**SUMMARY:** `C:/Users/Patryk/Projects/idle-1/.planning/phases/11-tree-data-balance/11-02-SUMMARY.md`\n\n**Commits:**\n- `1bffa8e`: feat(11-02): update tooltip descriptions for 19 new effect classes\n\n**Note:** .planning/ is gitignored so the docs commit was skipped, but SUMMARY.md, STATE.md, ROADMAP.md, and REQUIREMENTS.md are all updated on disk.\n\n**Duration:** ~1 min\n\n**What was done:**\n- Added 19 new EFFECT_DESCRIPTIONS entries to tooltip_panel.gd (38 total)\n- Added flat_decimal format type for crit multiplier display\n- Fixed negative value tooltip sign (focused_burst shows \"-6%\" not \"+6%\")\n- Balance verified: cost curves OK, 5 build archetypes have distinct viable paths, Nine Lives combo capped at 2.29x\n- STATE.md updated to 100% v1.2 complete\n- ROADMAP.md phase 11 marked complete\n- Requirements BAL-01 through BAL-05 marked complete\n- Checkpoint auto-approved (auto_advance=true)\n\n**Key files:**\n- `C:/Users/Patryk/Projects/idle-1/scenes/abilities_tree/tooltip_panel.gd`\n- `C:/Users/Patryk/Projects/idle-1/.planning/phases/11-tree-data-balance/11-02-SUMMARY.md`\n- `C:/Users/Patryk/Projects/idle-1/.planning/STATE.md`",
+    "summary": "Plan 11-02 complete - tooltip + balance",
+    "timestamp": "2026-04-03T14:58:54.513Z",
+    "color": "orange",
+    "read": true
+  },
+  {
+    "from": "executor-11-02",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"executor-11-02\",\"timestamp\":\"2026-04-03T14:58:57.107Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T14:58:57.107Z",
+    "color": "orange",
+    "read": true
+  },
+  {
+    "from": "executor-11-02",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"executor-11-02\",\"timestamp\":\"2026-04-03T14:59:00.333Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T14:59:00.333Z",
+    "color": "orange",
+    "read": true
+  },
+  {
+    "from": "executor-11-02",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"executor-11-02\",\"timestamp\":\"2026-04-03T14:59:04.790Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T14:59:04.790Z",
+    "color": "orange",
+    "read": true
+  },
+  {
+    "from": "executor-11-02",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"executor-11-02\",\"timestamp\":\"2026-04-03T14:59:07.905Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-04-03T14:59:07.905Z",
+    "color": "orange",
+    "read": true
+  },
+  {
+    "from": "executor-11-02",
+    "text": "{\"type\":\"shutdown_approved\",\"requestId\":\"shutdown-1775228348711@executor-11-02\",\"from\":\"executor-11-02\",\"timestamp\":\"2026-04-03T14:59:16.461Z\",\"paneId\":\"in-process\",\"backendType\":\"in-process\"}",
+    "timestamp": "2026-04-03T14:59:16.461Z",
+    "color": "orange",
+    "read": true
+  }
+]

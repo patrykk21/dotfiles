@@ -1,7 +1,7 @@
 ---
 name: gsd:execute-phase
 description: Execute all plans in a phase with wave-based parallelization
-argument-hint: "<phase-number> [--gaps-only]"
+argument-hint: "<phase-number> [--gaps-only] [--team]"
 allowed-tools:
   - Read
   - Write
@@ -22,8 +22,8 @@ Context budget: ~15% orchestrator, 100% fresh per subagent.
 </objective>
 
 <execution_context>
-@/Users/vigenerr/.claude/get-shit-done/workflows/execute-phase.md
-@/Users/vigenerr/.claude/get-shit-done/references/ui-brand.md
+@C:/Users/Patryk/.claude/get-shit-done/workflows/execute-phase.md
+@C:/Users/Patryk/.claude/get-shit-done/references/ui-brand.md
 </execution_context>
 
 <context>
@@ -31,11 +31,12 @@ Phase: $ARGUMENTS
 
 **Flags:**
 - `--gaps-only` — Execute only gap closure plans (plans with `gap_closure: true` in frontmatter). Use after verify-work creates fix plans.
+- `--team` — Use agent teams instead of subagents for wave execution. Teammates communicate directly and coordinate on shared concerns. Falls back to subagents for single-plan waves.
 
 Context files are resolved inside the workflow via `gsd-tools init execute-phase` and per-subagent `<files_to_read>` blocks.
 </context>
 
 <process>
-Execute the execute-phase workflow from @/Users/vigenerr/.claude/get-shit-done/workflows/execute-phase.md end-to-end.
+Execute the execute-phase workflow from @C:/Users/Patryk/.claude/get-shit-done/workflows/execute-phase.md end-to-end.
 Preserve all workflow gates (wave execution, checkpoint handling, verification, state updates, routing).
 </process>

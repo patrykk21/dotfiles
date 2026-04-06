@@ -1,0 +1,15 @@
+[
+  {
+    "from": "team-lead",
+    "text": "Task #1 (research) is now complete. The research document is ready at `C:\\Users\\Patryk\\Projects\\idle-1\\.planning\\skill-research\\RESEARCH.md`. \n\nPlease read it thoroughly and begin your work on Task #2 — designing 15-25 new skill nodes. The research covers 11 games analyzed, 9 skill archetypes, dopamine psychology, and specific recommendations for our cat clicker. Use it as your foundation.\n\nKey gaps identified by research that you MUST address:\n- Missing conditional bonuses and combo thresholds\n- No cross-branch synergies currently\n- No risk/reward tradeoffs\n- No proc-on-proc cascading\n- No build identity / mutually exclusive choices\n- No active abilities\n\nGo deep. This needs to be 9/10+ quality.",
+    "summary": "Research done, start designing skills",
+    "timestamp": "2026-04-03T12:44:54.267Z",
+    "read": true
+  },
+  {
+    "from": "team-lead",
+    "text": "{\"type\":\"shutdown_request\",\"requestId\":\"shutdown-1775220460696@designer\",\"from\":\"team-lead\",\"reason\":\"All tasks completed and approved. Great work!\",\"timestamp\":\"2026-04-03T12:47:40.696Z\"}",
+    "timestamp": "2026-04-03T12:47:40.696Z",
+    "read": true
+  }
+]

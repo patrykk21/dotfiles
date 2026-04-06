@@ -1,0 +1,19 @@
+{
+  "name": "skill-tree-research",
+  "description": "Research, design, and plan new skills/effects for the idle cat clicker skill tree. Deep research into dopamine mechanics, idle game progression, and satisfying skill design.",
+  "createdAt": 1775219664979,
+  "leadAgentId": "team-lead@skill-tree-research",
+  "leadSessionId": "6b85982b-eb11-442e-9830-3dedcb0847fb",
+  "members": [
+    {
+      "agentId": "team-lead@skill-tree-research",
+      "name": "team-lead",
+      "agentType": "team-lead",
+      "model": "claude-opus-4-6[1m]",
+      "joinedAt": 1775219664979,
+      "tmuxPaneId": "",
+      "cwd": "C:\\Users\\Patryk\\Projects\\idle-1",
+      "subscriptions": []
+    }
+  ]
+}

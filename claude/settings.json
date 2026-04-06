@@ -1,17 +1,19 @@
 {
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
   "permissions": {
     "allow": [
       "mcp__pencil"
     ]
   },
-  "model": "opus",
   "hooks": {
     "Stop": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/vigenerr/.claude/notify.sh Stop"
+            "command": "C:/Users/Patryk/.claude/notify.cmd Stop"
           }
         ]
       }
@@ -21,7 +23,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/vigenerr/.claude/notify.sh Notification"
+            "command": "C:/Users/Patryk/.claude/notify.cmd Notification"
           }
         ]
       }
@@ -31,7 +33,27 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"/Users/vigenerr/.claude/hooks/gsd-check-update.js\""
+            "command": "C:/Users/Patryk/.claude/hooks/gsd-check-update.cmd"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:/Users/Patryk/.claude/hooks/gsd-context-monitor.js\""
+          }
+        ]
+      }
+    ],
+    "CwdChanged": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:/Users/Patryk/.claude/hooks/godot-worktree-setup.cmd"
           }
         ]
       }
@@ -39,9 +61,10 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "node \"/Users/vigenerr/.claude/hooks/gsd-statusline.js\""
+    "command": "C:/Users/Patryk/.claude/hooks/gsd-statusline.cmd"
   },
   "alwaysThinkingEnabled": true,
+  "effortLevel": "medium",
   "skipDangerousModePermissionPrompt": true,
   "mcpServers": {
     "playwright": {
@@ -57,7 +80,10 @@
       "command": "open-devtools",
       "args": [],
       "env": {}
+    },
+    "vercel": {
+      "type": "http",
+      "url": "https://mcp.vercel.com"
     }
-  },
-  "effortLevel": "low"
+  }
 }

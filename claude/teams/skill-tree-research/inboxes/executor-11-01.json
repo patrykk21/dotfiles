@@ -1,0 +1,22 @@
+[
+  {
+    "from": "executor-11-01",
+    "text": "{\"type\":\"task_assignment\",\"taskId\":\"26\",\"subject\":\"Task 1: Add 25 CSV rows + create 25 .tres files\",\"description\":\"Append 25 new node rows to tree_nodes.csv and create matching .tres resource files\",\"assignedBy\":\"executor-11-01\",\"timestamp\":\"2026-04-03T14:47:30.908Z\"}",
+    "timestamp": "2026-04-03T14:47:30.908Z",
+    "color": "purple",
+    "read": true
+  },
+  {
+    "from": "executor-11-01",
+    "text": "{\"type\":\"task_assignment\",\"taskId\":\"27\",\"subject\":\"Task 2: Update VALID_EFFECT_CLASSES + save migration v2->v3\",\"description\":\"Add 19 new effect classes to csv_to_tres.gd and bump save version with proper migration\",\"assignedBy\":\"executor-11-01\",\"timestamp\":\"2026-04-03T14:49:42.788Z\"}",
+    "timestamp": "2026-04-03T14:49:42.788Z",
+    "color": "purple",
+    "read": true
+  },
+  {
+    "from": "team-lead",
+    "text": "{\"type\":\"shutdown_request\",\"requestId\":\"shutdown-1775228033643@executor-11-01\",\"from\":\"team-lead\",\"reason\":\"Plan 11-01 complete.\",\"timestamp\":\"2026-04-03T14:53:53.643Z\"}",
+    "timestamp": "2026-04-03T14:53:53.643Z",
+    "read": true
+  }
+]

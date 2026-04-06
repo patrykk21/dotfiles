@@ -1,0 +1,22 @@
+[
+  {
+    "from": "executor-10-05",
+    "text": "{\"type\":\"task_assignment\",\"taskId\":\"24\",\"subject\":\"Task 1: Overtime keystone — session extension + 2x earnings + spawn suppression\",\"description\":\"Add overtime signals to EventBus, overtime logic to SessionManager, 2x earnings to PulseSystem, spawn suppression to PlayField\",\"assignedBy\":\"executor-10-05\",\"timestamp\":\"2026-04-03T14:27:16.875Z\"}",
+    "timestamp": "2026-04-03T14:27:16.875Z",
+    "color": "yellow",
+    "read": true
+  },
+  {
+    "from": "executor-10-05",
+    "text": "{\"type\":\"task_assignment\",\"taskId\":\"25\",\"subject\":\"Task 2: HUD indicators for Overtime and Lucky Streak\",\"description\":\"Add OvertimeLabel and LuckyLabel to HUD scene/script, lucky_streak_started signal to EventBus, emit from PulseSystem\",\"assignedBy\":\"executor-10-05\",\"timestamp\":\"2026-04-03T14:28:29.434Z\"}",
+    "timestamp": "2026-04-03T14:28:29.434Z",
+    "color": "yellow",
+    "read": true
+  },
+  {
+    "from": "team-lead",
+    "text": "{\"type\":\"shutdown_request\",\"requestId\":\"shutdown-1775226775105@executor-10-05\",\"from\":\"team-lead\",\"reason\":\"Plan 10-05 complete.\",\"timestamp\":\"2026-04-03T14:32:55.105Z\"}",
+    "timestamp": "2026-04-03T14:32:55.105Z",
+    "read": true
+  }
+]

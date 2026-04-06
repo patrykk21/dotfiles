@@ -13,10 +13,10 @@ Validate `.planning/` directory integrity and report actionable issues. Checks f
 </objective>
 
 <execution_context>
-@/Users/vigenerr/.claude/get-shit-done/workflows/health.md
+@C:/Users/Patryk/.claude/get-shit-done/workflows/health.md
 </execution_context>
 
 <process>
-Execute the health workflow from @/Users/vigenerr/.claude/get-shit-done/workflows/health.md end-to-end.
+Execute the health workflow from @C:/Users/Patryk/.claude/get-shit-done/workflows/health.md end-to-end.
 Parse --repair flag from arguments and pass to workflow.
 </process>

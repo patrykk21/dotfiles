@@ -1,0 +1,29 @@
+[
+  {
+    "from": "executor-11-02",
+    "text": "{\"type\":\"task_assignment\",\"taskId\":\"28\",\"subject\":\"Task 1: Update tooltip descriptions + balance verification\",\"description\":\"Add 19 new EFFECT_DESCRIPTIONS entries, flat_decimal format, negative value sign fix, balance analysis\",\"assignedBy\":\"executor-11-02\",\"timestamp\":\"2026-04-03T14:54:37.781Z\"}",
+    "timestamp": "2026-04-03T14:54:37.781Z",
+    "color": "orange",
+    "read": true
+  },
+  {
+    "from": "executor-11-02",
+    "text": "{\"type\":\"task_assignment\",\"taskId\":\"29\",\"subject\":\"Task 2: Checkpoint human-verify (auto-approve)\",\"description\":\"Auto-approve the human-verify checkpoint since auto_advance is true\",\"assignedBy\":\"executor-11-02\",\"timestamp\":\"2026-04-03T14:55:35.391Z\"}",
+    "timestamp": "2026-04-03T14:55:35.391Z",
+    "color": "orange",
+    "read": true
+  },
+  {
+    "from": "executor-11-02",
+    "text": "{\"type\":\"task_assignment\",\"taskId\":\"30\",\"subject\":\"Create SUMMARY.md and update STATE.md/ROADMAP.md\",\"description\":\"Write 11-02-SUMMARY.md, update state and roadmap via gsd-tools\",\"assignedBy\":\"executor-11-02\",\"timestamp\":\"2026-04-03T14:55:40.621Z\"}",
+    "timestamp": "2026-04-03T14:55:40.621Z",
+    "color": "orange",
+    "read": true
+  },
+  {
+    "from": "team-lead",
+    "text": "{\"type\":\"shutdown_request\",\"requestId\":\"shutdown-1775228348711@executor-11-02\",\"from\":\"team-lead\",\"reason\":\"Plan 11-02 complete. Milestone done!\",\"timestamp\":\"2026-04-03T14:59:08.711Z\"}",
+    "timestamp": "2026-04-03T14:59:08.711Z",
+    "read": true
+  }
+]

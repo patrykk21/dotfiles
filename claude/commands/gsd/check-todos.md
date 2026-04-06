@@ -21,7 +21,7 @@ Routes to the check-todos workflow which handles:
 </objective>
 
 <execution_context>
-@/Users/vigenerr/.claude/get-shit-done/workflows/check-todos.md
+@C:/Users/Patryk/.claude/get-shit-done/workflows/check-todos.md
 </execution_context>
 
 <context>
@@ -31,7 +31,7 @@ Todo state and roadmap correlation are loaded in-workflow using `init todos` and
 </context>
 
 <process>
-**Follow the check-todos workflow** from `@/Users/vigenerr/.claude/get-shit-done/workflows/check-todos.md`.
+**Follow the check-todos workflow** from `@C:/Users/Patryk/.claude/get-shit-done/workflows/check-todos.md`.
 
 The workflow handles all logic including:
 1. Todo existence checking

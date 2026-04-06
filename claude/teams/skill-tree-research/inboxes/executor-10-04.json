@@ -1,0 +1,29 @@
+[
+  {
+    "from": "executor-10-04",
+    "text": "{\"type\":\"task_assignment\",\"taskId\":\"20\",\"subject\":\"Task 1: Overclock (KEY-01) — hit streak counter + burst pulse\",\"description\":\"Add Overclock streak tracking, _fire_burst_pulse(), ring color system, and overclock trigger in _fire_pulse()\",\"assignedBy\":\"executor-10-04\",\"timestamp\":\"2026-04-03T14:20:09.683Z\"}",
+    "timestamp": "2026-04-03T14:20:09.683Z",
+    "color": "green",
+    "read": true
+  },
+  {
+    "from": "executor-10-04",
+    "text": "{\"type\":\"task_assignment\",\"taskId\":\"21\",\"subject\":\"Task 2: Momentum + Combo Threshold + Critical Cascade\",\"description\":\"Add Momentum stacking, Combo Threshold breakpoints, Critical Cascade chain crits\",\"assignedBy\":\"executor-10-04\",\"timestamp\":\"2026-04-03T14:21:27.219Z\"}",
+    "timestamp": "2026-04-03T14:21:27.219Z",
+    "color": "green",
+    "read": true
+  },
+  {
+    "from": "executor-10-04",
+    "text": "{\"type\":\"task_assignment\",\"taskId\":\"23\",\"subject\":\"Create SUMMARY.md and update state\",\"description\":\"Create 10-04-SUMMARY.md, update STATE.md and ROADMAP.md\",\"assignedBy\":\"executor-10-04\",\"timestamp\":\"2026-04-03T14:22:50.345Z\"}",
+    "timestamp": "2026-04-03T14:22:50.345Z",
+    "color": "green",
+    "read": true
+  },
+  {
+    "from": "team-lead",
+    "text": "{\"type\":\"shutdown_request\",\"requestId\":\"shutdown-1775226386121@executor-10-04\",\"from\":\"team-lead\",\"reason\":\"Plan 10-04 complete.\",\"timestamp\":\"2026-04-03T14:26:26.121Z\"}",
+    "timestamp": "2026-04-03T14:26:26.121Z",
+    "read": true
+  }
+]

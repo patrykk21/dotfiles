@@ -1,0 +1,29 @@
+[
+  {
+    "from": "executor-09-02",
+    "text": "{\"type\":\"task_assignment\",\"taskId\":\"6\",\"subject\":\"Task 1: Add per-cat combo to CatEntity + ComboLabel to scene\",\"description\":\"Add combo_count, decay timer, ComboLabel to cat_entity.gd and cat_entity.tscn\",\"assignedBy\":\"executor-09-02\",\"timestamp\":\"2026-04-03T13:29:34.295Z\"}",
+    "timestamp": "2026-04-03T13:29:34.295Z",
+    "color": "orange",
+    "read": true
+  },
+  {
+    "from": "executor-09-02",
+    "text": "{\"type\":\"task_assignment\",\"taskId\":\"7\",\"subject\":\"Task 2: Rewrite PulseSystem for per-cat combo + remove global combo state\",\"description\":\"Rewrite pulse_system.gd, remove global combo from game_state.gd, event_bus.gd, hud.gd, hud.tscn\",\"assignedBy\":\"executor-09-02\",\"timestamp\":\"2026-04-03T13:30:25.187Z\"}",
+    "timestamp": "2026-04-03T13:30:25.187Z",
+    "color": "orange",
+    "read": false
+  },
+  {
+    "from": "executor-09-02",
+    "text": "{\"type\":\"task_assignment\",\"taskId\":\"8\",\"subject\":\"Create SUMMARY.md + update STATE.md and ROADMAP.md\",\"description\":\"Create summary, update state, roadmap, requirements\",\"assignedBy\":\"executor-09-02\",\"timestamp\":\"2026-04-03T13:31:56.018Z\"}",
+    "timestamp": "2026-04-03T13:31:56.018Z",
+    "color": "orange",
+    "read": false
+  },
+  {
+    "from": "team-lead",
+    "text": "{\"type\":\"shutdown_request\",\"requestId\":\"shutdown-1775223376114@executor-09-02\",\"from\":\"team-lead\",\"reason\":\"Plan 09-02 complete. Shutting down.\",\"timestamp\":\"2026-04-03T13:36:16.114Z\"}",
+    "timestamp": "2026-04-03T13:36:16.114Z",
+    "read": true
+  }
+]

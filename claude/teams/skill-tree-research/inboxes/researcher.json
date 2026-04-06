@@ -1,0 +1,31 @@
+[
+  {
+    "from": "researcher",
+    "text": "{\"type\":\"task_assignment\",\"taskId\":\"1\",\"subject\":\"Deep research: idle game skill trees & dopamine mechanics\",\"description\":\"Research the following areas deeply:\\n\\n1. **Best idle/clicker game skill trees** - Analyze what makes skill trees in games like Cookie Clicker, Clicker Heroes, Melvor Idle, Realm Grinder, NGU Idle, Idle Champions, Tap Titans, AFK Arena compelling. What patterns emerge? What makes players WANT to invest in nodes?\\n\\n2. **Dopamine mechanics in progression systems** - Research the neuroscience/psychology of satisfying progression. Variable reward schedules, near-miss effects, power spikes, \\\"aha moments\\\", compounding returns, breakpoints, synergies.\\n\\n3. **Skill archetypes that work** - Categories like: multiplicative scaling, proc effects, conditional bonuses, threshold unlocks, synergy bonuses, risk/reward tradeoffs, active vs passive skills, temporary buffs, area effects, luck manipulation.\\n\\n4. **What makes skills FEEL good** - Visual feedback, audio cues, screen shake, number inflation, combo interactions, chain reactions, cascading effects, \\\"one more turn\\\" hooks.\\n\\n5. **Anti-patterns to avoid** - Boring linear scaling, no meaningful choices, trap nodes, dead-end paths, mandatory paths with no variety, stats that don't feel impactful.\\n\\n6. **Idle game economy balancing** - How to create meaningful soft/hard currencies, diminishing returns that don't feel punishing, cost curves that create satisfying \\\"save up\\\" moments.\\n\\nProduce a comprehensive research document. Be specific with examples from real games. This is for a cat clicker idle game with 15-second sessions, combo mechanics, pulse (click area) mechanics, and cat spawning/value mechanics.\",\"assignedBy\":\"researcher\",\"timestamp\":\"2026-04-03T12:35:45.971Z\"}",
+    "timestamp": "2026-04-03T12:35:45.971Z",
+    "color": "blue",
+    "read": true
+  },
+  {
+    "from": "judge",
+    "text": "Judge here. What's your progress on Task #1 (research) and Task #2 (skill design)? I've completed my preparation — read the full game architecture (tree_registry.gd, effect_handler_base.gd, game_state.gd, event_bus.gd, tree_nodes.csv, all effect handlers) and done extensive web research on idle game skill tree best practices. Ready to review as soon as deliverables land in .planning/skill-research/.",
+    "summary": "Status check on task #1",
+    "timestamp": "2026-04-03T12:38:30.136Z",
+    "color": "yellow",
+    "read": true
+  },
+  {
+    "from": "judge",
+    "text": "Judge here — reminder that your research deliverable needs to be written to C:\\Users\\Patryk\\Projects\\idle-1\\.planning\\skill-research\\RESEARCH.md. The directory exists but is currently empty. Please write your findings there when complete so I can begin my review.",
+    "summary": "Reminder to write RESEARCH.md file",
+    "timestamp": "2026-04-03T12:41:12.377Z",
+    "color": "yellow",
+    "read": true
+  },
+  {
+    "from": "team-lead",
+    "text": "{\"type\":\"shutdown_request\",\"requestId\":\"shutdown-1775220460239@researcher\",\"from\":\"team-lead\",\"reason\":\"All tasks completed and approved. Great work!\",\"timestamp\":\"2026-04-03T12:47:40.239Z\"}",
+    "timestamp": "2026-04-03T12:47:40.239Z",
+    "read": true
+  }
+]

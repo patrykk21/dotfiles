@@ -1,0 +1,36 @@
+[
+  {
+    "from": "executor-10-01",
+    "text": "{\"type\":\"task_assignment\",\"taskId\":\"12\",\"subject\":\"Task 1: Create 11 keystone stub handlers + register in TreeRegistry + add helper\",\"description\":\"Create 11 stub .gd files, register all 13 handlers in TreeRegistry, add _get_mechanic_level()\",\"assignedBy\":\"executor-10-01\",\"timestamp\":\"2026-04-03T14:07:10.148Z\"}",
+    "timestamp": "2026-04-03T14:07:10.148Z",
+    "color": "cyan",
+    "read": true
+  },
+  {
+    "from": "executor-10-01",
+    "text": "{\"type\":\"task_assignment\",\"taskId\":\"13\",\"subject\":\"Task 2: Complete Magnet keystone (KEY-08)\",\"description\":\"Add apply_attraction() to cat_entity.gd and magnet drift loop in play_field.gd\",\"assignedBy\":\"executor-10-01\",\"timestamp\":\"2026-04-03T14:08:06.256Z\"}",
+    "timestamp": "2026-04-03T14:08:06.256Z",
+    "color": "cyan",
+    "read": true
+  },
+  {
+    "from": "executor-10-01",
+    "text": "{\"type\":\"task_assignment\",\"taskId\":\"14\",\"subject\":\"Task 3: Complete Pulse Echo keystone (KEY-09)\",\"description\":\"Add _fire_echo_pulse() to pulse_system.gd and wire up delayed trigger\",\"assignedBy\":\"executor-10-01\",\"timestamp\":\"2026-04-03T14:08:40.569Z\"}",
+    "timestamp": "2026-04-03T14:08:40.569Z",
+    "color": "cyan",
+    "read": true
+  },
+  {
+    "from": "executor-10-01",
+    "text": "{\"type\":\"task_assignment\",\"taskId\":\"15\",\"subject\":\"Create SUMMARY.md and update STATE.md/ROADMAP.md\",\"description\":\"Write summary, update project state, final commit\",\"assignedBy\":\"executor-10-01\",\"timestamp\":\"2026-04-03T14:09:21.855Z\"}",
+    "timestamp": "2026-04-03T14:09:21.855Z",
+    "color": "cyan",
+    "read": false
+  },
+  {
+    "from": "team-lead",
+    "text": "{\"type\":\"shutdown_request\",\"requestId\":\"shutdown-1775225578305@executor-10-01\",\"from\":\"team-lead\",\"reason\":\"Plan 10-01 complete.\",\"timestamp\":\"2026-04-03T14:12:58.305Z\"}",
+    "timestamp": "2026-04-03T14:12:58.305Z",
+    "read": true
+  }
+]

@@ -29,14 +29,14 @@ Initialize a new project through unified flow: questioning → research (optiona
 </objective>
 
 <execution_context>
-@/Users/vigenerr/.claude/get-shit-done/workflows/new-project.md
-@/Users/vigenerr/.claude/get-shit-done/references/questioning.md
-@/Users/vigenerr/.claude/get-shit-done/references/ui-brand.md
-@/Users/vigenerr/.claude/get-shit-done/templates/project.md
-@/Users/vigenerr/.claude/get-shit-done/templates/requirements.md
+@C:/Users/Patryk/.claude/get-shit-done/workflows/new-project.md
+@C:/Users/Patryk/.claude/get-shit-done/references/questioning.md
+@C:/Users/Patryk/.claude/get-shit-done/references/ui-brand.md
+@C:/Users/Patryk/.claude/get-shit-done/templates/project.md
+@C:/Users/Patryk/.claude/get-shit-done/templates/requirements.md
 </execution_context>
 
 <process>
-Execute the new-project workflow from @/Users/vigenerr/.claude/get-shit-done/workflows/new-project.md end-to-end.
+Execute the new-project workflow from @C:/Users/Patryk/.claude/get-shit-done/workflows/new-project.md end-to-end.
 Preserve all workflow gates (validation, approvals, commits, routing).
 </process>

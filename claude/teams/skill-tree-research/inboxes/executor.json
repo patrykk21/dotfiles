@@ -1,0 +1,23 @@
+[
+  {
+    "from": "executor-10-02",
+    "text": "{\"type\":\"task_assignment\",\"taskId\":\"16\",\"subject\":\"Task 1: Nine Lives keystone — CatEntity FSM + PulseSystem caller update\",\"description\":\"Modify cat_entity.gd: change on_hit() -> float, add _lives_remaining/_nine_lives_unlocked, opacity fade. Update all 3 pulse_system.gd callers to capture value_mult. Update _pool_reset().\",\"assignedBy\":\"executor-10-02\",\"timestamp\":\"2026-04-03T14:13:39.519Z\"}",
+    "timestamp": "2026-04-03T14:13:39.519Z",
+    "color": "red",
+    "read": false
+  },
+  {
+    "from": "executor-10-02",
+    "text": "{\"type\":\"task_assignment\",\"taskId\":\"17\",\"subject\":\"Task 2: Lucky Paws + First Impression + Purr Resonance\",\"description\":\"Add Lucky Paws (3s 3x streak on golden hit), First Impression (5x first pulse), Purr Resonance (+radius from combos) to pulse_system.gd.\",\"assignedBy\":\"executor-10-02\",\"timestamp\":\"2026-04-03T14:14:38.617Z\"}",
+    "timestamp": "2026-04-03T14:14:38.617Z",
+    "color": "red",
+    "read": false
+  },
+  {
+    "from": "executor-10-02",
+    "text": "{\"type\":\"task_assignment\",\"taskId\":\"18\",\"subject\":\"Create SUMMARY.md and update STATE.md/ROADMAP.md\",\"description\":\"Create 10-02-SUMMARY.md, run self-check, update STATE.md and ROADMAP.md via gsd-tools, final commit.\",\"assignedBy\":\"executor-10-02\",\"timestamp\":\"2026-04-03T14:16:02.443Z\"}",
+    "timestamp": "2026-04-03T14:16:02.443Z",
+    "color": "red",
+    "read": false
+  }
+]
