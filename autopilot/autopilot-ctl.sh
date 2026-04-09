@@ -187,7 +187,11 @@ case "${1:-help}" in
                 else
                     echo -e "  ${CYAN}$project${NC} ${DIM}($jira_proj)${NC} — ${YELLOW}IDLE${NC}"
                 fi
-                echo -e "      History:  ${GREEN}$completed${NC} done, ${RED}$failed${NC} failed"
+                if [ "$pstatus" = "working" ]; then
+                    echo -e "      History:  ${CYAN}1${NC} in progress, ${GREEN}$completed${NC} done, ${RED}$failed${NC} failed"
+                else
+                    echo -e "      History:  ${GREEN}$completed${NC} done, ${RED}$failed${NC} failed"
+                fi
                 echo ""
             done
         fi
