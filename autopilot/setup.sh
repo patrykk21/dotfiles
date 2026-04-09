@@ -8,7 +8,7 @@ set -euo pipefail
 
 AUTOPILOT_DIR="$HOME/.config/autopilot"
 SCRIPT_PATH="$AUTOPILOT_DIR/autopilot-runner.sh"
-SERVICE_NAME="autopilot-jira"
+SERVICE_NAME="autopilot"
 
 detect_os() {
     case "$(uname -s)" in

@@ -10,7 +10,7 @@ shopt -s nullglob
 AUTOPILOT_DIR="$HOME/.config/autopilot"
 PROJECTS_DIR="$AUTOPILOT_DIR/projects"
 ENABLED_FILE="$AUTOPILOT_DIR/enabled"
-SERVICE_NAME="autopilot-jira"
+SERVICE_NAME="autopilot"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -175,7 +175,7 @@ case "${1:-help}" in
         scheduler_load
         projects=$(list_projects)
         count=$(echo "$projects" | grep -c . || true)
-        echo -e "${GREEN}Autopilot enabled.${NC} Polling every 5 minutes."
+        echo -e "${GREEN}Autopilot enabled.${NC} Polling every 1 minute."
         echo -e "  Projects: ${BLUE}${count}${NC} configured"
         if [ -n "$projects" ]; then
             echo "$projects" | while read -r p; do
