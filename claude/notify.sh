@@ -42,7 +42,17 @@ send_notification() {
 # Determine notification type from command line argument
 hook_type="${1:-unknown}"
 tool_name="${CLAUDE_TOOL_NAME:-}"
-working_dir="$(basename "$PWD")"
+
+# Detect project and worktree from cwd
+WORKTREES_BASE="$HOME/worktrees"
+if [[ "$PWD" == "$WORKTREES_BASE/"* ]]; then
+    relative="${PWD#$WORKTREES_BASE/}"
+    project_name=$(echo "$relative" | cut -d'/' -f1)
+    worktree_name=$(echo "$relative" | cut -d'/' -f2)
+    working_dir="$project_name/$worktree_name"
+else
+    working_dir="$(basename "$PWD")"
+fi
 
 case "$hook_type" in
     "Stop")
