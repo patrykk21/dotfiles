@@ -355,19 +355,16 @@ resolve_port() {
 
 start_dev_server() {
     local worktree_name="$1"
-    local port="$2"
 
     if [ -z "$DEV_SERVER_CMD" ]; then
         log "INFO" "No DEV_SERVER_CMD configured, skipping server start."
         return 0
     fi
 
-    # Substitute $PORT in the command
-    local cmd
-    cmd=$(PORT="$port" envsubst '$PORT' <<< "$DEV_SERVER_CMD")
-
-    log "INFO" "Starting dev server: $cmd"
-    tmux send-keys -t "$worktree_name:2" "$cmd" Enter
+    # Send command as-is to tmux — variables like $SERVER_PORT are
+    # already set in the pane's env by create-worktree-session.sh
+    log "INFO" "Starting dev server: $DEV_SERVER_CMD"
+    tmux send-keys -t "$worktree_name:2" "$DEV_SERVER_CMD" Enter
 
     sleep 3
 }
@@ -629,7 +626,7 @@ main() {
     local port
     port=$(resolve_port "$worktree_name")
 
-    start_dev_server "$worktree_name" "$port"
+    start_dev_server "$worktree_name"
 
     local prompt_file
     prompt_file=$(generate_prompt "$TICKET_KEY" "$worktree_name" "$port")
