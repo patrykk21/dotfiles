@@ -1,7 +1,7 @@
 ---
 name: autopilot
-description: "Launch GSD project/milestone in fully autonomous mode — runs until completion, only interrupts for auth gates or unrecoverable errors"
-argument-hint: "<new-project|new-milestone|resume> [--from-phase N] [--no-team] [--no-judge] [@idea-doc.md]"
+description: "Launch GSD project/milestone in fully autonomous mode, or implement a Jira ticket end-to-end. Pass a Jira URL or GSD args."
+argument-hint: "<jira-url | new-project | new-milestone | resume> [--from-phase N] [--no-team] [--no-judge] [@idea-doc.md]"
 allowed-tools:
   - Read
   - Write
@@ -23,7 +23,65 @@ allowed-tools:
   - SendMessage
   - WebSearch
   - WebFetch
+  - mcp__claude_ai_Atlassian__getJiraIssue
+  - mcp__claude_ai_Atlassian__searchJiraIssuesUsingJql
+  - mcp__claude_ai_Atlassian__addCommentToJiraIssue
+  - mcp__claude_ai_Atlassian__getTransitionsForJiraIssue
+  - mcp__claude_ai_Atlassian__transitionJiraIssue
+  - mcp__claude_ai_Atlassian__getAccessibleAtlassianResources
+  - mcp__github-work__create_pull_request
+  - mcp__github-work__push_files
 ---
+
+<jira-ticket-mode>
+## Jira Ticket Detection
+
+**BEFORE anything else**, check if `$ARGUMENTS` contains a Jira URL (e.g., `https://....atlassian.net/browse/ECH-571`).
+
+If it does:
+
+### Step 1: Extract ticket key
+Parse the URL to get the ticket key (e.g., `ECH-571` from `https://groupondev.atlassian.net/browse/ECH-571`).
+
+### Step 2: Fetch ticket from Jira
+Use the Atlassian MCP tools to get:
+- Summary, description, acceptance criteria
+- Comments (for additional context)
+- Issue type and priority
+- Any linked tickets
+
+Cloud ID for Atlassian: `d22269b5-12fa-4277-9276-734d96c6467d`
+
+### Step 3: Implement the ticket
+Work autonomously to implement the ticket end-to-end:
+
+1. **Read project conventions** — AGENTS.md / CLAUDE.md in the project root
+2. **Plan** — identify files to change, break into tasks if needed
+3. **Implement** — write code following project conventions
+4. **Verify** — run test, lint, typecheck commands. Fix any errors.
+5. **Commit & push** — format: `[TICKET-KEY] Description`. Push to current branch.
+6. **Create PR** — against the project's base branch with a descriptive summary
+7. **Comment on Jira** — add the PR link and brief summary to the ticket
+
+### Step 4: Signal completion
+If the environment variables are set (they are when launched by the autopilot scheduler):
+```bash
+[ -n "$AUTOPILOT_COMPLETION_MARKER" ] && echo "PR_URL" > "$AUTOPILOT_COMPLETION_MARKER"
+```
+On failure:
+```bash
+[ -n "$AUTOPILOT_FAILURE_MARKER" ] && echo "reason" > "$AUTOPILOT_FAILURE_MARKER"
+```
+
+### Rules for Jira mode
+- Work autonomously, but if genuinely uncertain, ask — the user may be watching
+- Do NOT modify files outside ticket scope
+- Do NOT amend existing commits
+- If the dev server is already running, do not start another one
+- Follow ALL project conventions from AGENTS.md / CLAUDE.md
+
+**If `$ARGUMENTS` is a Jira URL, execute the Jira flow above and STOP. Do NOT continue to the GSD flow below.**
+</jira-ticket-mode>
 
 <objective>
 Run an entire GSD project or milestone autonomously from start to finish. The AI chains through all phases (plan → execute → verify → next phase) without stopping for confirmations. It only interrupts the user when:

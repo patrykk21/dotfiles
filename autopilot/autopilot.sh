@@ -403,18 +403,22 @@ generate_prompt() {
 
 launch_claude() {
     local worktree_name="$1"
-    local prompt_file="$2"
+    local ticket_key="$2"
     local worktree_path="$WORKTREES_BASE/$worktree_name"
 
     mkdir -p "$AUTOPILOT_DIR/markers"
 
-    # Write a launcher script — avoids tmux send-keys length limits
-    # Uses interactive mode so you get the full Claude TUI
+    # Build the Jira ticket URL
+    local jira_url="${JIRA_BASE_URL}/browse/${ticket_key}"
+
+    # Write a launcher script — starts Claude interactively with /autopilot command
     local launcher="$AUTOPILOT_DIR/prompts/${worktree_name}.sh"
     cat > "$launcher" << LAUNCHER
 #!/usr/bin/env bash
 cd '$worktree_path'
-$CLAUDE_BIN --dangerously-skip-permissions "\$(cat '$prompt_file')"
+export AUTOPILOT_COMPLETION_MARKER='$AUTOPILOT_DIR/markers/${worktree_name}.done'
+export AUTOPILOT_FAILURE_MARKER='$AUTOPILOT_DIR/markers/${worktree_name}.failed'
+$CLAUDE_BIN --dangerously-skip-permissions "/autopilot $jira_url"
 echo \$? > '$AUTOPILOT_DIR/markers/${worktree_name}.exit_code'
 LAUNCHER
     chmod +x "$launcher"
@@ -637,9 +641,7 @@ main() {
 
     start_dev_server "$worktree_name"
 
-    local prompt_file
-    prompt_file=$(generate_prompt "$TICKET_KEY" "$worktree_name" "$port")
-    launch_claude "$worktree_name" "$prompt_file"
+    launch_claude "$worktree_name" "$TICKET_KEY"
 
     write_state "working" "$TICKET_KEY" "$worktree_name" "$WORKTREES_BASE/$worktree_name" "$port"
 
