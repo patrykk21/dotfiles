@@ -65,6 +65,7 @@ Work autonomously to implement it end-to-end:
 5. **Commit & push** — format: `[TICKET-KEY] Description`. Push to current branch.
 6. **Create PR** — against the project's base branch with a descriptive summary
 7. **Comment on ticket** — add the PR link and brief summary back on the original ticket (use the platform's MCP tools if available)
+8. **Transition ticket** — move the ticket to "Code Review" / "In Review" / "Review" status. For Jira: get available transitions, find the one matching review, and transition. For other platforms: update status if the MCP tools support it.
 
 ### Step 3: Signal completion
 If the environment variables are set (they are when launched by the autopilot scheduler):
