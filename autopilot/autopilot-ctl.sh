@@ -347,6 +347,60 @@ case "${1:-help}" in
         fi
         ;;
 
+    stop)
+        project_name="${2:-}"
+        if [ -z "$project_name" ]; then
+            echo "Usage: autopilot stop <project-name>"
+            echo ""
+            echo "Stops the active ticket: kills Claude session, removes worktree + branch, resets state."
+            exit 1
+        fi
+
+        state_file="$AUTOPILOT_DIR/state/${project_name}.json"
+        if [ ! -f "$state_file" ] || [ "$(jq -r '.status' "$state_file" 2>/dev/null)" != "working" ]; then
+            echo -e "${YELLOW}$project_name is not working on anything.${NC}"
+            exit 0
+        fi
+
+        ticket=$(jq -r '.ticket' "$state_file")
+        worktree=$(jq -r '.worktree_name' "$state_file")
+        worktree_path=$(jq -r '.worktree_path' "$state_file")
+
+        echo -e "${YELLOW}Stopping $ticket ($worktree)...${NC}"
+
+        # Kill Claude in tmux pane
+        tmux send-keys -t "$worktree:1" C-c 2>/dev/null
+        sleep 1
+
+        # Kill tmux session
+        tmux kill-session -t "$worktree" 2>/dev/null && echo "  Killed tmux session" || echo "  No tmux session found"
+
+        # Remove worktree and branch
+        if [ -d "$worktree_path" ]; then
+            git -C "$worktree_path" worktree remove "$worktree_path" --force 2>/dev/null || \
+                rm -rf "$worktree_path" 2>/dev/null
+            echo "  Removed worktree"
+        fi
+
+        # Load project config for the main repo path
+        if [ -f "$PROJECTS_DIR/${project_name}.env" ]; then
+            # shellcheck source=/dev/null
+            source "$PROJECTS_DIR/${project_name}.env" 2>/dev/null
+            git -C "${PROJECT_DIR:-}" branch -D "$worktree" 2>/dev/null && echo "  Deleted branch" || true
+            git -C "${PROJECT_DIR:-}" worktree prune 2>/dev/null
+        fi
+
+        # Clean markers
+        rm -f "$AUTOPILOT_DIR/markers/${worktree}".{done,failed,exit_code} 2>/dev/null
+        rm -f "$AUTOPILOT_DIR/prompts/${worktree}".{sh,md} 2>/dev/null
+
+        # Reset state
+        echo '{"status":"idle"}' > "$state_file"
+        rm -f "$AUTOPILOT_DIR/state/${project_name}.lock"
+
+        echo -e "${GREEN}Stopped. $project_name is idle.${NC}"
+        ;;
+
     reset)
         project_name="${2:-}"
         if [ -z "$project_name" ]; then
@@ -397,9 +451,10 @@ case "${1:-help}" in
         echo ""
         echo "Execution:"
         echo "  run [project]      Run one cycle (all projects, or specific one)"
+        echo "  stop <project>     Stop active ticket (kill session, remove worktree, reset)"
         echo "  logs [project] [N] Show last N log lines"
         echo "  history [project]  Show completed/failed tickets"
-        echo "  reset <project>    Reset project state to idle"
+        echo "  reset <project>    Reset state to idle (without cleanup)"
         echo "  reset --all        Reset all projects"
         ;;
 esac
