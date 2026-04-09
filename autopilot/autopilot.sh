@@ -1093,24 +1093,41 @@ main() {
     status=$(echo "$state" | jq -r '.status')
 
     if [ "$status" = "working" ]; then
+        local prev_ticket
+        prev_ticket=$(echo "$state" | jq -r '.ticket')
         check_active_work
-        # Re-read state — if task just completed, try picking next immediately
+        # Re-read state — if task just completed successfully, try picking next immediately
         state=$(read_state)
         status=$(echo "$state" | jq -r '.status')
         if [ "$status" = "idle" ]; then
-            log "INFO" "Previous task completed. Checking for next task immediately."
-            # fall through to find_ticket below
+            # Only auto-chain on success, not on failure (prevents retry loops)
+            local last_outcome=""
+            local hist_file="$HISTORY_DIR/${prev_ticket}.json"
+            if [ -f "$hist_file" ]; then
+                last_outcome=$(jq -r '.outcome // ""' "$hist_file" 2>/dev/null)
+            fi
+            if [ "$last_outcome" = "completed" ]; then
+                log "INFO" "Previous task completed successfully. Checking for next task immediately."
+                # fall through to find_ticket below
+            else
+                log "INFO" "Previous task ended (outcome: ${last_outcome:-unknown}). Waiting for next cycle."
+                log "INFO" "=== Autopilot cycle complete ==="
+                exit 0
+            fi
         else
             log "INFO" "=== Autopilot cycle complete ==="
             exit 0
         fi
     fi
 
-    # Enforce concurrency limit
+    # Enforce concurrency limit (check ALL project state files)
     local active_count=0
-    if [ -d "$AUTOPILOT_DIR/state" ]; then
-        active_count=$(find "$AUTOPILOT_DIR/state" -name "*.json" -exec grep -l '"status":"working"' {} \; 2>/dev/null | wc -l)
-    fi
+    for state_file in "$AUTOPILOT_DIR/state/"*.json; do
+        [ -f "$state_file" ] || continue
+        local s
+        s=$(jq -r '.status' "$state_file" 2>/dev/null || echo "")
+        [ "$s" = "working" ] && active_count=$((active_count + 1))
+    done
     if [ "$active_count" -ge "$MAX_CONCURRENT_TICKETS" ]; then
         log "INFO" "Concurrency limit reached ($active_count/$MAX_CONCURRENT_TICKETS). Waiting."
         log "INFO" "=== Autopilot cycle complete ==="
