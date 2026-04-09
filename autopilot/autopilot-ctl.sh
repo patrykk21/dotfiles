@@ -40,6 +40,19 @@ session_is_alive() {
     if [ "$HAS_TMUX" = true ]; then
         tmux has-session -t "$worktree" 2>/dev/null && return 0
     fi
+    # On Windows with WT tabs, PID is the wt.exe launcher (exits immediately).
+    # If state says "working" and no exit markers exist, assume alive.
+    local os
+    os=$(detect_os)
+    if [ "$os" = "windows" ]; then
+        local marker_dir="$AUTOPILOT_DIR/markers"
+        if [ ! -f "$marker_dir/${worktree}.exit_code" ] && \
+           [ ! -f "$marker_dir/${worktree}.done" ] && \
+           [ ! -f "$marker_dir/${worktree}.failed" ]; then
+            return 0
+        fi
+        return 1
+    fi
     # Fallback: check PID file
     local pid_file="$PIDS_DIR/${worktree}-claude.pid"
     if [ -f "$pid_file" ]; then

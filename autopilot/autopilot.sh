@@ -1032,8 +1032,13 @@ check_active_work() {
     local session_alive=false
     if [ "$HAS_TMUX" = true ]; then
         tmux has-session -t "$worktree_name" 2>/dev/null && session_alive=true
+    elif [ "$PLATFORM" = "windows" ]; then
+        # On Windows Terminal tabs, the PID is the wt.exe launcher which exits immediately.
+        # No markers (.done/.failed/.exit_code) means Claude is still running in the tab.
+        # Assume alive — the exit_code marker (written by launcher script) is the true signal.
+        session_alive=true
     else
-        # Check PID file for background process
+        # Background process: check PID file
         local pid_file="$PIDS_DIR/${worktree_name}-claude.pid"
         if [ -f "$pid_file" ]; then
             local claude_pid
