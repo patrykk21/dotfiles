@@ -653,8 +653,16 @@ setup_worktree() {
     local branch_name="$worktree_name"
     local worktree_path="$WORKTREES_BASE/$worktree_name"
 
+    # Check worktrunk path pattern first (project.branch)
+    local wt_path="$(dirname "$PROJECT_DIR")/$(basename "$PROJECT_DIR").${worktree_name}"
+    if [ -d "$wt_path" ]; then
+        log "INFO" "Worktree already exists: $wt_path"
+        RESOLVED_WORKTREE_PATH="$wt_path"
+        return 0
+    fi
     if [ -d "$worktree_path" ]; then
         log "INFO" "Worktree already exists: $worktree_path"
+        RESOLVED_WORKTREE_PATH="$worktree_path"
         return 0
     fi
 
@@ -674,8 +682,6 @@ setup_worktree() {
             log "ERROR" "Worktrunk created branch but worktree path not found"
             return 1
         fi
-        # Update WORKTREES_BASE to match where worktrunk actually put it
-        WORKTREES_BASE=$(dirname "$worktree_path")
         log "INFO" "Worktree created at: $worktree_path"
     else
         log "INFO" "Creating worktree: $worktree_path (branch: $branch_name, base: $base_override)"
@@ -708,6 +714,7 @@ setup_worktree() {
         done
     fi
 
+    RESOLVED_WORKTREE_PATH="$worktree_path"
     log "INFO" "Worktree setup complete: $worktree_path"
     return 0
 }
@@ -837,7 +844,7 @@ generate_prompt() {
 launch_claude() {
     local worktree_name="$1"
     local ticket_key="$2"
-    local worktree_path="$WORKTREES_BASE/$worktree_name"
+    local worktree_path="${RESOLVED_WORKTREE_PATH:-$WORKTREES_BASE/$worktree_name}"
 
     mkdir -p "$AUTOPILOT_DIR/markers"
 
