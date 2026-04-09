@@ -408,10 +408,19 @@ launch_claude() {
 
     mkdir -p "$AUTOPILOT_DIR/markers"
 
-    log "INFO" "Launching Claude Code in tmux pane $worktree_name:1"
+    # Write a launcher script — avoids tmux send-keys length limits
+    # Uses interactive mode so you get the full Claude TUI
+    local launcher="$AUTOPILOT_DIR/prompts/${worktree_name}.sh"
+    cat > "$launcher" << LAUNCHER
+#!/usr/bin/env bash
+cd '$worktree_path'
+$CLAUDE_BIN --dangerously-skip-permissions "\$(cat '$prompt_file')"
+echo \$? > '$AUTOPILOT_DIR/markers/${worktree_name}.exit_code'
+LAUNCHER
+    chmod +x "$launcher"
 
-    tmux send-keys -t "$worktree_name:1" \
-        "cd '$worktree_path' && $CLAUDE_BIN --dangerously-skip-permissions -p \"\$(cat '$prompt_file')\" 2>&1 | tee '$AUTOPILOT_DIR/logs/${worktree_name}.log'; echo \$? > '$AUTOPILOT_DIR/markers/${worktree_name}.exit_code'" Enter
+    log "INFO" "Launching Claude Code in tmux pane $worktree_name:1"
+    tmux send-keys -t "$worktree_name:1" "$launcher" Enter
 
     log "INFO" "Claude launched. Monitoring via markers."
 }
