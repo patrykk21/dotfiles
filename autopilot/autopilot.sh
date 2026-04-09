@@ -845,16 +845,23 @@ launch_claude() {
     local ticket_url
     ticket_url=$(build_ticket_url "$ticket_key")
 
+    # Build a readable tab title: "🤖 TICKET-KEY — Summary"
+    local tab_title="🤖 ${ticket_key} — ${TICKET_SUMMARY:-$worktree_name}"
+
     # Write a launcher script — starts Claude interactively with /autopilot command
     local launcher="$AUTOPILOT_DIR/prompts/${worktree_name}.sh"
     cat > "$launcher" << LAUNCHER
 #!/usr/bin/env bash
+# Set terminal tab title
+echo -ne "\\033]0;${tab_title}\\007"
 cd '$worktree_path'
 export AUTOPILOT_COMPLETION_MARKER='$AUTOPILOT_DIR/markers/${worktree_name}.done'
 export AUTOPILOT_FAILURE_MARKER='$AUTOPILOT_DIR/markers/${worktree_name}.failed'
 export AUTOPILOT_WAITING_MARKER='$AUTOPILOT_DIR/markers/${worktree_name}.waiting'
 $CLAUDE_BIN --dangerously-skip-permissions "/autopilot $ticket_url"
 echo \$? > '$AUTOPILOT_DIR/markers/${worktree_name}.exit_code'
+# Mark tab as done
+echo -ne "\\033]0;✅ ${ticket_key} — done\\007"
 LAUNCHER
     chmod +x "$launcher"
 
@@ -869,8 +876,8 @@ LAUNCHER
         launcher_win="$(cygpath -w "$launcher" 2>/dev/null || echo "$launcher")"
         local bash_win
         bash_win="$(cygpath -w "$(command -v bash)" 2>/dev/null || echo "C:\\Program Files\\Git\\usr\\bin\\bash.exe")"
-        log "INFO" "Launching Claude Code in Windows Terminal tab: $worktree_name"
-        "$wt_bin" -w 0 nt --title "$worktree_name" "$bash_win" "$launcher_win" &
+        log "INFO" "Launching Claude Code in Windows Terminal tab: $tab_title"
+        "$wt_bin" -w 0 nt --title "$tab_title" "$bash_win" "$launcher_win" &
         local claude_pid=$!
         mkdir -p "$PIDS_DIR"
         echo "$claude_pid" > "$PIDS_DIR/${worktree_name}-claude.pid"
