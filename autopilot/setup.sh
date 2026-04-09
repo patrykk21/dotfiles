@@ -121,9 +121,11 @@ install_task_scheduler() {
     local vbs_path="$AUTOPILOT_DIR/autopilot-runner.vbs"
     local runner_win
     runner_win=$(cygpath -w "$SCRIPT_PATH" 2>/dev/null || echo "$SCRIPT_PATH")
+    local bash_win
+    bash_win=$(cygpath -w "$(command -v bash)" 2>/dev/null || echo "C:\\Program Files\\Git\\usr\\bin\\bash.exe")
     cat > "$vbs_path" << VBSEOF
 Set WshShell = CreateObject("WScript.Shell")
-WshShell.Run "bash ""${runner_win}""", 0, False
+WshShell.Run """${bash_win}"" ""${runner_win}""", 0, False
 VBSEOF
 
     local vbs_win
