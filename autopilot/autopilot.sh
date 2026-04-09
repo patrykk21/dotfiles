@@ -862,13 +862,15 @@ LAUNCHER
         log "INFO" "Launching Claude Code in tmux pane $worktree_name:1"
         tmux send-keys -t "$worktree_name:1" "$launcher" Enter
     elif [ "$PLATFORM" = "windows" ] && command -v wt.exe &>/dev/null; then
-        # Launch in a new Windows Terminal tab (interactive — can answer questions)
+        # Launch in a new Windows Terminal tab using Git Bash profile (interactive)
         local wt_bin
         wt_bin="$(cygpath -w "$HOME/AppData/Local/Microsoft/WindowsApps/wt.exe" 2>/dev/null || echo "wt.exe")"
         local launcher_win
         launcher_win="$(cygpath -w "$launcher" 2>/dev/null || echo "$launcher")"
+        # Detect Git Bash profile GUID, fall back to running bash directly
+        local git_bash_profile="${WT_GIT_BASH_PROFILE:-{2ece5bfe-50ed-5f3a-ab87-5cd4baafed2b}}"
         log "INFO" "Launching Claude Code in Windows Terminal tab: $worktree_name"
-        "$wt_bin" -w 0 nt --title "$worktree_name" bash "$launcher_win" &
+        "$wt_bin" -w 0 nt --profile "$git_bash_profile" --title "$worktree_name" bash "$launcher_win" &
         local claude_pid=$!
         mkdir -p "$PIDS_DIR"
         echo "$claude_pid" > "$PIDS_DIR/${worktree_name}-claude.pid"
