@@ -157,8 +157,15 @@ get_worktrees() {
             close(cmd)
         }
         
+        # Check if autopilot is waiting for input on this worktree
+        waiting_marker = ENVIRON["HOME"] "/.config/autopilot/markers/" ticket ".waiting"
+        waiting_text = ""
+        if (system("test -f " waiting_marker) == 0) {
+            waiting_text = " ⚠ INPUT"
+        }
+
         # Output format with type column and port
-        printf "%s%-15s %-10s %-12s %-6s %-30s %s\n", status_icon, ticket, type_text, session_text, port_text, branch, path
+        printf "%s%-15s %-10s %-12s %-6s %-30s %s%s\n", status_icon, ticket, type_text, session_text, port_text, branch, path, waiting_text
     }'
 }
 
@@ -232,7 +239,7 @@ fi
 # Use fzf (tmux display-popup creates the popup window)
 selected=$(echo "$WORKTREE_DATA" | fzf \
     --prompt=" Select worktree: " \
-    --header=$'\n'"$SEPARATOR"$'\n    ● Active   ○ Inactive   → Current   [SESSION] Active   [METADATA] Saved\n'"$SEPARATOR"$'\n    ↵ switch   ctrl-x delete   ctrl-k kill session   ctrl-r reload' \
+    --header=$'\n'"$SEPARATOR"$'\n    ● Active   ○ Inactive   → Current   [SESSION] Active   [METADATA] Saved   ⚠ INPUT Needs you\n'"$SEPARATOR"$'\n    ↵ switch   ctrl-x delete   ctrl-k kill session   ctrl-r reload' \
     --header-lines=2 \
     --ansi \
     --color="fg:250,bg:235,hl:114,fg+:235,bg+:114,hl+:235,prompt:114,pointer:114,header:243,border:114" \
