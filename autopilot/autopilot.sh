@@ -408,8 +408,13 @@ launch_claude() {
 
     mkdir -p "$AUTOPILOT_DIR/markers"
 
-    # Build the Jira ticket URL
-    local jira_url="${JIRA_BASE_URL}/browse/${ticket_key}"
+    # Build ticket URL from pattern or fall back to Jira format
+    local ticket_url
+    if [ -n "${TICKET_URL_PATTERN:-}" ]; then
+        ticket_url=$(echo "$TICKET_URL_PATTERN" | sed "s|{{KEY}}|$ticket_key|g")
+    else
+        ticket_url="${JIRA_BASE_URL}/browse/${ticket_key}"
+    fi
 
     # Write a launcher script — starts Claude interactively with /autopilot command
     local launcher="$AUTOPILOT_DIR/prompts/${worktree_name}.sh"
@@ -418,7 +423,7 @@ launch_claude() {
 cd '$worktree_path'
 export AUTOPILOT_COMPLETION_MARKER='$AUTOPILOT_DIR/markers/${worktree_name}.done'
 export AUTOPILOT_FAILURE_MARKER='$AUTOPILOT_DIR/markers/${worktree_name}.failed'
-$CLAUDE_BIN --dangerously-skip-permissions "/autopilot $jira_url"
+$CLAUDE_BIN --dangerously-skip-permissions "/autopilot $ticket_url"
 echo \$? > '$AUTOPILOT_DIR/markers/${worktree_name}.exit_code'
 LAUNCHER
     chmod +x "$launcher"
