@@ -922,6 +922,12 @@ write_state() {
         idle)
             json='{"status":"idle"}'
             ;;
+        failed)
+            # Preserve ticket info from current state for status display
+            local current_state
+            current_state=$(cat "$STATE_FILE" 2>/dev/null || echo '{}')
+            json=$(echo "$current_state" | jq '.status = "failed" | .failed_at = "'"$(date -u +"%Y-%m-%dT%H:%M:%SZ")"'"')
+            ;;
         working)
             local ticket="$1" worktree_name="$2" worktree_path="$3" port="$4"
             json=$(jq -n \
@@ -998,7 +1004,8 @@ check_active_work() {
         comment_on_ticket "$ticket" "Autopilot encountered an issue and could not complete this ticket automatically. Keeping in progress for manual review. Reason: $reason"
         save_history "$ticket" "failed" "$reason" "$worktree_name"
         rm -f "$AUTOPILOT_DIR/markers/${worktree_name}".{done,exit_code,failed}
-        write_state "idle"
+        write_state "failed"
+        log "WARN" "State set to FAILED. Run 'autopilot reset $PROJECT_NAME' to retry."
         return 0
     fi
 
@@ -1016,7 +1023,8 @@ check_active_work() {
         fi
         save_history "$ticket" "failed" "Exit code: $exit_code" "$worktree_name"
         rm -f "$AUTOPILOT_DIR/markers/${worktree_name}.exit_code"
-        write_state "idle"
+        write_state "failed"
+        log "WARN" "State set to FAILED. Run 'autopilot reset $PROJECT_NAME' to retry."
         return 0
     fi
 
@@ -1040,7 +1048,8 @@ check_active_work() {
         log "WARN" "Session $worktree_name died unexpectedly"
         comment_on_ticket "$ticket" "Autopilot: Session terminated unexpectedly. Keeping in progress for manual review."
         save_history "$ticket" "failed" "Session died" "$worktree_name"
-        write_state "idle"
+        write_state "failed"
+        log "WARN" "State set to FAILED. Run 'autopilot reset $PROJECT_NAME' to retry."
         return 0
     fi
 
@@ -1063,7 +1072,8 @@ check_active_work() {
         log "WARN" "$ticket: Timed out after $(( elapsed / 3600 ))h $(( (elapsed % 3600) / 60 ))m"
         comment_on_ticket "$ticket" "Autopilot: Timed out after $(( elapsed / 3600 )) hours. Keeping in progress for manual review."
         save_history "$ticket" "failed" "Timeout after ${elapsed}s" "$worktree_name"
-        write_state "idle"
+        write_state "failed"
+        log "WARN" "State set to FAILED. Run 'autopilot reset $PROJECT_NAME' to retry."
         return 0
     fi
 
@@ -1093,40 +1103,32 @@ main() {
     status=$(echo "$state" | jq -r '.status')
 
     if [ "$status" = "working" ]; then
-        local prev_ticket
-        prev_ticket=$(echo "$state" | jq -r '.ticket')
         check_active_work
-        # Re-read state — if task just completed successfully, try picking next immediately
         state=$(read_state)
         status=$(echo "$state" | jq -r '.status')
         if [ "$status" = "idle" ]; then
-            # Only auto-chain on success, not on failure (prevents retry loops)
-            local last_outcome=""
-            local hist_file="$HISTORY_DIR/${prev_ticket}.json"
-            if [ -f "$hist_file" ]; then
-                last_outcome=$(jq -r '.outcome // ""' "$hist_file" 2>/dev/null)
-            fi
-            if [ "$last_outcome" = "completed" ]; then
-                log "INFO" "Previous task completed successfully. Checking for next task immediately."
-                # fall through to find_ticket below
-            else
-                log "INFO" "Previous task ended (outcome: ${last_outcome:-unknown}). Waiting for next cycle."
-                log "INFO" "=== Autopilot cycle complete ==="
-                exit 0
-            fi
+            # Only success sets idle — safe to pick next immediately
+            log "INFO" "Previous task completed successfully. Checking for next task."
+            # fall through to find_ticket below
         else
+            # "failed" or still "working" — don't pick new work
             log "INFO" "=== Autopilot cycle complete ==="
             exit 0
         fi
+    elif [ "$status" = "failed" ]; then
+        log "INFO" "Project in FAILED state. Run 'autopilot reset $PROJECT_NAME' to resume."
+        log "INFO" "=== Autopilot cycle complete ==="
+        exit 0
     fi
 
-    # Enforce concurrency limit (check ALL project state files)
+    # Enforce concurrency limit via state files
+    # States that block new work: "working" (active) and "failed" (needs manual reset)
     local active_count=0
     for state_file in "$AUTOPILOT_DIR/state/"*.json; do
         [ -f "$state_file" ] || continue
         local s
         s=$(jq -r '.status' "$state_file" 2>/dev/null || echo "")
-        [ "$s" = "working" ] && active_count=$((active_count + 1))
+        [ "$s" = "working" ] || [ "$s" = "failed" ] && active_count=$((active_count + 1))
     done
     if [ "$active_count" -ge "$MAX_CONCURRENT_TICKETS" ]; then
         log "INFO" "Concurrency limit reached ($active_count/$MAX_CONCURRENT_TICKETS). Waiting."

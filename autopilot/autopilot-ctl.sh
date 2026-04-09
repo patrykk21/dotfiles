@@ -255,6 +255,10 @@ case "${1:-help}" in
                     else
                         echo -e "      Session:  ${RED}DEAD${NC}"
                     fi
+                elif [ "$pstatus" = "failed" ]; then
+                    ticket=$(echo "$state" | jq -r '.ticket')
+                    echo -e "  ${CYAN}$project${NC} ${DIM}($jira_proj)${NC} — ${RED}FAILED${NC} ($ticket)"
+                    echo -e "      Run: ${DIM}autopilot reset $project${NC} to retry"
                 else
                     echo -e "  ${CYAN}$project${NC} ${DIM}($jira_proj)${NC} — ${YELLOW}IDLE${NC}"
                 fi
