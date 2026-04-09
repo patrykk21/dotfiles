@@ -116,17 +116,25 @@ EOF
 # --- Windows: Task Scheduler ---
 install_task_scheduler() {
     local task_name="Autopilot-${SERVICE_NAME}"
-    local runner_path
-    runner_path=$(cygpath -w "$SCRIPT_PATH" 2>/dev/null || echo "$SCRIPT_PATH")
-    local bash_path
-    bash_path=$(cygpath -w "$(command -v bash)" 2>/dev/null || echo "bash")
+
+    # Create a VBS wrapper so the poll runs invisibly (no flashing terminal)
+    local vbs_path="$AUTOPILOT_DIR/autopilot-runner.vbs"
+    local runner_win
+    runner_win=$(cygpath -w "$SCRIPT_PATH" 2>/dev/null || echo "$SCRIPT_PATH")
+    cat > "$vbs_path" << VBSEOF
+Set WshShell = CreateObject("WScript.Shell")
+WshShell.Run "bash ""${runner_win}""", 0, False
+VBSEOF
+
+    local vbs_win
+    vbs_win=$(cygpath -w "$vbs_path" 2>/dev/null || echo "$vbs_path")
 
     schtasks.exe //Create //F //TN "$task_name" //SC MINUTE //MO 1 \
-        //TR "\"$bash_path\" \"$runner_path\"" 2>&1
+        //TR "wscript.exe \"$vbs_win\"" 2>&1
 
     if [ $? -eq 0 ]; then
         echo "Installed Windows Task Scheduler task: $task_name"
-        echo "  Runs every 5 minutes"
+        echo "  Runs every 1 minute (invisible polling)"
         echo "  To manage: autopilot on / autopilot off"
     else
         echo "WARNING: Failed to create scheduled task."

@@ -60,14 +60,21 @@ scheduler_load() {
             systemctl --user enable --now "${SERVICE_NAME}.timer" 2>/dev/null || true
             ;;
         windows)
-            # Windows Task Scheduler
+            # Windows Task Scheduler — use VBS wrapper for invisible polling
             local task_name="Autopilot-${SERVICE_NAME}"
-            local runner_path
-            runner_path=$(cygpath -w "$AUTOPILOT_DIR/autopilot-runner.sh" 2>/dev/null || echo "$AUTOPILOT_DIR/autopilot-runner.sh")
-            local bash_path
-            bash_path=$(cygpath -w "$(command -v bash)" 2>/dev/null || echo "bash")
+            local vbs_path="$AUTOPILOT_DIR/autopilot-runner.vbs"
+            if [ ! -f "$vbs_path" ]; then
+                local runner_win
+                runner_win=$(cygpath -w "$AUTOPILOT_DIR/autopilot-runner.sh" 2>/dev/null)
+                cat > "$vbs_path" << VBSEOF
+Set WshShell = CreateObject("WScript.Shell")
+WshShell.Run "bash ""${runner_win}""", 0, False
+VBSEOF
+            fi
+            local vbs_win
+            vbs_win=$(cygpath -w "$vbs_path" 2>/dev/null || echo "$vbs_path")
             schtasks.exe //Create //F //TN "$task_name" //SC MINUTE //MO 1 \
-                //TR "\"$bash_path\" \"$runner_path\"" 2>/dev/null || true
+                //TR "wscript.exe \"$vbs_win\"" 2>/dev/null || true
             ;;
     esac
 }
