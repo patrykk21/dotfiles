@@ -76,6 +76,9 @@ CLICKUP_TAG="${CLICKUP_TAG:-claude-autopilot}"
 AI_PICKER_ENABLED="${AI_PICKER_ENABLED:-true}"
 PICKER_MODEL="${PICKER_MODEL:-sonnet}"
 
+# Concurrency: max tickets worked on simultaneously
+MAX_CONCURRENT_TICKETS="${MAX_CONCURRENT_TICKETS:-1}"
+
 # Per-project paths (isolated state per project)
 STATE_FILE="$AUTOPILOT_DIR/state/${PROJECT_NAME}.json"
 LOCK_FILE="$AUTOPILOT_DIR/state/${PROJECT_NAME}.lock"
@@ -1101,6 +1104,17 @@ main() {
             log "INFO" "=== Autopilot cycle complete ==="
             exit 0
         fi
+    fi
+
+    # Enforce concurrency limit
+    local active_count=0
+    if [ -d "$AUTOPILOT_DIR/state" ]; then
+        active_count=$(find "$AUTOPILOT_DIR/state" -name "*.json" -exec grep -l '"status":"working"' {} \; 2>/dev/null | wc -l)
+    fi
+    if [ "$active_count" -ge "$MAX_CONCURRENT_TICKETS" ]; then
+        log "INFO" "Concurrency limit reached ($active_count/$MAX_CONCURRENT_TICKETS). Waiting."
+        log "INFO" "=== Autopilot cycle complete ==="
+        exit 0
     fi
 
     if ! find_ticket; then
