@@ -868,7 +868,7 @@ cd '$worktree_path'
 export AUTOPILOT_COMPLETION_MARKER='$AUTOPILOT_DIR/markers/${worktree_name}.done'
 export AUTOPILOT_FAILURE_MARKER='$AUTOPILOT_DIR/markers/${worktree_name}.failed'
 export AUTOPILOT_WAITING_MARKER='$AUTOPILOT_DIR/markers/${worktree_name}.waiting'
-$CLAUDE_BIN --dangerously-skip-permissions "/autopilot $ticket_url"
+$CLAUDE_BIN --dangerously-skip-permissions --name "${tab_title}" "/autopilot $ticket_url"
 echo \$? > '$AUTOPILOT_DIR/markers/${worktree_name}.exit_code'
 # Mark tab as done
 echo -ne "\\033]0;✅ ${ticket_key} — done\\007"
