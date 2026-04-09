@@ -861,6 +861,18 @@ LAUNCHER
     if [ "$HAS_TMUX" = true ]; then
         log "INFO" "Launching Claude Code in tmux pane $worktree_name:1"
         tmux send-keys -t "$worktree_name:1" "$launcher" Enter
+    elif [ "$PLATFORM" = "windows" ] && command -v wt.exe &>/dev/null; then
+        # Launch in a new Windows Terminal tab (interactive — can answer questions)
+        local wt_bin
+        wt_bin="$(cygpath -w "$HOME/AppData/Local/Microsoft/WindowsApps/wt.exe" 2>/dev/null || echo "wt.exe")"
+        local launcher_win
+        launcher_win="$(cygpath -w "$launcher" 2>/dev/null || echo "$launcher")"
+        log "INFO" "Launching Claude Code in Windows Terminal tab: $worktree_name"
+        "$wt_bin" -w 0 nt --title "$worktree_name" bash "$launcher_win" &
+        local claude_pid=$!
+        mkdir -p "$PIDS_DIR"
+        echo "$claude_pid" > "$PIDS_DIR/${worktree_name}-claude.pid"
+        log "INFO" "Claude launched in Windows Terminal tab (PID: $claude_pid)"
     else
         log "INFO" "Launching Claude Code in background"
         mkdir -p "$PIDS_DIR"
