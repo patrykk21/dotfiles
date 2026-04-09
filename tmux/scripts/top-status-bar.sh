@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# Source session group utilities
+source ~/.config/tmux/scripts/tmux-session-utils.sh
+
 # Clear the terminal and set up the environment
 export TERM=xterm-256color
 
@@ -74,14 +77,37 @@ get_worktree_status() {
     echo "$output"
 }
 
+# Function to get the main work pane's current path (not the status pane's own path)
+get_work_pane_path() {
+    local session="$1"
+    local window="$2"
+    # Find the active pane in this window that isn't a 1-line status bar
+    # The work pane is the large pane (height > 1)
+    local path
+    path=$(tmux list-panes -t "${session}:${window}" -F '#{pane_height} #{pane_current_path} #{pane_active}' 2>/dev/null | \
+        awk '$1 > 1 && $3 == 1 { print $2; exit }')
+    if [ -z "$path" ]; then
+        # Fallback: just get the largest pane's path
+        path=$(tmux list-panes -t "${session}:${window}" -F '#{pane_height} #{pane_current_path}' 2>/dev/null | \
+            sort -rn | head -1 | awk '{ print $2 }')
+    fi
+    echo "$path"
+}
+
 # Function to draw status line
 draw_status() {
-    # Get all values at once to minimize tmux calls
-    local info=$(tmux display-message -p '#S|#I|#{pane_current_path}|#{pane_width}')
-    IFS='|' read -r session current_window current_path width <<< "$info"
-    
-    # Get SERVER_PORT
-    local server_port=$(tmux show-environment -t "$session" SERVER_PORT 2>/dev/null | cut -d= -f2)
+    # Get session, window, and width from the status pane's own context
+    local info=$(tmux display-message -p '#S|#I|#{pane_width}')
+    IFS='|' read -r raw_session current_window width <<< "$info"
+    # Resolve grouped child to master for metadata lookups
+    local session
+    session=$(resolve_master_session "$raw_session")
+    # Get the current path from the WORK pane, not the status pane
+    local current_path
+    current_path=$(get_work_pane_path "$raw_session" "$current_window")
+
+    # Get SERVER_PORT (check the raw session first, then the master)
+    local server_port=$(tmux show-environment -t "$raw_session" SERVER_PORT 2>/dev/null | cut -d= -f2)
     if [ -z "$server_port" ] || [ "$server_port" = "-SERVER_PORT" ]; then
         server_port=$(tmux show-environment -g SERVER_PORT 2>/dev/null | cut -d= -f2)
     fi
@@ -127,9 +153,10 @@ UPDATE_COUNT=0
 # Main loop - monitor tmux state directly
 while true; do
     # Get current state
+    CURRENT_SESSION=$(tmux display-message -p '#S' 2>/dev/null || echo "")
     CURRENT_WINDOW=$(tmux display-message -p '#I' 2>/dev/null || echo "")
     CURRENT_WINDOWS=$(tmux list-windows -F '#I' 2>/dev/null | tr '\n' ' ')
-    CURRENT_PATH=$(tmux display-message -p '#{pane_current_path}' 2>/dev/null || echo "")
+    CURRENT_PATH=$(get_work_pane_path "$CURRENT_SESSION" "$CURRENT_WINDOW")
     
     # Check if we need to update (window changed, windows list changed, path changed, or periodic)
     if [ "$CURRENT_WINDOW" != "$LAST_WINDOW" ] || \

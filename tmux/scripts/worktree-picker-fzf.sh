@@ -6,6 +6,7 @@
 # Source metadata functions
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/worktree-metadata.sh"
+source "$SCRIPT_DIR/tmux-session-utils.sh"
 
 # Get current directory to identify current worktree
 CURRENT_DIR=$(tmux display-message -p "#{pane_current_path}")
@@ -21,7 +22,16 @@ REPO_NAME=$(basename "$MAIN_REPO")
 # Sanitize repo name - replace dots and other special chars with underscores
 SAFE_REPO_NAME=$(echo "$REPO_NAME" | sed 's/[^a-zA-Z0-9-]/_/g')
 CURRENT_WORKTREE=$(cd "$CURRENT_DIR" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null)
-CURRENT_SESSION=$(tmux display-message -p "#{session_name}")
+RAW_SESSION=$(tmux display-message -p "#{session_name}")
+CURRENT_SESSION=$(resolve_master_session "$RAW_SESSION")
+
+# Write the master session name to /tmp/tmux-switch-to-session.
+# The actual grouped-child creation happens in switch-to-session.sh
+# AFTER the popup closes, so it can accurately check attached clients.
+write_switch_session() {
+    local target="$1"
+    echo "$target" > /tmp/tmux-switch-to-session
+}
 
 # Get list of worktrees with metadata-enhanced info
 get_worktrees() {
@@ -318,7 +328,7 @@ if [ -n "$selected" ]; then
         # Check if base session exists
         if tmux has-session -t "$session_name" 2>/dev/null; then
             echo "[PICKER DEBUG] Base session exists, switching to: $session_name" >> /tmp/tmux-worktree-debug.log
-            echo "$session_name" > /tmp/tmux-switch-to-session
+            write_switch_session "$session_name"
             exit 0
         else
             # Check if we have metadata for base
@@ -337,7 +347,7 @@ if [ -n "$selected" ]; then
                 update_session_access "$REPO_NAME" "$session_name"
                 
                 # Write session name for tmux to switch to
-                echo "$session_name" > /tmp/tmux-switch-to-session
+                write_switch_session "$session_name"
                 exit 0
             else
                 # No metadata, create new base session with defaults
@@ -350,7 +360,7 @@ if [ -n "$selected" ]; then
                 save_session_metadata "$REPO_NAME" "$session_name" "$MAIN_REPO" "master" "$session_name"
                 
                 # Write session name for tmux to switch to
-                echo "$session_name" > /tmp/tmux-switch-to-session
+                write_switch_session "$session_name"
                 exit 0
             fi
         fi
@@ -365,7 +375,7 @@ if [ -n "$selected" ]; then
         if tmux has-session -t "$name" 2>/dev/null; then
             echo "[PICKER DEBUG] Session $name already exists, switching" >> /tmp/tmux-worktree-debug.log
             # Write session name to temp file for tmux to read
-            echo "$name" > /tmp/tmux-switch-to-session
+            write_switch_session "$name"
             exit 0
         else
             # Check if we have metadata for this worktree
@@ -390,7 +400,7 @@ if [ -n "$selected" ]; then
                 update_session_access "$REPO_NAME" "$name"
                 
                 # Write session name for tmux to switch to
-                echo "$name" > /tmp/tmux-switch-to-session
+                write_switch_session "$name"
                 exit 0
             else
                 # No metadata, create new session with defaults
@@ -410,7 +420,7 @@ if [ -n "$selected" ]; then
                 save_session_metadata "$REPO_NAME" "$name" "$worktree_path" "$branch" "$name"
                 
                 # Write session name for tmux to switch to
-                echo "$name" > /tmp/tmux-switch-to-session
+                write_switch_session "$name"
                 exit 0
             fi
         fi

@@ -6,6 +6,10 @@ SESSION=$(echo "$WINDOW_TARGET" | cut -d':' -f1)
 
 # Source metadata functions
 source ~/.config/tmux/scripts/worktree-metadata.sh
+source ~/.config/tmux/scripts/tmux-session-utils.sh
+
+# Resolve to master session for metadata lookups
+MASTER_SESSION=$(resolve_master_session "$SESSION")
 
 # Get current directory from the window
 CURRENT_DIR=$(tmux display-message -t "$WINDOW_TARGET" -p '#{pane_current_path}' 2>/dev/null)
@@ -27,16 +31,16 @@ if [[ "$CURRENT_DIR" == "$WORKTREES_BASE/"* ]]; then
         SERVER_PORT=$(ensure_and_get_server_port "$REPO_NAME" "$TICKET")
     fi
 else
-    # Use session name to lookup metadata
-    if ! [[ "$SESSION" =~ -base$ ]]; then
+    # Use master session name to lookup metadata
+    if ! [[ "$MASTER_SESSION" =~ -base$ ]]; then
         # Try to find repo by checking git remote
         if git -C "$CURRENT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
             REPO_URL=$(git -C "$CURRENT_DIR" remote get-url origin 2>/dev/null)
             REPO_NAME=$(basename "$REPO_URL" .git 2>/dev/null)
-            
+
             if [ -n "$REPO_NAME" ]; then
                 # Use unified function to ensure metadata exists and get port
-                SERVER_PORT=$(ensure_and_get_server_port "$REPO_NAME" "$SESSION")
+                SERVER_PORT=$(ensure_and_get_server_port "$REPO_NAME" "$MASTER_SESSION")
             fi
         fi
     fi

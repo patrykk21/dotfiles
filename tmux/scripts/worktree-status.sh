@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 
-# Get current session name
-SESSION=$(tmux display-message -p '#S')
-
-# Get current directory
-CURRENT_DIR=$(tmux display-message -p '#{pane_current_path}')
+# Get current session name (resolve grouped children to master)
+RAW_SESSION=$(tmux display-message -p '#S')
 
 # Source metadata functions
 source ~/.config/tmux/scripts/worktree-metadata.sh
+source ~/.config/tmux/scripts/tmux-session-utils.sh
+
+SESSION=$(resolve_master_session "$RAW_SESSION")
+
+# Get current directory
+CURRENT_DIR=$(tmux display-message -p '#{pane_current_path}')
 
 # Get SERVER_PORT from metadata using unified function
 # The session name is the ticket (e.g., ECH-123)

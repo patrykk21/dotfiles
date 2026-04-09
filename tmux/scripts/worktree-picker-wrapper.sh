@@ -2,6 +2,9 @@
 
 # Wrapper script for worktree picker that handles deletion confirmations
 
+# Source session group utilities
+source "$(dirname "$0")/tmux-session-utils.sh"
+
 while true; do
     # Run the picker
     ~/.config/tmux/scripts/worktree-picker-fzf.sh
@@ -34,8 +37,8 @@ while true; do
                 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
                 source "$SCRIPT_DIR/worktree-metadata.sh"
                 
-                # Kill tmux session if it exists
-                tmux has-session -t "$TICKET" 2>/dev/null && tmux kill-session -t "$TICKET" 2>/dev/null
+                # Kill tmux session group if it exists
+                kill_session_group "$TICKET"
                 
                 # Remove metadata if it exists
                 remove_session_metadata "$REPO_NAME" "$TICKET"

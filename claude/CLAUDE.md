@@ -106,6 +106,20 @@ wt remove
 ```
 Binary: `C:/Users/Patryk/AppData/Local/Microsoft/WinGet/Packages/max-sixty.worktrunk_Microsoft.Winget.Source_8wekyb3d8bbwe/git-wt.exe`
 
+## Agent Teams (experimental, enabled)
+
+**Use agent teams when workers need to communicate with each other** — not just report back. Prefer over subagents for:
+- Parallel code review from independent angles (security, perf, coverage)
+- Debugging with competing hypotheses (teammates challenge each other)
+- Independent module implementation (no shared files)
+- Cross-layer changes (frontend + backend + tests, each owned separately)
+
+**Do NOT use when:** tasks are sequential, agents would edit the same files, or workers only need to report results.
+
+**Quick decision:** parallelizable + inter-agent coordination needed = agent team. Otherwise use Task tool (subagents).
+
+See full guidance: `~/.claude/skills/agent-teams.md`
+
 ## Specialized Agents (use with Task tool)
 - **general-purpose**: Complex searches, multi-step tasks
 - **react-component-creator**: React components + TypeScript
@@ -141,6 +155,11 @@ Binary: `C:/Users/Patryk/AppData/Local/Microsoft/WinGet/Packages/max-sixty.workt
   - Code snippets: Explains how code works, its patterns, and improvement opportunities
   - Uses: code-quality-guardian for architectural analysis and educational explanations
   - Uses documentation search when needed
+- `/gsd-run-all`: Run all remaining GSD phases end-to-end without interruption (plan → execute → repeat)
+  - No args: run all remaining phases from current position
+  - `--from N`: start from phase N
+  - `--only N`: run only phase N
+  - Lives in `~/.claude/skills/gsd-run-all.md` — safe from GSD updates
 - `/score`: Display current project score
   - Shows score from .claude/score.json
   - If file doesn't exist, initializes at 0

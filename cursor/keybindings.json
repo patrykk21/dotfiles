@@ -73,5 +73,10 @@
   {
     "key": "ctrl+alt+cmd+c",
     "command": "workbench.view.extension.coderabbit-vscode-sidebar-view"
+  },
+  {
+    "key": "alt+cmd+s",
+    "command": "workbench.action.toggleUnifiedSidebarFromKeyboard",
+    "when": "cursor.agentIdeUnification.enabled == true && !isAuxiliaryWindowFocusedContext"
   }
 ]

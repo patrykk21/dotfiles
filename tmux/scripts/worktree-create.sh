@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 
 # Create a new git worktree with associated tmux session
-# Usage: worktree-create.sh <ticket-name>
+# Usage: worktree-create.sh <ticket-name> [base-branch]
 
 # Source metadata functions
 source "$(dirname "$0")/worktree-metadata.sh"
 
 TICKET="$1"
+BASE_BRANCH_ARG="$2"
 
 # Validate input
 if [ -z "$TICKET" ]; then
@@ -29,12 +30,21 @@ fi
 
 REPO_NAME=$(basename "$MAIN_REPO")
 
-# Get the current branch to use as starting point
-# This will be the branch of the current worktree or main repo
-CURRENT_BRANCH=$(git branch --show-current)
-if [ -z "$CURRENT_BRANCH" ]; then
-    # If we're in a detached HEAD state, get the commit SHA
-    CURRENT_BRANCH=$(git rev-parse HEAD)
+# Determine the base branch to start from
+if [ -n "$BASE_BRANCH_ARG" ]; then
+    # Use explicitly provided base branch
+    CURRENT_BRANCH="$BASE_BRANCH_ARG"
+    if ! git rev-parse --verify "$CURRENT_BRANCH" &>/dev/null; then
+        tmux display-message -d 2000 "Error: Branch '$CURRENT_BRANCH' does not exist"
+        exit 1
+    fi
+else
+    # Fall back to current branch (original behavior)
+    CURRENT_BRANCH=$(git branch --show-current)
+    if [ -z "$CURRENT_BRANCH" ]; then
+        # If we're in a detached HEAD state, get the commit SHA
+        CURRENT_BRANCH=$(git rev-parse HEAD)
+    fi
 fi
 
 # Use centralized worktrees directory with repo subdirectory
@@ -120,6 +130,22 @@ SESSION_NAME="$TICKET"
 
 # Save session metadata
 save_session_metadata "$REPO_NAME" "$TICKET" "$WORKTREE_PATH" "$BRANCH_NAME" "$SESSION_NAME"
+
+# Patch .claude/launch.json with worktree path and assigned port
+if [ -f "$WORKTREE_PATH/.claude/launch.json" ]; then
+    LAUNCH_PORT=$(get_session_metadata "$REPO_NAME" "$TICKET" "port")
+    if [ -n "$LAUNCH_PORT" ]; then
+        TEMP_LAUNCH=$(mktemp)
+        sed "s|$MAIN_REPO|$WORKTREE_PATH|g" "$WORKTREE_PATH/.claude/launch.json" \
+            | jq --argjson port "$LAUNCH_PORT" '
+                .configurations |= map(
+                    if .name == "Next.js Frontend"
+                    then .port = $port
+                    else .
+                    end
+                )' > "$TEMP_LAUNCH" && mv "$TEMP_LAUNCH" "$WORKTREE_PATH/.claude/launch.json"
+    fi
+fi
 
 # Run dependency installation in the background
 install_dependencies

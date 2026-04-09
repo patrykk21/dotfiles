@@ -3,6 +3,9 @@
 # Kill a tmux session from the worktree picker
 # This only kills the session, not the worktree itself
 
+# Source session group utilities
+source "$(dirname "$0")/tmux-session-utils.sh"
+
 # Get the full selection line
 SELECTION="$*"
 
@@ -23,8 +26,8 @@ if [[ "$SESSION_STATUS" != "[SESSION]" ]]; then
     exit 0
 fi
 
-# Get current session to avoid killing it
-CURRENT_SESSION=$(tmux display-message -p '#S')
+# Get current session to avoid killing it (resolve grouped child to master)
+CURRENT_SESSION=$(resolve_master_session "$(tmux display-message -p '#S')")
 
 # Check if we're trying to kill the current session
 if [ "$TICKET" = "$CURRENT_SESSION" ]; then
@@ -32,9 +35,9 @@ if [ "$TICKET" = "$CURRENT_SESSION" ]; then
     exit 0
 fi
 
-# Kill the session if it exists
+# Kill the session and all grouped children
 if tmux has-session -t "$TICKET" 2>/dev/null; then
-    tmux kill-session -t "$TICKET" 2>/dev/null
+    kill_session_group "$TICKET"
     tmux display-message -d 1000 "✓ Killed session: $TICKET"
 else
     tmux display-message -d 1000 "Session not found: $TICKET"

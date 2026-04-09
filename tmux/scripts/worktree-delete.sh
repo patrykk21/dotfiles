@@ -5,9 +5,10 @@
 
 # Source metadata functions
 source "$(dirname "$0")/worktree-metadata.sh"
+source "$(dirname "$0")/tmux-session-utils.sh"
 
-# Get current session name
-CURRENT_SESSION=$(tmux display-message -p '#S')
+# Get current session name (resolve grouped child to master)
+CURRENT_SESSION=$(resolve_master_session "$(tmux display-message -p '#S')")
 
 # Get the main repository info
 MAIN_REPO=$(git worktree list | head -1 | awk '{print $1}')
@@ -99,8 +100,8 @@ if [[ "$confirm" != "YES"* ]]; then
     exit 0
 fi
 
-# Find a session to switch to
-MAIN_SESSION=$(tmux list-sessions -F "#{session_name}" | grep -v "^${CURRENT_SESSION}$" | head -1)
+# Find a session to switch to (exclude grouped children and current session)
+MAIN_SESSION=$(tmux list-sessions -F "#{session_name}" | grep -v '_g[0-9]\+$' | grep -v "^${CURRENT_SESSION}$" | head -1)
 
 # Switch to another session or create one if needed
 if [ -n "$MAIN_SESSION" ]; then
@@ -111,8 +112,8 @@ else
     tmux switch-client -t "main"
 fi
 
-# Kill the worktree session
-tmux kill-session -t "$CURRENT_SESSION" 2>/dev/null
+# Kill the worktree session and all grouped children
+kill_session_group "$CURRENT_SESSION"
 
 # Remove metadata if it exists
 if [ -n "$TICKET" ]; then

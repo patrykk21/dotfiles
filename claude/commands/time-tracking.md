@@ -78,10 +78,33 @@ mcp__tempo__retrieveWorklogs({
 - 🔴 MISSING: Past day <8 hours
 - 🟡 Today: Current day (in progress)
 
-### 6. Display Summary
+### 6. Check Quick Track Log
+
+Read `~/.claude/time-track.md` if it exists. Parse the current week's entries (Monday through today).
+
+For each entry, extract: Date, Category (ticket or tag), Activity, Duration.
+
+Cross-reference with Tempo worklogs:
+- Entries in time-track.md that **don't have** a matching Tempo worklog → flag as "Not in Tempo"
+- This helps catch work that was tracked quickly but not yet logged formally
+
+### 7. Display Table 3: Quick Track Entries (This Week)
+
+| Date | Category | Activity | Duration | In Tempo? |
+|------|----------|----------|----------|-----------|
+| 2026-03-28 | `ECH-648` | Daily sync tests and backfill | 1h | ❌ Not logged |
+| 2026-03-27 | `meeting` | Sprint planning | 1h | ✅ Found |
+
+**Matching logic:**
+- Match by date + ticket key (if category is a ticket number like ECH-XXX)
+- For non-ticket categories (meeting, review, etc.), match by date + similar duration
+- If no close match found, mark as ❌
+
+### 8. Display Summary
 
 **Tickets:** Total, estimated, logged, overall %, breakdown by status
 **Week:** Days complete, total logged, missing, weekly target, action required
+**Quick Track:** X entries this week, Y not yet in Tempo — consider logging them
 
 ## Notes
 

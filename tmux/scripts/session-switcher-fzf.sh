@@ -2,8 +2,8 @@
 
 # Session switcher using fzf-tmux
 
-# Get list of sessions
-sessions=$(tmux list-sessions -F "#{session_name}: #{session_windows} windows#{?session_attached, (attached),}")
+# Get list of sessions (filter out grouped child sessions)
+sessions=$(tmux list-sessions -F "#{session_name}: #{session_windows} windows#{?session_attached, (attached),}" | grep -v '^[^:]*_g[0-9]\+:')
 
 # Use fzf-tmux to select a session with kill functionality
 selected=$(echo "$sessions" | fzf-tmux -p 60%,60% \

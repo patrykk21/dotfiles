@@ -5,6 +5,9 @@
 if [ -f ~/.config/tmux/scripts/worktree-metadata.sh ]; then
     source ~/.config/tmux/scripts/worktree-metadata.sh 2>/dev/null || true
 fi
+if [ -f ~/.config/tmux/scripts/tmux-session-utils.sh ]; then
+    source ~/.config/tmux/scripts/tmux-session-utils.sh 2>/dev/null || true
+fi
 
 # Get current directory
 CURRENT_DIR="$PWD"
@@ -29,7 +32,13 @@ if command -v get_worktree_info_from_path >/dev/null 2>&1 && command -v ensure_a
     else
         # Try to get from session name for non-worktree paths
         if [ -n "$TMUX" ]; then
-            SESSION=$(tmux display-message -p '#S' 2>/dev/null)
+            RAW_SESSION=$(tmux display-message -p '#S' 2>/dev/null)
+            # Resolve grouped child to master for metadata lookups
+            if command -v resolve_master_session >/dev/null 2>&1; then
+                SESSION=$(resolve_master_session "$RAW_SESSION")
+            else
+                SESSION="$RAW_SESSION"
+            fi
             if [ -n "$SESSION" ] && ! [[ "$SESSION" =~ -base$ ]]; then
                 # Try to find repo by checking git remote
                 if git -C "$CURRENT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
