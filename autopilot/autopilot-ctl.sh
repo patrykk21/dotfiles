@@ -189,7 +189,13 @@ case "${1:-help}" in
                     echo "      Port:     $port"
                     echo "      Started:  $started"
                     if tmux has-session -t "$worktree" 2>/dev/null; then
-                        echo -e "      Session:  ${GREEN}ALIVE${NC}"
+                        waiting_marker="$AUTOPILOT_DIR/markers/${worktree}.waiting"
+                        if [ -f "$waiting_marker" ]; then
+                            echo -e "      Session:  ${YELLOW}NEEDS INPUT${NC}  ← tmux a -t $worktree"
+                            echo -e "      Question: $(cat "$waiting_marker" | head -1)"
+                        else
+                            echo -e "      Session:  ${GREEN}ALIVE${NC}"
+                        fi
                     else
                         echo -e "      Session:  ${RED}DEAD${NC}"
                     fi

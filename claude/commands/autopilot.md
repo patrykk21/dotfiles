@@ -77,6 +77,17 @@ On failure:
 [ -n "$AUTOPILOT_FAILURE_MARKER" ] && echo "reason" > "$AUTOPILOT_FAILURE_MARKER"
 ```
 
+### Signaling when you need input
+If you need to ask the user a question, write the question to the waiting marker BEFORE asking:
+```bash
+[ -n "$AUTOPILOT_WAITING_MARKER" ] && echo "Brief question summary" > "$AUTOPILOT_WAITING_MARKER"
+```
+After the user responds, clear it:
+```bash
+[ -n "$AUTOPILOT_WAITING_MARKER" ] && rm -f "$AUTOPILOT_WAITING_MARKER"
+```
+This lets `autopilot status` show which sessions need attention.
+
 ### Rules for ticket mode
 - Work autonomously, but if genuinely uncertain, ask — the user may be watching
 - Do NOT modify files outside ticket scope
