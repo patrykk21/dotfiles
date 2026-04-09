@@ -67,7 +67,7 @@ scheduler_load() {
             local bash_path
             bash_path=$(cygpath -w "$(command -v bash)" 2>/dev/null || echo "bash")
             schtasks.exe //Create //F //TN "$task_name" //SC MINUTE //MO 5 \
-                //TR "\"$bash_path\" \"$runner_path\"" //RL HIGHEST 2>/dev/null || true
+                //TR "\"$bash_path\" \"$runner_path\"" 2>/dev/null || true
             ;;
     esac
 }

@@ -122,7 +122,7 @@ install_task_scheduler() {
     bash_path=$(cygpath -w "$(command -v bash)" 2>/dev/null || echo "bash")
 
     schtasks.exe //Create //F //TN "$task_name" //SC MINUTE //MO 5 \
-        //TR "\"$bash_path\" \"$runner_path\"" //RL HIGHEST 2>/dev/null
+        //TR "\"$bash_path\" \"$runner_path\"" 2>&1
 
     if [ $? -eq 0 ]; then
         echo "Installed Windows Task Scheduler task: $task_name"
