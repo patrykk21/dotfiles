@@ -54,14 +54,9 @@ claude/commands/gsd/*.bak
 
 !tmux/
 !tmux/**
-!claude/
-!claude/**
 
 # Exclude TPM plugins (should be installed locally, not committed)
-tmux/plugins/tmux-continuum/
-tmux/plugins/tmux-resurrect/
-tmux/plugins/tmux-sensible/
-tmux/plugins/tpm/
+tmux/plugins/
 
 # Exclude Zed runtime and cache files
 zed/.tmp*
@@ -84,3 +79,6 @@ autopilot/prompts/
 autopilot/enabled
 autopilot/launchd-stdout.log
 autopilot/launchd-stderr.log
+autopilot/config.env
+autopilot/jira-credentials.env
+autopilot/*.credentials*
