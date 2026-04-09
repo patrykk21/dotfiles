@@ -16,6 +16,26 @@
             "command": "C:/Users/Patryk/.claude/notify.cmd Stop"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.config/claude/hooks/worktree-waiting-marker.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.config/claude/hooks/worktree-waiting-marker.sh",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "Notification": [
