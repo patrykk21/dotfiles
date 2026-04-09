@@ -56,15 +56,24 @@ scheduler_unload() {
 scheduler_status_line() {
     case "$(detect_os)" in
         macos)
+            local plist="$HOME/Library/LaunchAgents/com.${SERVICE_NAME}.plist"
             if launchctl list "com.${SERVICE_NAME}" &>/dev/null; then
-                echo -e "  Schedule: ${GREEN}LOADED${NC} (launchd, every 5 min)"
+                local interval
+                interval=$(/usr/libexec/PlistBuddy -c "Print :StartInterval" "$plist" 2>/dev/null || echo "300")
+                if [ "$interval" -ge 60 ]; then
+                    echo -e "  Schedule: ${GREEN}LOADED${NC} (launchd, every $((interval / 60))m)"
+                else
+                    echo -e "  Schedule: ${GREEN}LOADED${NC} (launchd, every ${interval}s)"
+                fi
             else
                 echo -e "  Schedule: ${YELLOW}NOT LOADED${NC} (run 'autopilot setup')"
             fi
             ;;
         linux)
             if systemctl --user is-active "${SERVICE_NAME}.timer" &>/dev/null; then
-                echo -e "  Schedule: ${GREEN}ACTIVE${NC} (systemd, every 5 min)"
+                local interval
+                interval=$(systemctl --user show "${SERVICE_NAME}.timer" -p TriggerLimitIntervalSec --value 2>/dev/null || echo "300s")
+                echo -e "  Schedule: ${GREEN}ACTIVE${NC} (systemd, every ${interval})"
             else
                 echo -e "  Schedule: ${YELLOW}INACTIVE${NC} (run 'autopilot setup')"
             fi
