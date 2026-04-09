@@ -38,13 +38,25 @@ fi
 # shellcheck source=/dev/null
 source "$CONFIG_FILE"
 
-# Validate required config vars
-for var in PROJECT_DIR JIRA_PROJECT JIRA_LABEL; do
-    if [ -z "${!var:-}" ]; then
-        echo "ERROR: Required config variable '$var' is not set in $CONFIG_FILE"
-        exit 1
-    fi
-done
+# Tracker type: "jira" (default) or "clickup"
+TRACKER="${TRACKER:-jira}"
+
+# Validate required config vars based on tracker
+if [ "$TRACKER" = "clickup" ]; then
+    for var in PROJECT_DIR CLICKUP_API_TOKEN CLICKUP_TEAM_ID CLICKUP_TAG; do
+        if [ -z "${!var:-}" ]; then
+            echo "ERROR: Required config variable '$var' is not set in $CONFIG_FILE"
+            exit 1
+        fi
+    done
+else
+    for var in PROJECT_DIR JIRA_PROJECT JIRA_LABEL; do
+        if [ -z "${!var:-}" ]; then
+            echo "ERROR: Required config variable '$var' is not set in $CONFIG_FILE"
+            exit 1
+        fi
+    done
+fi
 
 # Derived defaults
 PROJECT_NAME="${PROJECT_NAME:-$(basename "$PROJECT_DIR")}"
@@ -55,6 +67,14 @@ TMUX_SCRIPTS="${TMUX_SCRIPTS:-$HOME/.config/tmux/scripts}"
 DEV_SERVER_CMD="${DEV_SERVER_CMD:-}"
 INSTALL_CMD="${INSTALL_CMD:-}"
 WORKTREE_SETUP_HOOK="${WORKTREE_SETUP_HOOK:-}"
+
+# ClickUp defaults
+CLICKUP_SPACE_IDS="${CLICKUP_SPACE_IDS:-}"
+CLICKUP_TAG="${CLICKUP_TAG:-claude-autopilot}"
+
+# AI Picker defaults
+AI_PICKER_ENABLED="${AI_PICKER_ENABLED:-true}"
+PICKER_MODEL="${PICKER_MODEL:-sonnet}"
 
 # Per-project paths (isolated state per project)
 STATE_FILE="$AUTOPILOT_DIR/state/${PROJECT_NAME}.json"
@@ -73,6 +93,19 @@ fi
 
 # Detect default shell
 USER_SHELL="${SHELL:-/bin/bash}"
+
+# --- Platform Detection ---
+detect_platform() {
+    case "$(uname -s)" in
+        MINGW*|MSYS*|CYGWIN*) echo "windows" ;;
+        Darwin)               echo "macos" ;;
+        Linux)                echo "linux" ;;
+        *)                    echo "unknown" ;;
+    esac
+}
+PLATFORM=$(detect_platform)
+HAS_TMUX=false
+command -v tmux &>/dev/null && HAS_TMUX=true
 
 # --- Logging ---
 log() {
@@ -244,6 +277,365 @@ jira_comment() {
     fi
 }
 
+# --- ClickUp API ---
+clickup_api() {
+    local method="$1"
+    local endpoint="$2"
+    local data="${3:-}"
+
+    local args=(-s -w "\n%{http_code}" -X "$method"
+        -H "Content-Type: application/json"
+        -H "Authorization: $CLICKUP_API_TOKEN"
+        "https://api.clickup.com/api/v2${endpoint}")
+
+    if [ -n "$data" ]; then
+        args+=(-d "$data")
+    fi
+
+    curl "${args[@]}" 2>/dev/null
+}
+
+find_autopilot_ticket_clickup() {
+    # Build query params
+    local params="tags[]=${CLICKUP_TAG}&statuses[]=to%20do&order_by=created&reverse=true&subtasks=true&include_closed=false"
+
+    # Filter by space if configured
+    if [ -n "$CLICKUP_SPACE_IDS" ]; then
+        for sid in $(echo "$CLICKUP_SPACE_IDS" | tr ',' ' '); do
+            params+="&space_ids[]=$sid"
+        done
+    fi
+
+    local response
+    response=$(clickup_api GET "/team/${CLICKUP_TEAM_ID}/task?${params}&page=0")
+
+    local http_code
+    http_code=$(echo "$response" | tail -1)
+    local body
+    body=$(echo "$response" | sed '$d')
+
+    if [ "$http_code" != "200" ]; then
+        log "ERROR" "ClickUp search failed (HTTP $http_code): $body"
+        return 1
+    fi
+
+    local task_count
+    task_count=$(echo "$body" | jq -r '.tasks | length')
+    if [ "$task_count" = "0" ] || [ "$task_count" = "null" ]; then
+        log "INFO" "No tasks found with tag '$CLICKUP_TAG' in To Do status."
+        return 1
+    fi
+
+    # Pick the oldest task (last in reverse-created list, or first if API returns oldest first)
+    TICKET_KEY=$(echo "$body" | jq -r '.tasks[0].id')
+    TICKET_SUMMARY=$(echo "$body" | jq -r '.tasks[0].name')
+    TICKET_TYPE=$(echo "$body" | jq -r '.tasks[0].type // "task"')
+    TICKET_PRIORITY=$(echo "$body" | jq -r '.tasks[0].priority.priority // "normal"')
+    CLICKUP_TASK_URL=$(echo "$body" | jq -r '.tasks[0].url')
+    CLICKUP_TASK_CUSTOM_ID=$(echo "$body" | jq -r '.tasks[0].custom_id // empty')
+
+    # Use custom ID for branch names if available, otherwise task ID
+    if [ -n "$CLICKUP_TASK_CUSTOM_ID" ] && [ "$CLICKUP_TASK_CUSTOM_ID" != "null" ]; then
+        TICKET_KEY="$CLICKUP_TASK_CUSTOM_ID"
+    fi
+
+    log "INFO" "Found task: $TICKET_KEY - $TICKET_SUMMARY ($TICKET_TYPE, $TICKET_PRIORITY)"
+    return 0
+}
+
+transition_to_in_progress_clickup() {
+    local task_id="$1"
+
+    local response
+    response=$(clickup_api PUT "/task/$task_id" '{"status":"in progress"}')
+    local http_code
+    http_code=$(echo "$response" | tail -1)
+
+    if [ "$http_code" = "200" ]; then
+        log "INFO" "Transitioned $task_id to In Progress"
+        return 0
+    else
+        log "ERROR" "Failed to transition $task_id (HTTP $http_code)"
+        return 1
+    fi
+}
+
+clickup_comment() {
+    local task_id="$1"
+    local message="$2"
+
+    local body
+    body=$(jq -n --arg msg "$message" '{comment_text: $msg}')
+
+    local response
+    response=$(clickup_api POST "/task/$task_id/comment" "$body")
+    local http_code
+    http_code=$(echo "$response" | tail -1)
+
+    if [ "$http_code" = "200" ]; then
+        log "INFO" "Commented on $task_id"
+    else
+        log "WARN" "Failed to comment on $task_id (HTTP $http_code)"
+    fi
+}
+
+# --- Tracker-agnostic wrappers ---
+find_ticket() {
+    if [ "$TRACKER" = "clickup" ] && [ "${AI_PICKER_ENABLED:-true}" = "true" ]; then
+        if ai_pick_ticket; then return 0; fi
+        log "WARN" "AI picker failed, falling back to oldest-first"
+    fi
+    if [ "$TRACKER" = "clickup" ]; then
+        find_autopilot_ticket_clickup
+    else
+        find_autopilot_ticket
+    fi
+}
+
+transition_ticket() {
+    local key="$1"
+    if [ "$TRACKER" = "clickup" ]; then
+        transition_to_in_progress_clickup "$key"
+    else
+        transition_to_in_progress "$key"
+    fi
+}
+
+comment_on_ticket() {
+    local key="$1"
+    local msg="$2"
+    if [ "$TRACKER" = "clickup" ]; then
+        clickup_comment "$key" "$msg"
+    else
+        jira_comment "$key" "$msg"
+    fi
+}
+
+build_ticket_url() {
+    local key="$1"
+    if [ "$TRACKER" = "clickup" ]; then
+        echo "${CLICKUP_TASK_URL:-https://app.clickup.com/t/$key}"
+    elif [ -n "${TICKET_URL_PATTERN:-}" ]; then
+        echo "$TICKET_URL_PATTERN" | sed "s|{{KEY}}|$key|g"
+    else
+        echo "${JIRA_BASE_URL}/browse/${key}"
+    fi
+}
+
+# --- AI Ticket Picker ---
+
+fetch_all_candidates_clickup() {
+    local params="tags[]=${CLICKUP_TAG}&statuses[]=to%20do&order_by=created&reverse=true&subtasks=true&include_closed=false"
+
+    if [ -n "$CLICKUP_SPACE_IDS" ]; then
+        for sid in $(echo "$CLICKUP_SPACE_IDS" | tr ',' ' '); do
+            params+="&space_ids[]=$sid"
+        done
+    fi
+
+    local response
+    response=$(clickup_api GET "/team/${CLICKUP_TEAM_ID}/task?${params}&page=0")
+
+    local http_code
+    http_code=$(echo "$response" | tail -1)
+    local body
+    body=$(echo "$response" | sed '$d')
+
+    if [ "$http_code" != "200" ]; then
+        log "ERROR" "ClickUp fetch failed (HTTP $http_code)"
+        return 1
+    fi
+
+    local task_count
+    task_count=$(echo "$body" | jq -r '.tasks | length')
+    if [ "$task_count" = "0" ] || [ "$task_count" = "null" ]; then
+        log "INFO" "No tasks found with tag '$CLICKUP_TAG' in To Do status."
+        return 1
+    fi
+
+    # Extract relevant fields, truncate descriptions to 300 chars
+    CANDIDATE_TASKS_JSON=$(echo "$body" | jq '[.tasks[] | {
+        id, custom_id, name,
+        description: (.description // "" | .[0:300]),
+        priority: (.priority.orderindex // null),
+        priority_label: (.priority.priority // "none"),
+        tags: [.tags[].name],
+        dependencies, linked_tasks,
+        url, date_created
+    }]')
+
+    log "INFO" "Found $task_count candidate tasks"
+    return 0
+}
+
+gather_local_context() {
+    local history_json="[]"
+    local branches_json="[]"
+    local worktrees_json="[]"
+
+    # Completed history
+    if [ -d "$HISTORY_DIR" ]; then
+        local hist_files
+        hist_files=$(find "$HISTORY_DIR" -maxdepth 1 -name "*.json" -type f 2>/dev/null)
+        if [ -n "$hist_files" ]; then
+            history_json=$(echo "$hist_files" | xargs cat 2>/dev/null | jq -s '.' 2>/dev/null || echo "[]")
+        fi
+    fi
+
+    # Existing branches
+    if [ -d "$PROJECT_DIR/.git" ] || [ -f "$PROJECT_DIR/.git" ]; then
+        branches_json=$(git -C "$PROJECT_DIR" branch --list --format='%(refname:short)' 2>/dev/null | jq -R -s 'split("\n") | map(select(length > 0))' 2>/dev/null || echo "[]")
+    fi
+
+    # Existing worktrees
+    if [ -d "$PROJECT_DIR/.git" ] || [ -f "$PROJECT_DIR/.git" ]; then
+        worktrees_json=$(git -C "$PROJECT_DIR" worktree list --porcelain 2>/dev/null | awk '
+            /^worktree / { path=$2 }
+            /^branch /   { branch=$2; sub(/refs\/heads\//, "", branch); print path "|" branch }
+        ' | jq -R -s 'split("\n") | map(select(length > 0)) | map(split("|") | {path: .[0], branch: .[1]})' 2>/dev/null || echo "[]")
+    fi
+
+    LOCAL_CONTEXT_JSON=$(jq -n \
+        --argjson history "$history_json" \
+        --argjson branches "$branches_json" \
+        --argjson worktrees "$worktrees_json" \
+        --arg base_branch "$BASE_BRANCH" \
+        '{completed_history: $history, existing_branches: $branches, existing_worktrees: $worktrees, base_branch: $base_branch}')
+}
+
+ai_pick_ticket() {
+    log "INFO" "Running AI ticket picker (model: $PICKER_MODEL)"
+
+    if ! fetch_all_candidates_clickup; then
+        return 1
+    fi
+
+    gather_local_context
+
+    # Build picker prompt
+    local prompt_file="$AUTOPILOT_DIR/prompts/_picker_prompt.md"
+    mkdir -p "$AUTOPILOT_DIR/prompts"
+    cat > "$prompt_file" << 'PICKER_HEADER'
+You are choosing the next task for an autonomous coding agent to implement.
+
+## Instructions
+- Pick the task that should be done NEXT considering dependencies and priority.
+- If task B depends on task A, A must be completed first (check completed history for matching task IDs).
+- If the picked task depends on a completed task whose branch still exists in "Existing Branches", set base_branch to that branch name so the new work builds on top of it.
+- Otherwise set base_branch to the default base branch shown below.
+- If NO task can be picked (all blocked by unmet dependencies), return {"pick": null, "reasoning": "..."}.
+- Priority ordering: 1=urgent, 2=high, 3=normal, 4=low, null=none. Prefer higher priority.
+- Consider task descriptions and tags for context about what makes sense to do first.
+
+Return ONLY valid JSON with no markdown fences:
+{"pick": {"task_id": "...", "name": "...", "base_branch": "...", "url": "..."}, "reasoning": "one sentence explaining your choice"}
+PICKER_HEADER
+
+    # Append data sections
+    {
+        echo ""
+        echo "## Default Base Branch"
+        echo "$BASE_BRANCH"
+        echo ""
+        echo "## Candidate Tasks"
+        echo "$CANDIDATE_TASKS_JSON"
+        echo ""
+        echo "## Local Context"
+        echo "$LOCAL_CONTEXT_JSON"
+    } >> "$prompt_file"
+
+    # Invoke Claude
+    local picker_response
+    picker_response=$("$CLAUDE_BIN" -p --model "$PICKER_MODEL" --output-format json < "$prompt_file" 2>/dev/null)
+    local exit_code=$?
+
+    if [ $exit_code -ne 0 ] || [ -z "$picker_response" ]; then
+        log "ERROR" "Claude picker call failed (exit $exit_code)"
+        return 1
+    fi
+
+    # Parse outer JSON wrapper
+    local inner
+    inner=$(echo "$picker_response" | jq -r '.result // empty' 2>/dev/null)
+    if [ -z "$inner" ]; then
+        log "ERROR" "Picker response missing .result field"
+        return 1
+    fi
+
+    # Parse inner picker JSON
+    local task_id
+    task_id=$(echo "$inner" | jq -r '.pick.task_id // empty' 2>/dev/null)
+
+    if [ -z "$task_id" ] || [ "$task_id" = "null" ]; then
+        local reasoning
+        reasoning=$(echo "$inner" | jq -r '.reasoning // "no reason given"' 2>/dev/null)
+        log "INFO" "Picker chose nothing: $reasoning"
+        return 1
+    fi
+
+    # Extract pick details
+    TICKET_KEY="$task_id"
+    TICKET_SUMMARY=$(echo "$inner" | jq -r '.pick.name // empty' 2>/dev/null)
+    CLICKUP_TASK_URL=$(echo "$inner" | jq -r '.pick.url // empty' 2>/dev/null)
+    PICKER_BASE_BRANCH=$(echo "$inner" | jq -r '.pick.base_branch // empty' 2>/dev/null)
+    PICKER_REASONING=$(echo "$inner" | jq -r '.reasoning // empty' 2>/dev/null)
+
+    # Fill in missing fields from candidate data
+    if [ -z "$TICKET_SUMMARY" ]; then
+        TICKET_SUMMARY=$(echo "$CANDIDATE_TASKS_JSON" | jq -r --arg id "$task_id" '.[] | select(.id == $id) | .name // empty')
+    fi
+    if [ -z "$CLICKUP_TASK_URL" ]; then
+        CLICKUP_TASK_URL=$(echo "$CANDIDATE_TASKS_JSON" | jq -r --arg id "$task_id" '.[] | select(.id == $id) | .url // empty')
+    fi
+
+    # Look for custom_id from candidates
+    CLICKUP_TASK_CUSTOM_ID=$(echo "$CANDIDATE_TASKS_JSON" | jq -r --arg id "$task_id" '.[] | select(.id == $id) | .custom_id // empty')
+    if [ -n "$CLICKUP_TASK_CUSTOM_ID" ] && [ "$CLICKUP_TASK_CUSTOM_ID" != "null" ]; then
+        TICKET_KEY="$CLICKUP_TASK_CUSTOM_ID"
+    fi
+
+    TICKET_TYPE="task"
+    TICKET_PRIORITY=$(echo "$CANDIDATE_TASKS_JSON" | jq -r --arg id "$task_id" '.[] | select(.id == $id) | .priority_label // "normal"')
+
+    # Validate task_id exists in candidates
+    local valid
+    valid=$(echo "$CANDIDATE_TASKS_JSON" | jq -r --arg id "$task_id" '[.[] | select(.id == $id)] | length')
+    if [ "$valid" = "0" ]; then
+        log "ERROR" "Picker chose task_id '$task_id' which is not in candidate list"
+        return 1
+    fi
+
+    # Validate base branch exists (fall back to BASE_BRANCH if not)
+    if [ -n "$PICKER_BASE_BRANCH" ] && [ "$PICKER_BASE_BRANCH" != "$BASE_BRANCH" ]; then
+        if ! git -C "$PROJECT_DIR" rev-parse --verify "$PICKER_BASE_BRANCH" &>/dev/null && \
+           ! git -C "$PROJECT_DIR" rev-parse --verify "origin/$PICKER_BASE_BRANCH" &>/dev/null; then
+            log "WARN" "Picker suggested base '$PICKER_BASE_BRANCH' but it doesn't exist. Using $BASE_BRANCH."
+            PICKER_BASE_BRANCH="$BASE_BRANCH"
+        fi
+    fi
+    PICKER_BASE_BRANCH="${PICKER_BASE_BRANCH:-$BASE_BRANCH}"
+
+    # Save decision for audit
+    mkdir -p "$HISTORY_DIR/_picker_decisions"
+    local timestamp
+    timestamp=$(date -u +"%Y-%m-%dT%H-%M-%SZ")
+    jq -n \
+        --arg ts "$timestamp" \
+        --arg task_id "$task_id" \
+        --arg name "$TICKET_SUMMARY" \
+        --arg base "$PICKER_BASE_BRANCH" \
+        --arg url "$CLICKUP_TASK_URL" \
+        --arg reasoning "$PICKER_REASONING" \
+        --arg model "$PICKER_MODEL" \
+        --argjson candidates_count "$(echo "$CANDIDATE_TASKS_JSON" | jq 'length')" \
+        '{timestamp: $ts, picked: {task_id: $task_id, name: $name, base_branch: $base, url: $url}, reasoning: $reasoning, model: $model, candidates_count: $candidates_count}' \
+        > "$HISTORY_DIR/_picker_decisions/${timestamp}.json"
+
+    log "INFO" "Picker chose: $TICKET_KEY - $TICKET_SUMMARY (base: $PICKER_BASE_BRANCH)"
+    log "INFO" "Reasoning: $PICKER_REASONING"
+    return 0
+}
+
 # --- Worktree Management ---
 create_worktree_name() {
     local ticket_key="$1"
@@ -257,6 +649,7 @@ create_worktree_name() {
 
 setup_worktree() {
     local worktree_name="$1"
+    local base_override="${2:-$BASE_BRANCH}"
     local branch_name="$worktree_name"
     local worktree_path="$WORKTREES_BASE/$worktree_name"
 
@@ -267,27 +660,44 @@ setup_worktree() {
 
     # Fetch latest from remote
     cd "$PROJECT_DIR"
-    git fetch origin "$BASE_BRANCH" 2>/dev/null || true
+    git fetch origin "$base_override" 2>/dev/null || true
 
-    log "INFO" "Creating worktree: $worktree_path (branch: $branch_name, base: $BASE_BRANCH)"
-    git worktree add -b "$branch_name" "$worktree_path" "origin/$BASE_BRANCH" 2>&1 | while read -r line; do
-        log "INFO" "git: $line"
-    done
+    # Prefer worktrunk (git-wt) if available — runs pre-start hooks (copy-ignored etc.)
+    if command -v git-wt &>/dev/null && [ -f "$PROJECT_DIR/.config/wt.toml" ]; then
+        log "INFO" "Creating worktree via worktrunk: $branch_name (base: $base_override)"
+        git-wt switch --create "$branch_name" --base "$base_override" --no-cd 2>&1 | while read -r line; do
+            log "INFO" "wt: $line"
+        done
+        # worktrunk places worktrees relative to the project dir — find the actual path
+        worktree_path=$(git worktree list --porcelain | grep -A0 "worktree.*${branch_name}" | head -1 | sed 's/^worktree //')
+        if [ -z "$worktree_path" ] || [ ! -d "$worktree_path" ]; then
+            log "ERROR" "Worktrunk created branch but worktree path not found"
+            return 1
+        fi
+        # Update WORKTREES_BASE to match where worktrunk actually put it
+        WORKTREES_BASE=$(dirname "$worktree_path")
+        log "INFO" "Worktree created at: $worktree_path"
+    else
+        log "INFO" "Creating worktree: $worktree_path (branch: $branch_name, base: $base_override)"
+        git worktree add -b "$branch_name" "$worktree_path" "origin/$base_override" 2>&1 | while read -r line; do
+            log "INFO" "git: $line"
+        done
 
-    if [ ! -d "$worktree_path" ]; then
-        log "ERROR" "Failed to create worktree at $worktree_path"
-        return 1
-    fi
+        if [ ! -d "$worktree_path" ]; then
+            log "ERROR" "Failed to create worktree at $worktree_path"
+            return 1
+        fi
 
-    # Run project-specific setup hook if configured (e.g., copy .env, generate configs)
-    if [ -n "$WORKTREE_SETUP_HOOK" ] && [ -x "$WORKTREE_SETUP_HOOK" ]; then
-        log "INFO" "Running worktree setup hook: $WORKTREE_SETUP_HOOK"
-        WORKTREE_PATH="$worktree_path" \
-        PROJECT_DIR="$PROJECT_DIR" \
-        WORKTREE_NAME="$worktree_name" \
-            "$WORKTREE_SETUP_HOOK" 2>&1 | while read -r line; do
-                log "INFO" "hook: $line"
-            done
+        # Run project-specific setup hook if configured (e.g., copy .env, generate configs)
+        if [ -n "$WORKTREE_SETUP_HOOK" ] && [ -x "$WORKTREE_SETUP_HOOK" ]; then
+            log "INFO" "Running worktree setup hook: $WORKTREE_SETUP_HOOK"
+            WORKTREE_PATH="$worktree_path" \
+            PROJECT_DIR="$PROJECT_DIR" \
+            WORKTREE_NAME="$worktree_name" \
+                "$WORKTREE_SETUP_HOOK" 2>&1 | while read -r line; do
+                    log "INFO" "hook: $line"
+                done
+        fi
     fi
 
     # Install dependencies if configured
@@ -302,30 +712,36 @@ setup_worktree() {
     return 0
 }
 
-# --- Tmux & Server ---
-# Delegates to existing create-worktree-session.sh which handles:
-#   - tmux session creation (3 tabs: claude, server, commands)
-#   - port generation via worktree-metadata.sh
-#   - metadata persistence
-# Falls back to a simple tmux session if the script is not available.
+# --- Session Management (cross-platform) ---
+# On macOS/Linux with tmux: creates tmux sessions with multiple windows.
+# On Windows (or no tmux): runs processes in background with PID tracking.
+
+PIDS_DIR="$AUTOPILOT_DIR/pids"
+
 setup_session() {
     local worktree_name="$1"
     local worktree_path="$WORKTREES_BASE/$worktree_name"
 
-    if tmux has-session -t "$worktree_name" 2>/dev/null; then
-        log "INFO" "Tmux session already exists: $worktree_name"
-        return 0
-    fi
+    if [ "$HAS_TMUX" = true ]; then
+        if tmux has-session -t "$worktree_name" 2>/dev/null; then
+            log "INFO" "Tmux session already exists: $worktree_name"
+            return 0
+        fi
 
-    if [ -x "$TMUX_SCRIPTS/create-worktree-session.sh" ]; then
-        log "INFO" "Creating tmux session via create-worktree-session.sh"
-        "$TMUX_SCRIPTS/create-worktree-session.sh" "$worktree_name" "$worktree_path"
+        if [ -x "$TMUX_SCRIPTS/create-worktree-session.sh" ]; then
+            log "INFO" "Creating tmux session via create-worktree-session.sh"
+            "$TMUX_SCRIPTS/create-worktree-session.sh" "$worktree_name" "$worktree_path"
+        else
+            log "INFO" "Creating tmux session manually: $worktree_name"
+            tmux new-session -s "$worktree_name" -n "claude" -c "$worktree_path" -d "cd '$worktree_path' && exec $USER_SHELL"
+            tmux new-window -t "$worktree_name:2" -n "server" -c "$worktree_path" "cd '$worktree_path' && exec $USER_SHELL"
+            tmux new-window -t "$worktree_name:3" -n "commands" -c "$worktree_path" "cd '$worktree_path' && exec $USER_SHELL"
+            tmux select-window -t "$worktree_name:1"
+        fi
     else
-        log "INFO" "Creating tmux session manually: $worktree_name"
-        tmux new-session -s "$worktree_name" -n "claude" -c "$worktree_path" -d "cd '$worktree_path' && exec $USER_SHELL"
-        tmux new-window -t "$worktree_name:2" -n "server" -c "$worktree_path" "cd '$worktree_path' && exec $USER_SHELL"
-        tmux new-window -t "$worktree_name:3" -n "commands" -c "$worktree_path" "cd '$worktree_path' && exec $USER_SHELL"
-        tmux select-window -t "$worktree_name:1"
+        # No tmux: just ensure PID directory exists for background process tracking
+        mkdir -p "$PIDS_DIR"
+        log "INFO" "No tmux available — will run processes in background (PID-tracked)"
     fi
 
     return 0
@@ -355,16 +771,33 @@ resolve_port() {
 
 start_dev_server() {
     local worktree_name="$1"
+    local worktree_path="$WORKTREES_BASE/$worktree_name"
 
     if [ -z "$DEV_SERVER_CMD" ]; then
         log "INFO" "No DEV_SERVER_CMD configured, skipping server start."
         return 0
     fi
 
-    # Send command as-is to tmux — variables like $SERVER_PORT are
-    # already set in the pane's env by create-worktree-session.sh
     log "INFO" "Starting dev server: $DEV_SERVER_CMD"
-    tmux send-keys -t "$worktree_name:2" "$DEV_SERVER_CMD" Enter
+
+    if [ "$HAS_TMUX" = true ]; then
+        # Send command to tmux pane — $SERVER_PORT is set in pane env
+        tmux send-keys -t "$worktree_name:2" "$DEV_SERVER_CMD" Enter
+    else
+        # Run dev server as background process with PID tracking
+        local port
+        port=$(resolve_port "$worktree_name")
+        local server_log="$AUTOPILOT_DIR/logs/${worktree_name}-server.log"
+        (
+            cd "$worktree_path"
+            export SERVER_PORT="$port"
+            eval "$DEV_SERVER_CMD" >> "$server_log" 2>&1
+        ) &
+        local server_pid=$!
+        mkdir -p "$PIDS_DIR"
+        echo "$server_pid" > "$PIDS_DIR/${worktree_name}-server.pid"
+        log "INFO" "Dev server started in background (PID: $server_pid, port: $port)"
+    fi
 
     sleep 3
 }
@@ -408,13 +841,9 @@ launch_claude() {
 
     mkdir -p "$AUTOPILOT_DIR/markers"
 
-    # Build ticket URL from pattern or fall back to Jira format
+    # Build ticket URL (tracker-agnostic)
     local ticket_url
-    if [ -n "${TICKET_URL_PATTERN:-}" ]; then
-        ticket_url=$(echo "$TICKET_URL_PATTERN" | sed "s|{{KEY}}|$ticket_key|g")
-    else
-        ticket_url="${JIRA_BASE_URL}/browse/${ticket_key}"
-    fi
+    ticket_url=$(build_ticket_url "$ticket_key")
 
     # Write a launcher script — starts Claude interactively with /autopilot command
     local launcher="$AUTOPILOT_DIR/prompts/${worktree_name}.sh"
@@ -429,8 +858,17 @@ echo \$? > '$AUTOPILOT_DIR/markers/${worktree_name}.exit_code'
 LAUNCHER
     chmod +x "$launcher"
 
-    log "INFO" "Launching Claude Code in tmux pane $worktree_name:1"
-    tmux send-keys -t "$worktree_name:1" "$launcher" Enter
+    if [ "$HAS_TMUX" = true ]; then
+        log "INFO" "Launching Claude Code in tmux pane $worktree_name:1"
+        tmux send-keys -t "$worktree_name:1" "$launcher" Enter
+    else
+        log "INFO" "Launching Claude Code in background"
+        mkdir -p "$PIDS_DIR"
+        bash "$launcher" >> "$AUTOPILOT_DIR/logs/${worktree_name}-claude.log" 2>&1 &
+        local claude_pid=$!
+        echo "$claude_pid" > "$PIDS_DIR/${worktree_name}-claude.pid"
+        log "INFO" "Claude launched in background (PID: $claude_pid)"
+    fi
 
     log "INFO" "Claude launched. Monitoring via markers."
 }
@@ -526,7 +964,7 @@ check_active_work() {
         local reason
         reason=$(cat "$AUTOPILOT_DIR/markers/${worktree_name}.failed")
         log "WARN" "$ticket failed: $reason"
-        jira_comment "$ticket" "Autopilot encountered an issue and could not complete this ticket automatically. Keeping in progress for manual review. Reason: $reason"
+        comment_on_ticket "$ticket" "Autopilot encountered an issue and could not complete this ticket automatically. Keeping in progress for manual review. Reason: $reason"
         save_history "$ticket" "failed" "$reason" "$worktree_name"
         rm -f "$AUTOPILOT_DIR/markers/${worktree_name}".{done,exit_code,failed}
         write_state "idle"
@@ -540,10 +978,10 @@ check_active_work() {
 
         if [ "$exit_code" = "0" ]; then
             log "WARN" "$ticket: Claude exited (code 0) but no completion marker found"
-            jira_comment "$ticket" "Autopilot: Claude process completed but no explicit completion marker was written. Please review the worktree at $WORKTREES_BASE/$worktree_name"
+            comment_on_ticket "$ticket" "Autopilot: Claude process completed but no explicit completion marker was written. Please review the worktree at $WORKTREES_BASE/$worktree_name"
         else
             log "WARN" "$ticket: Claude exited with code $exit_code"
-            jira_comment "$ticket" "Autopilot encountered an issue (exit code: $exit_code). Keeping in progress for manual review. Worktree: $WORKTREES_BASE/$worktree_name"
+            comment_on_ticket "$ticket" "Autopilot encountered an issue (exit code: $exit_code). Keeping in progress for manual review. Worktree: $WORKTREES_BASE/$worktree_name"
         fi
         save_history "$ticket" "failed" "Exit code: $exit_code" "$worktree_name"
         rm -f "$AUTOPILOT_DIR/markers/${worktree_name}.exit_code"
@@ -551,11 +989,26 @@ check_active_work() {
         return 0
     fi
 
-    # Check if tmux session is still alive
-    if ! tmux has-session -t "$worktree_name" 2>/dev/null; then
-        log "WARN" "Tmux session $worktree_name died unexpectedly"
-        jira_comment "$ticket" "Autopilot: Session terminated unexpectedly. Keeping in progress for manual review."
-        save_history "$ticket" "failed" "Tmux session died" "$worktree_name"
+    # Check if session is still alive
+    local session_alive=false
+    if [ "$HAS_TMUX" = true ]; then
+        tmux has-session -t "$worktree_name" 2>/dev/null && session_alive=true
+    else
+        # Check PID file for background process
+        local pid_file="$PIDS_DIR/${worktree_name}-claude.pid"
+        if [ -f "$pid_file" ]; then
+            local claude_pid
+            claude_pid=$(cat "$pid_file" 2>/dev/null || echo "")
+            if [ -n "$claude_pid" ] && kill -0 "$claude_pid" 2>/dev/null; then
+                session_alive=true
+            fi
+        fi
+    fi
+
+    if [ "$session_alive" = false ]; then
+        log "WARN" "Session $worktree_name died unexpectedly"
+        comment_on_ticket "$ticket" "Autopilot: Session terminated unexpectedly. Keeping in progress for manual review."
+        save_history "$ticket" "failed" "Session died" "$worktree_name"
         write_state "idle"
         return 0
     fi
@@ -577,7 +1030,7 @@ check_active_work() {
 
     if [ "$elapsed" -gt "$max_seconds" ]; then
         log "WARN" "$ticket: Timed out after $(( elapsed / 3600 ))h $(( (elapsed % 3600) / 60 ))m"
-        jira_comment "$ticket" "Autopilot: Timed out after $(( elapsed / 3600 )) hours. Keeping in progress for manual review."
+        comment_on_ticket "$ticket" "Autopilot: Timed out after $(( elapsed / 3600 )) hours. Keeping in progress for manual review."
         save_history "$ticket" "failed" "Timeout after ${elapsed}s" "$worktree_name"
         write_state "idle"
         return 0
@@ -597,9 +1050,11 @@ main() {
     fi
 
     acquire_lock
-    load_jira_credentials
+    if [ "$TRACKER" = "jira" ]; then
+        load_jira_credentials
+    fi
 
-    log "INFO" "=== Autopilot cycle started ($PROJECT_NAME) ==="
+    log "INFO" "=== Autopilot cycle started ($PROJECT_NAME, tracker: $TRACKER) ==="
 
     local state
     state=$(read_state)
@@ -608,18 +1063,26 @@ main() {
 
     if [ "$status" = "working" ]; then
         check_active_work
-        log "INFO" "=== Autopilot cycle complete ==="
-        exit 0
+        # Re-read state — if task just completed, try picking next immediately
+        state=$(read_state)
+        status=$(echo "$state" | jq -r '.status')
+        if [ "$status" = "idle" ]; then
+            log "INFO" "Previous task completed. Checking for next task immediately."
+            # fall through to find_ticket below
+        else
+            log "INFO" "=== Autopilot cycle complete ==="
+            exit 0
+        fi
     fi
 
-    if ! find_autopilot_ticket; then
+    if ! find_ticket; then
         log "INFO" "=== Autopilot cycle complete (no work) ==="
         exit 0
     fi
 
     log "INFO" "=== Starting work on $TICKET_KEY ==="
 
-    if ! transition_to_in_progress "$TICKET_KEY"; then
+    if ! transition_ticket "$TICKET_KEY"; then
         log "ERROR" "Could not transition $TICKET_KEY. Skipping."
         exit 1
     fi
@@ -627,17 +1090,18 @@ main() {
     local worktree_name
     worktree_name=$(create_worktree_name "$TICKET_KEY" "$TICKET_SUMMARY")
 
-    if ! setup_worktree "$worktree_name"; then
+    local effective_base="${PICKER_BASE_BRANCH:-$BASE_BRANCH}"
+    if ! setup_worktree "$worktree_name" "$effective_base"; then
         log "ERROR" "Failed to create worktree for $TICKET_KEY"
-        jira_comment "$TICKET_KEY" "Autopilot: Failed to create worktree. Keeping in progress for manual intervention."
+        comment_on_ticket "$TICKET_KEY" "Autopilot: Failed to create worktree. Keeping in progress for manual intervention."
         save_history "$TICKET_KEY" "failed" "Worktree creation failed" "$worktree_name"
         exit 1
     fi
 
     if ! setup_session "$worktree_name"; then
-        log "ERROR" "Failed to create tmux session for $TICKET_KEY"
-        jira_comment "$TICKET_KEY" "Autopilot: Failed to create tmux session."
-        save_history "$TICKET_KEY" "failed" "Tmux session creation failed" "$worktree_name"
+        log "ERROR" "Failed to create session for $TICKET_KEY"
+        comment_on_ticket "$TICKET_KEY" "Autopilot: Failed to create session."
+        save_history "$TICKET_KEY" "failed" "Session creation failed" "$worktree_name"
         exit 1
     fi
 
@@ -651,7 +1115,7 @@ main() {
 
     write_state "working" "$TICKET_KEY" "$worktree_name" "$WORKTREES_BASE/$worktree_name" "$port"
 
-    jira_comment "$TICKET_KEY" "Autopilot: Started working on this ticket. Worktree: $worktree_name, Port: $port"
+    comment_on_ticket "$TICKET_KEY" "Autopilot: Started working on this ticket. Worktree: $worktree_name, Port: $port"
 
     log "INFO" "=== $TICKET_KEY dispatched to Claude. Will check on next cycle. ==="
 }

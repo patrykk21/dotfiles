@@ -11,8 +11,17 @@ WORKTREES_BASE="$HOME/worktrees"
 # Read hook data from stdin
 INPUT=$(cat)
 
+# Parse JSON with node (cross-platform — python3 may be a stub on Windows)
+json_get() {
+    echo "$INPUT" | node -e "
+        let d='';process.stdin.on('data',c=>d+=c);
+        process.stdin.on('end',()=>{try{console.log(JSON.parse(d)['$1']||'')}catch{console.log('')}})
+    " 2>/dev/null || echo ""
+}
+
 # Get CWD from hook data, fall back to PWD
-CWD=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('cwd',''))" 2>/dev/null || echo "${PWD:-}")
+CWD=$(json_get cwd)
+[ -z "$CWD" ] && CWD="${PWD:-}"
 
 # Determine worktree name from CWD
 WORKTREE_NAME=""
@@ -28,7 +37,7 @@ MARKER="$MARKERS_DIR/${WORKTREE_NAME}.waiting"
 mkdir -p "$MARKERS_DIR"
 
 # Get event name
-EVENT=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('hook_event_name',''))" 2>/dev/null || echo "")
+EVENT=$(json_get hook_event_name)
 
 case "$EVENT" in
     Stop)

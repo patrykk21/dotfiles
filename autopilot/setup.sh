@@ -12,9 +12,10 @@ SERVICE_NAME="autopilot-jira"
 
 detect_os() {
     case "$(uname -s)" in
-        Darwin) echo "macos" ;;
-        Linux)  echo "linux" ;;
-        *)      echo "unknown" ;;
+        Darwin)               echo "macos" ;;
+        Linux)                echo "linux" ;;
+        MINGW*|MSYS*|CYGWIN*) echo "windows" ;;
+        *)                    echo "unknown" ;;
     esac
 }
 
@@ -112,6 +113,28 @@ EOF
     echo "  Or just use: autopilot on / autopilot off"
 }
 
+# --- Windows: Task Scheduler ---
+install_task_scheduler() {
+    local task_name="Autopilot-${SERVICE_NAME}"
+    local runner_path
+    runner_path=$(cygpath -w "$SCRIPT_PATH" 2>/dev/null || echo "$SCRIPT_PATH")
+    local bash_path
+    bash_path=$(cygpath -w "$(command -v bash)" 2>/dev/null || echo "bash")
+
+    schtasks.exe //Create //F //TN "$task_name" //SC MINUTE //MO 5 \
+        //TR "\"$bash_path\" \"$runner_path\"" //RL HIGHEST 2>/dev/null
+
+    if [ $? -eq 0 ]; then
+        echo "Installed Windows Task Scheduler task: $task_name"
+        echo "  Runs every 5 minutes"
+        echo "  To manage: autopilot on / autopilot off"
+    else
+        echo "WARNING: Failed to create scheduled task."
+        echo "You may need to run this as Administrator, or create it manually."
+        echo "You can still run autopilot manually: autopilot run"
+    fi
+}
+
 setup_config() {
     if [ -f "$AUTOPILOT_DIR/config.env" ]; then
         echo "Config file already exists: $AUTOPILOT_DIR/config.env"
@@ -150,8 +173,9 @@ main() {
 
     echo "[3/3] Installing scheduler..."
     case "$os" in
-        macos)  install_launchd ;;
-        linux)  install_systemd ;;
+        macos)   install_launchd ;;
+        linux)   install_systemd ;;
+        windows) install_task_scheduler ;;
         *)
             echo "WARNING: Unsupported OS '$os'. No scheduler installed."
             echo "You can still run autopilot manually: autopilot run"

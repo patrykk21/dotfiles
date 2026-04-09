@@ -23,10 +23,31 @@ NC='\033[0m'
 # --- Cross-platform scheduler ---
 detect_os() {
     case "$(uname -s)" in
-        Darwin) echo "macos" ;;
-        Linux)  echo "linux" ;;
-        *)      echo "unknown" ;;
+        Darwin)               echo "macos" ;;
+        Linux)                echo "linux" ;;
+        MINGW*|MSYS*|CYGWIN*) echo "windows" ;;
+        *)                    echo "unknown" ;;
     esac
+}
+
+HAS_TMUX=false
+command -v tmux &>/dev/null && HAS_TMUX=true
+PIDS_DIR="$AUTOPILOT_DIR/pids"
+
+# Check if a session (tmux or background PID) is alive
+session_is_alive() {
+    local worktree="$1"
+    if [ "$HAS_TMUX" = true ]; then
+        tmux has-session -t "$worktree" 2>/dev/null && return 0
+    fi
+    # Fallback: check PID file
+    local pid_file="$PIDS_DIR/${worktree}-claude.pid"
+    if [ -f "$pid_file" ]; then
+        local pid
+        pid=$(cat "$pid_file" 2>/dev/null || echo "")
+        [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null && return 0
+    fi
+    return 1
 }
 
 scheduler_load() {
@@ -37,6 +58,16 @@ scheduler_load() {
             ;;
         linux)
             systemctl --user enable --now "${SERVICE_NAME}.timer" 2>/dev/null || true
+            ;;
+        windows)
+            # Windows Task Scheduler
+            local task_name="Autopilot-${SERVICE_NAME}"
+            local runner_path
+            runner_path=$(cygpath -w "$AUTOPILOT_DIR/autopilot-runner.sh" 2>/dev/null || echo "$AUTOPILOT_DIR/autopilot-runner.sh")
+            local bash_path
+            bash_path=$(cygpath -w "$(command -v bash)" 2>/dev/null || echo "bash")
+            schtasks.exe //Create //F //TN "$task_name" //SC MINUTE //MO 5 \
+                //TR "\"$bash_path\" \"$runner_path\"" //RL HIGHEST 2>/dev/null || true
             ;;
     esac
 }
@@ -49,6 +80,10 @@ scheduler_unload() {
             ;;
         linux)
             systemctl --user disable --now "${SERVICE_NAME}.timer" 2>/dev/null || true
+            ;;
+        windows)
+            local task_name="Autopilot-${SERVICE_NAME}"
+            schtasks.exe //Delete //TN "$task_name" //F 2>/dev/null || true
             ;;
     esac
 }
@@ -76,6 +111,14 @@ scheduler_status_line() {
                 echo -e "  Schedule: ${GREEN}ACTIVE${NC} (systemd, every ${interval})"
             else
                 echo -e "  Schedule: ${YELLOW}INACTIVE${NC} (run 'autopilot setup')"
+            fi
+            ;;
+        windows)
+            local task_name="Autopilot-${SERVICE_NAME}"
+            if schtasks.exe //Query //TN "$task_name" &>/dev/null; then
+                echo -e "  Schedule: ${GREEN}ACTIVE${NC} (Task Scheduler, every 5m)"
+            else
+                echo -e "  Schedule: ${YELLOW}NOT CONFIGURED${NC} (run 'autopilot setup')"
             fi
             ;;
         *)  echo -e "  Schedule: ${YELLOW}UNKNOWN OS${NC}" ;;
@@ -188,10 +231,14 @@ case "${1:-help}" in
                     echo "      Worktree: $worktree"
                     echo "      Port:     $port"
                     echo "      Started:  $started"
-                    if tmux has-session -t "$worktree" 2>/dev/null; then
+                    if session_is_alive "$worktree"; then
                         waiting_marker="$AUTOPILOT_DIR/markers/${worktree}.waiting"
                         if [ -f "$waiting_marker" ]; then
-                            echo -e "      Session:  ${YELLOW}NEEDS INPUT${NC}  ← tmux a -t $worktree"
+                            if [ "$HAS_TMUX" = true ]; then
+                                echo -e "      Session:  ${YELLOW}NEEDS INPUT${NC}  ← tmux a -t $worktree"
+                            else
+                                echo -e "      Session:  ${YELLOW}NEEDS INPUT${NC}  (check logs/${worktree}-claude.log)"
+                            fi
                             echo -e "      Question: $(cat "$waiting_marker" | head -1)"
                         else
                             echo -e "      Session:  ${GREEN}ALIVE${NC}"
@@ -374,12 +421,24 @@ case "${1:-help}" in
 
         echo -e "${YELLOW}Stopping $ticket ($worktree)...${NC}"
 
-        # Kill Claude in tmux pane
-        tmux send-keys -t "$worktree:1" C-c 2>/dev/null
-        sleep 1
-
-        # Kill tmux session
-        tmux kill-session -t "$worktree" 2>/dev/null && echo "  Killed tmux session" || echo "  No tmux session found"
+        if [ "$HAS_TMUX" = true ]; then
+            # Kill Claude in tmux pane
+            tmux send-keys -t "$worktree:1" C-c 2>/dev/null
+            sleep 1
+            # Kill tmux session
+            tmux kill-session -t "$worktree" 2>/dev/null && echo "  Killed tmux session" || echo "  No tmux session found"
+        else
+            # Kill background processes via PID files
+            for pidfile in "$PIDS_DIR/${worktree}"-*.pid; do
+                [ -f "$pidfile" ] || continue
+                local pid
+                pid=$(cat "$pidfile" 2>/dev/null || echo "")
+                if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+                    kill "$pid" 2>/dev/null && echo "  Killed process $pid ($(basename "$pidfile" .pid))"
+                fi
+                rm -f "$pidfile"
+            done
+        fi
 
         # Remove worktree and branch
         if [ -d "$worktree_path" ]; then
