@@ -10,6 +10,9 @@ set -uo pipefail
 # All project-specific config lives in config.env (not committed to dotfiles).
 # Project-specific setup logic lives in the project's .autopilot/ directory.
 #
+# State is stored in a single metadata JSON file per project:
+#   projects/<project>.state.json
+#
 # Usage: Called by launchd/systemd every 5 minutes, or manually.
 # Control: Use autopilot-ctl (on|off|status|run)
 # =============================================================================
@@ -79,10 +82,8 @@ PICKER_MODEL="${PICKER_MODEL:-sonnet}"
 # Concurrency: max tickets worked on simultaneously
 MAX_CONCURRENT_TICKETS="${MAX_CONCURRENT_TICKETS:-1}"
 
-# Per-project paths (isolated state per project)
-STATE_FILE="$AUTOPILOT_DIR/state/${PROJECT_NAME}.json"
-LOCK_FILE="$AUTOPILOT_DIR/state/${PROJECT_NAME}.lock"
-HISTORY_DIR="$AUTOPILOT_DIR/history/${PROJECT_NAME}"
+# Unified metadata file (single source of truth per project)
+META_FILE="$AUTOPILOT_DIR/projects/${PROJECT_NAME}.state.json"
 LOG_FILE="$AUTOPILOT_DIR/logs/${PROJECT_NAME}.log"
 
 # Resolve Claude binary: config override > claude-patched > claude
@@ -119,24 +120,79 @@ log() {
     [[ -t 1 ]] && echo "[$timestamp] [$level] $*"
 }
 
-# --- Lock Management ---
-acquire_lock() {
-    if [ -f "$LOCK_FILE" ]; then
-        local pid
-        pid=$(cat "$LOCK_FILE" 2>/dev/null || echo "")
-        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-            log "INFO" "Another autopilot instance is running (PID: $pid). Exiting."
-            exit 0
-        else
-            log "WARN" "Stale lock file found (PID: $pid). Removing."
-            rm -f "$LOCK_FILE"
-        fi
+# --- Unified Metadata Management ---
+meta_read() {
+    if [ -f "$META_FILE" ]; then
+        cat "$META_FILE"
+    else
+        echo '{"status":"idle","current":null,"history":[],"picker_decisions":[],"lock_pid":null}'
     fi
-    echo $$ > "$LOCK_FILE"
+}
+
+meta_write() {
+    local json="$1"
+    mkdir -p "$(dirname "$META_FILE")"
+    echo "$json" > "${META_FILE}.tmp" && mv "${META_FILE}.tmp" "$META_FILE"
+}
+
+meta_set_working() {
+    local ticket="$1" ticket_url="$2" worktree_name="$3" worktree_path="$4" base_branch="$5"
+    local meta
+    meta=$(meta_read)
+    meta_write "$(echo "$meta" | jq \
+        --arg ticket "$ticket" \
+        --arg ticket_url "$ticket_url" \
+        --arg wt_name "$worktree_name" \
+        --arg wt_path "$worktree_path" \
+        --arg base "$base_branch" \
+        --arg now "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+        '.status = "working" | .current = {ticket: $ticket, ticket_url: $ticket_url, worktree_name: $wt_name, worktree_path: $wt_path, base_branch: $base, started_at: $now}')"
+}
+
+meta_set_idle_from_completion() {
+    local details="$1"
+    local meta
+    meta=$(meta_read)
+    meta_write "$(echo "$meta" | jq \
+        --arg details "$details" \
+        --arg now "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+        '.status = "idle" | .history += [.current + {outcome: "completed", details: $details, completed_at: $now}] | .current = null')"
+}
+
+meta_set_failed() {
+    local details="$1"
+    local meta
+    meta=$(meta_read)
+    meta_write "$(echo "$meta" | jq \
+        --arg details "$details" \
+        --arg now "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+        '.status = "failed" | .history += [.current + {outcome: "failed", details: $details, completed_at: $now}] | .current = null')"
+}
+
+meta_add_picker_decision() {
+    local decision_json="$1"
+    local meta
+    meta=$(meta_read)
+    meta_write "$(echo "$meta" | jq --argjson d "$decision_json" '.picker_decisions = (.picker_decisions + [$d])[-50:]')"
+}
+
+# --- Lock Management (via metadata) ---
+acquire_lock() {
+    local meta
+    meta=$(meta_read)
+    local lock_pid
+    lock_pid=$(echo "$meta" | jq -r '.lock_pid // empty')
+    if [ -n "$lock_pid" ] && [ "$lock_pid" != "null" ] && kill -0 "$lock_pid" 2>/dev/null; then
+        log "INFO" "Another autopilot instance is running (PID: $lock_pid). Exiting."
+        exit 0
+    fi
+    meta_write "$(echo "$meta" | jq --arg pid "$$" '.lock_pid = ($pid | tonumber)')"
 }
 
 release_lock() {
-    rm -f "$LOCK_FILE"
+    if [ -f "$META_FILE" ]; then
+        meta_write "$(meta_read | jq '.lock_pid = null')"
+    fi
 }
 
 trap release_lock EXIT
@@ -476,14 +532,8 @@ gather_local_context() {
     local branches_json="[]"
     local worktrees_json="[]"
 
-    # Completed history
-    if [ -d "$HISTORY_DIR" ]; then
-        local hist_files
-        hist_files=$(find "$HISTORY_DIR" -maxdepth 1 -name "*.json" -type f 2>/dev/null)
-        if [ -n "$hist_files" ]; then
-            history_json=$(echo "$hist_files" | xargs cat 2>/dev/null | jq -s '.' 2>/dev/null || echo "[]")
-        fi
-    fi
+    # Completed history from metadata
+    history_json=$(meta_read | jq '.history')
 
     # Existing branches
     if [ -d "$PROJECT_DIR/.git" ] || [ -f "$PROJECT_DIR/.git" ]; then
@@ -618,11 +668,11 @@ PICKER_HEADER
     fi
     PICKER_BASE_BRANCH="${PICKER_BASE_BRANCH:-$BASE_BRANCH}"
 
-    # Save decision for audit
-    mkdir -p "$HISTORY_DIR/_picker_decisions"
+    # Save picker decision to metadata
     local timestamp
-    timestamp=$(date -u +"%Y-%m-%dT%H-%M-%SZ")
-    jq -n \
+    timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    local decision
+    decision=$(jq -n \
         --arg ts "$timestamp" \
         --arg task_id "$task_id" \
         --arg name "$TICKET_SUMMARY" \
@@ -631,8 +681,8 @@ PICKER_HEADER
         --arg reasoning "$PICKER_REASONING" \
         --arg model "$PICKER_MODEL" \
         --argjson candidates_count "$(echo "$CANDIDATE_TASKS_JSON" | jq 'length')" \
-        '{timestamp: $ts, picked: {task_id: $task_id, name: $name, base_branch: $base, url: $url}, reasoning: $reasoning, model: $model, candidates_count: $candidates_count}' \
-        > "$HISTORY_DIR/_picker_decisions/${timestamp}.json"
+        '{timestamp: $ts, picked: {task_id: $task_id, name: $name, base_branch: $base, url: $url}, reasoning: $reasoning, model: $model, candidates_count: $candidates_count}')
+    meta_add_picker_decision "$decision"
 
     log "INFO" "Picker chose: $TICKET_KEY - $TICKET_SUMMARY (base: $PICKER_BASE_BRANCH)"
     log "INFO" "Reasoning: $PICKER_REASONING"
@@ -837,8 +887,8 @@ generate_prompt() {
         -e "s|{{BASE_BRANCH}}|$BASE_BRANCH|g" \
         -e "s|{{PROJECT_NAME}}|$PROJECT_NAME|g" \
         -e "s|{{JIRA_PROJECT}}|$JIRA_PROJECT|g" \
-        -e "s|{{COMPLETION_MARKER}}|$AUTOPILOT_DIR/markers/${worktree_name}.done|g" \
-        -e "s|{{FAILURE_MARKER}}|$AUTOPILOT_DIR/markers/${worktree_name}.failed|g" \
+        -e 's|{{COMPLETION_MARKER}}|$AUTOPILOT_COMPLETION_MARKER|g' \
+        -e 's|{{FAILURE_MARKER}}|$AUTOPILOT_FAILURE_MARKER|g' \
         "$PROMPT_TEMPLATE" > "$prompt_file"
 
     echo "$prompt_file"
@@ -849,27 +899,65 @@ launch_claude() {
     local ticket_key="$2"
     local worktree_path="${RESOLVED_WORKTREE_PATH:-$WORKTREES_BASE/$worktree_name}"
 
-    mkdir -p "$AUTOPILOT_DIR/markers"
-
     # Build ticket URL (tracker-agnostic)
     local ticket_url
     ticket_url=$(build_ticket_url "$ticket_key")
 
-    # Build a readable tab title: "🤖 TICKET-KEY — Summary"
+    # Build a readable tab title
     local tab_title="🤖 ${ticket_key} — ${TICKET_SUMMARY:-$worktree_name}"
 
+    # Convert META_FILE to a Windows path for jq inside the launcher if needed
+    local meta_file_path="$META_FILE"
+
     # Write a launcher script — starts Claude interactively with /autopilot command
+    # Claude writes to temp marker files; the launcher reads them after Claude exits
+    # and updates the unified metadata JSON.
     local launcher="$AUTOPILOT_DIR/prompts/${worktree_name}.sh"
     cat > "$launcher" << LAUNCHER
 #!/usr/bin/env bash
 # Set terminal tab title
 echo -ne "\\033]0;${tab_title}\\007"
 cd '$worktree_path'
-export AUTOPILOT_COMPLETION_MARKER='$AUTOPILOT_DIR/markers/${worktree_name}.done'
-export AUTOPILOT_FAILURE_MARKER='$AUTOPILOT_DIR/markers/${worktree_name}.failed'
-export AUTOPILOT_WAITING_MARKER='$AUTOPILOT_DIR/markers/${worktree_name}.waiting'
+
+# Temp marker files (Claude's /autopilot command writes to these)
+COMPLETION_MARKER=\$(mktemp)
+FAILURE_MARKER=\$(mktemp)
+WAITING_MARKER=\$(mktemp)
+export AUTOPILOT_COMPLETION_MARKER="\$COMPLETION_MARKER"
+export AUTOPILOT_FAILURE_MARKER="\$FAILURE_MARKER"
+export AUTOPILOT_WAITING_MARKER="\$WAITING_MARKER"
+
+# Run Claude
 $CLAUDE_BIN --dangerously-skip-permissions --name "${tab_title}" "/autopilot $ticket_url"
-echo \$? > '$AUTOPILOT_DIR/markers/${worktree_name}.exit_code'
+EXIT_CODE=\$?
+
+# Update metadata JSON based on outcome
+META_FILE="$meta_file_path"
+NOW=\$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+if [ -f "\$COMPLETION_MARKER" ] && [ -s "\$COMPLETION_MARKER" ]; then
+    DETAILS=\$(cat "\$COMPLETION_MARKER")
+    jq --arg details "\$DETAILS" --arg now "\$NOW" \\
+      '.status = "idle" | .history += [.current + {outcome: "completed", details: \$details, completed_at: \$now}] | .current = null' \\
+      "\$META_FILE" > "\${META_FILE}.tmp" && mv "\${META_FILE}.tmp" "\$META_FILE"
+elif [ -f "\$FAILURE_MARKER" ] && [ -s "\$FAILURE_MARKER" ]; then
+    REASON=\$(cat "\$FAILURE_MARKER")
+    jq --arg reason "\$REASON" --arg now "\$NOW" \\
+      '.status = "failed" | .history += [.current + {outcome: "failed", details: \$reason, completed_at: \$now}] | .current = null' \\
+      "\$META_FILE" > "\${META_FILE}.tmp" && mv "\${META_FILE}.tmp" "\$META_FILE"
+elif [ "\$EXIT_CODE" -eq 0 ]; then
+    jq --arg now "\$NOW" \\
+      '.status = "failed" | .history += [.current + {outcome: "failed", details: "Exit 0 but no completion marker", completed_at: \$now}] | .current = null' \\
+      "\$META_FILE" > "\${META_FILE}.tmp" && mv "\${META_FILE}.tmp" "\$META_FILE"
+else
+    jq --arg code "\$EXIT_CODE" --arg now "\$NOW" \\
+      '.status = "failed" | .history += [.current + {outcome: "failed", details: ("Exit code: " + \$code), completed_at: \$now}] | .current = null' \\
+      "\$META_FILE" > "\${META_FILE}.tmp" && mv "\${META_FILE}.tmp" "\$META_FILE"
+fi
+
+# Cleanup temp markers
+rm -f "\$COMPLETION_MARKER" "\$FAILURE_MARKER" "\$WAITING_MARKER"
+
 # Mark tab as done
 echo -ne "\\033]0;✅ ${ticket_key} — done\\007"
 LAUNCHER
@@ -901,166 +989,74 @@ LAUNCHER
         log "INFO" "Claude launched in background (PID: $claude_pid)"
     fi
 
-    log "INFO" "Claude launched. Monitoring via markers."
-}
-
-# --- State Management ---
-read_state() {
-    if [ -f "$STATE_FILE" ]; then
-        cat "$STATE_FILE"
-    else
-        echo '{"status":"idle"}'
-    fi
-}
-
-write_state() {
-    local status="$1"
-    shift
-    local json
-
-    case "$status" in
-        idle)
-            json='{"status":"idle"}'
-            ;;
-        failed)
-            # Preserve ticket info from current state for status display
-            local current_state
-            current_state=$(cat "$STATE_FILE" 2>/dev/null || echo '{}')
-            json=$(echo "$current_state" | jq '.status = "failed" | .failed_at = "'"$(date -u +"%Y-%m-%dT%H:%M:%SZ")"'"')
-            ;;
-        working)
-            local ticket="$1" worktree_name="$2" worktree_path="$3" port="$4"
-            json=$(jq -n \
-                --arg status "working" \
-                --arg ticket "$ticket" \
-                --arg worktree_name "$worktree_name" \
-                --arg worktree_path "$worktree_path" \
-                --arg port "$port" \
-                --arg project "$PROJECT_NAME" \
-                --arg started_at "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
-                --arg pid "$$" \
-                '{status: $status, ticket: $ticket, worktree_name: $worktree_name, worktree_path: $worktree_path, port: ($port | tonumber), project: $project, started_at: $started_at, pid: ($pid | tonumber)}')
-            ;;
-    esac
-
-    echo "$json" > "$STATE_FILE"
-}
-
-save_history() {
-    local ticket="$1"
-    local outcome="$2"
-    local details="${3:-}"
-    local worktree_name="${4:-}"
-
-    local state
-    state=$(read_state)
-
-    jq -n \
-        --arg ticket "$ticket" \
-        --arg outcome "$outcome" \
-        --arg details "$details" \
-        --arg worktree_name "$worktree_name" \
-        --arg project "$PROJECT_NAME" \
-        --arg completed_at "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
-        --argjson state "$state" \
-        '{ticket: $ticket, outcome: $outcome, details: $details, worktree_name: $worktree_name, project: $project, completed_at: $completed_at, started_at: ($state.started_at // "unknown")}' \
-        > "$HISTORY_DIR/${ticket}.json"
+    log "INFO" "Claude launched. Metadata will be updated by launcher on exit."
 }
 
 # --- Check Active Work ---
 check_active_work() {
-    local state
-    state=$(read_state)
+    local meta
+    meta=$(meta_read)
     local status
-    status=$(echo "$state" | jq -r '.status')
+    status=$(echo "$meta" | jq -r '.status')
+
+    if [ "$status" = "idle" ]; then
+        # Launcher already updated metadata to idle (completed successfully)
+        log "INFO" "Previous task completed (launcher updated metadata)."
+        return 0
+    fi
+
+    if [ "$status" = "failed" ]; then
+        # Launcher already updated metadata to failed
+        local last_ticket
+        last_ticket=$(echo "$meta" | jq -r '.history[-1].ticket // "unknown"')
+        local last_reason
+        last_reason=$(echo "$meta" | jq -r '.history[-1].details // "unknown"')
+        log "WARN" "$last_ticket failed: $last_reason"
+        comment_on_ticket "$last_ticket" "Autopilot encountered an issue and could not complete this ticket automatically. Reason: $last_reason"
+        log "WARN" "State is FAILED. Run 'autopilot reset $PROJECT_NAME' to retry."
+        return 0
+    fi
 
     if [ "$status" != "working" ]; then
         return 1
     fi
 
+    # Status is "working" — Claude is still running (launcher hasn't updated yet)
     local ticket worktree_name
-    ticket=$(echo "$state" | jq -r '.ticket')
-    worktree_name=$(echo "$state" | jq -r '.worktree_name')
+    ticket=$(echo "$meta" | jq -r '.current.ticket')
+    worktree_name=$(echo "$meta" | jq -r '.current.worktree_name')
 
     log "INFO" "Checking active work: $ticket ($worktree_name)"
 
-    # Check for completion marker
-    if [ -f "$AUTOPILOT_DIR/markers/${worktree_name}.done" ]; then
-        log "INFO" "$ticket completed successfully!"
-        local result
-        result=$(cat "$AUTOPILOT_DIR/markers/${worktree_name}.done")
-        save_history "$ticket" "completed" "$result" "$worktree_name"
-        rm -f "$AUTOPILOT_DIR/markers/${worktree_name}".{done,exit_code,failed}
-        write_state "idle"
-        log "INFO" "State reset to idle. Ready for next ticket."
-        return 0
-    fi
-
-    # Check for failure marker
-    if [ -f "$AUTOPILOT_DIR/markers/${worktree_name}.failed" ]; then
-        local reason
-        reason=$(cat "$AUTOPILOT_DIR/markers/${worktree_name}.failed")
-        log "WARN" "$ticket failed: $reason"
-        comment_on_ticket "$ticket" "Autopilot encountered an issue and could not complete this ticket automatically. Keeping in progress for manual review. Reason: $reason"
-        save_history "$ticket" "failed" "$reason" "$worktree_name"
-        rm -f "$AUTOPILOT_DIR/markers/${worktree_name}".{done,exit_code,failed}
-        write_state "failed"
-        log "WARN" "State set to FAILED. Run 'autopilot reset $PROJECT_NAME' to retry."
-        return 0
-    fi
-
-    # Check if exit code file exists (Claude process ended)
-    if [ -f "$AUTOPILOT_DIR/markers/${worktree_name}.exit_code" ]; then
-        local exit_code
-        exit_code=$(cat "$AUTOPILOT_DIR/markers/${worktree_name}.exit_code")
-
-        if [ "$exit_code" = "0" ]; then
-            log "WARN" "$ticket: Claude exited (code 0) but no completion marker found"
-            comment_on_ticket "$ticket" "Autopilot: Claude process completed but no explicit completion marker was written. Please review the worktree at $WORKTREES_BASE/$worktree_name"
-        else
-            log "WARN" "$ticket: Claude exited with code $exit_code"
-            comment_on_ticket "$ticket" "Autopilot encountered an issue (exit code: $exit_code). Keeping in progress for manual review. Worktree: $WORKTREES_BASE/$worktree_name"
-        fi
-        save_history "$ticket" "failed" "Exit code: $exit_code" "$worktree_name"
-        rm -f "$AUTOPILOT_DIR/markers/${worktree_name}.exit_code"
-        write_state "failed"
-        log "WARN" "State set to FAILED. Run 'autopilot reset $PROJECT_NAME' to retry."
-        return 0
-    fi
-
-    # Check if session is still alive
-    local session_alive=false
+    # On tmux: check if session is still alive as secondary signal
     if [ "$HAS_TMUX" = true ]; then
-        tmux has-session -t "$worktree_name" 2>/dev/null && session_alive=true
-    elif [ "$PLATFORM" = "windows" ]; then
-        # On Windows Terminal tabs, the PID is the wt.exe launcher which exits immediately.
-        # No markers (.done/.failed/.exit_code) means Claude is still running in the tab.
-        # Assume alive — the exit_code marker (written by launcher script) is the true signal.
-        session_alive=true
-    else
+        if ! tmux has-session -t "$worktree_name" 2>/dev/null; then
+            log "WARN" "Session $worktree_name died unexpectedly (tmux session gone)"
+            comment_on_ticket "$ticket" "Autopilot: Session terminated unexpectedly. Keeping in progress for manual review."
+            meta_set_failed "Session died (tmux session gone)"
+            log "WARN" "State set to FAILED. Run 'autopilot reset $PROJECT_NAME' to retry."
+            return 0
+        fi
+    elif [ "$PLATFORM" != "windows" ]; then
         # Background process: check PID file
         local pid_file="$PIDS_DIR/${worktree_name}-claude.pid"
         if [ -f "$pid_file" ]; then
             local claude_pid
             claude_pid=$(cat "$pid_file" 2>/dev/null || echo "")
-            if [ -n "$claude_pid" ] && kill -0 "$claude_pid" 2>/dev/null; then
-                session_alive=true
+            if [ -n "$claude_pid" ] && ! kill -0 "$claude_pid" 2>/dev/null; then
+                log "WARN" "Session $worktree_name died unexpectedly (PID $claude_pid gone)"
+                comment_on_ticket "$ticket" "Autopilot: Session terminated unexpectedly. Keeping in progress for manual review."
+                meta_set_failed "Session died (PID gone)"
+                log "WARN" "State set to FAILED. Run 'autopilot reset $PROJECT_NAME' to retry."
+                return 0
             fi
         fi
     fi
-
-    if [ "$session_alive" = false ]; then
-        log "WARN" "Session $worktree_name died unexpectedly"
-        comment_on_ticket "$ticket" "Autopilot: Session terminated unexpectedly. Keeping in progress for manual review."
-        save_history "$ticket" "failed" "Session died" "$worktree_name"
-        write_state "failed"
-        log "WARN" "State set to FAILED. Run 'autopilot reset $PROJECT_NAME' to retry."
-        return 0
-    fi
+    # On Windows: launcher updates metadata when done, so if still "working", Claude is running.
 
     # Check for timeout (4 hours max)
     local started_at now_epoch started_epoch elapsed max_seconds
-    started_at=$(echo "$state" | jq -r '.started_at')
+    started_at=$(echo "$meta" | jq -r '.current.started_at')
     # Cross-platform epoch conversion
     if date -j &>/dev/null; then
         # macOS
@@ -1076,8 +1072,7 @@ check_active_work() {
     if [ "$elapsed" -gt "$max_seconds" ]; then
         log "WARN" "$ticket: Timed out after $(( elapsed / 3600 ))h $(( (elapsed % 3600) / 60 ))m"
         comment_on_ticket "$ticket" "Autopilot: Timed out after $(( elapsed / 3600 )) hours. Keeping in progress for manual review."
-        save_history "$ticket" "failed" "Timeout after ${elapsed}s" "$worktree_name"
-        write_state "failed"
+        meta_set_failed "Timeout after ${elapsed}s"
         log "WARN" "State set to FAILED. Run 'autopilot reset $PROJECT_NAME' to retry."
         return 0
     fi
@@ -1088,7 +1083,7 @@ check_active_work() {
 
 # --- Main Flow ---
 main() {
-    mkdir -p "$AUTOPILOT_DIR/logs" "$AUTOPILOT_DIR/markers" "$AUTOPILOT_DIR/prompts" "$AUTOPILOT_DIR/state" "$HISTORY_DIR"
+    mkdir -p "$AUTOPILOT_DIR/logs" "$AUTOPILOT_DIR/prompts" "$AUTOPILOT_DIR/projects"
 
     if [ ! -f "$ENABLED_FILE" ]; then
         [[ -t 1 ]] && log "INFO" "Autopilot is disabled. Run 'autopilot on' to enable."
@@ -1102,15 +1097,15 @@ main() {
 
     log "INFO" "=== Autopilot cycle started ($PROJECT_NAME, tracker: $TRACKER) ==="
 
-    local state
-    state=$(read_state)
+    local meta
+    meta=$(meta_read)
     local status
-    status=$(echo "$state" | jq -r '.status')
+    status=$(echo "$meta" | jq -r '.status')
 
     if [ "$status" = "working" ]; then
         check_active_work
-        state=$(read_state)
-        status=$(echo "$state" | jq -r '.status')
+        meta=$(meta_read)
+        status=$(echo "$meta" | jq -r '.status')
         if [ "$status" = "idle" ]; then
             # Only success sets idle — safe to pick next immediately
             log "INFO" "Previous task completed successfully. Checking for next task."
@@ -1126,13 +1121,13 @@ main() {
         exit 0
     fi
 
-    # Enforce concurrency limit via state files
+    # Enforce concurrency limit via metadata files
     # States that block new work: "working" (active) and "failed" (needs manual reset)
     local active_count=0
-    for state_file in "$AUTOPILOT_DIR/state/"*.json; do
-        [ -f "$state_file" ] || continue
+    for meta_file in "$AUTOPILOT_DIR/projects/"*.state.json; do
+        [ -f "$meta_file" ] || continue
         local s
-        s=$(jq -r '.status' "$state_file" 2>/dev/null || echo "")
+        s=$(jq -r '.status' "$meta_file" 2>/dev/null || echo "")
         [ "$s" = "working" ] || [ "$s" = "failed" ] && active_count=$((active_count + 1))
     done
     if [ "$active_count" -ge "$MAX_CONCURRENT_TICKETS" ]; then
@@ -1160,14 +1155,14 @@ main() {
     if ! setup_worktree "$worktree_name" "$effective_base"; then
         log "ERROR" "Failed to create worktree for $TICKET_KEY"
         comment_on_ticket "$TICKET_KEY" "Autopilot: Failed to create worktree. Keeping in progress for manual intervention."
-        save_history "$TICKET_KEY" "failed" "Worktree creation failed" "$worktree_name"
+        meta_set_failed "Worktree creation failed"
         exit 1
     fi
 
     if ! setup_session "$worktree_name"; then
         log "ERROR" "Failed to create session for $TICKET_KEY"
         comment_on_ticket "$TICKET_KEY" "Autopilot: Failed to create session."
-        save_history "$TICKET_KEY" "failed" "Session creation failed" "$worktree_name"
+        meta_set_failed "Session creation failed"
         exit 1
     fi
 
@@ -1177,9 +1172,13 @@ main() {
 
     start_dev_server "$worktree_name"
 
-    launch_claude "$worktree_name" "$TICKET_KEY"
+    local ticket_url
+    ticket_url=$(build_ticket_url "$TICKET_KEY")
 
-    write_state "working" "$TICKET_KEY" "$worktree_name" "$WORKTREES_BASE/$worktree_name" "$port"
+    # Set metadata to working BEFORE launching Claude
+    meta_set_working "$TICKET_KEY" "$ticket_url" "$worktree_name" "${RESOLVED_WORKTREE_PATH:-$WORKTREES_BASE/$worktree_name}" "$effective_base"
+
+    launch_claude "$worktree_name" "$TICKET_KEY"
 
     comment_on_ticket "$TICKET_KEY" "Autopilot: Started working on this ticket. Worktree: $worktree_name, Port: $port"
 

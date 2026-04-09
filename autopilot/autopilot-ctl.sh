@@ -5,6 +5,8 @@ shopt -s nullglob
 # =============================================================================
 # Autopilot Control Script (multi-project, cross-platform)
 # Usage: autopilot <command> [args]
+#
+# State is stored in unified metadata files: projects/<project>.state.json
 # =============================================================================
 
 AUTOPILOT_DIR="$HOME/.config/autopilot"
@@ -34,24 +36,46 @@ HAS_TMUX=false
 command -v tmux &>/dev/null && HAS_TMUX=true
 PIDS_DIR="$AUTOPILOT_DIR/pids"
 
+# --- Metadata helpers ---
+meta_file_for() {
+    local project="$1"
+    echo "$PROJECTS_DIR/${project}.state.json"
+}
+
+meta_read_project() {
+    local project="$1"
+    local mf
+    mf=$(meta_file_for "$project")
+    if [ -f "$mf" ]; then
+        cat "$mf"
+    else
+        echo '{"status":"idle","current":null,"history":[],"picker_decisions":[],"lock_pid":null}'
+    fi
+}
+
+meta_write_project() {
+    local project="$1"
+    local json="$2"
+    local mf
+    mf=$(meta_file_for "$project")
+    mkdir -p "$(dirname "$mf")"
+    echo "$json" > "${mf}.tmp" && mv "${mf}.tmp" "$mf"
+}
+
 # Check if a session (tmux or background PID) is alive
 session_is_alive() {
     local worktree="$1"
     if [ "$HAS_TMUX" = true ]; then
         tmux has-session -t "$worktree" 2>/dev/null && return 0
     fi
-    # On Windows with WT tabs, PID is the wt.exe launcher (exits immediately).
-    # If state says "working" and no exit markers exist, assume alive.
+    # On Windows with WT tabs: if metadata still says "working", launcher hasn't
+    # updated yet, meaning Claude is still running in the tab.
     local os
     os=$(detect_os)
     if [ "$os" = "windows" ]; then
-        local marker_dir="$AUTOPILOT_DIR/markers"
-        if [ ! -f "$marker_dir/${worktree}.exit_code" ] && \
-           [ ! -f "$marker_dir/${worktree}.done" ] && \
-           [ ! -f "$marker_dir/${worktree}.failed" ]; then
-            return 0
-        fi
-        return 1
+        # The launcher script updates metadata when Claude exits.
+        # If we're checking liveness, the caller already knows status is "working".
+        return 0
     fi
     # Fallback: check PID file
     local pid_file="$PIDS_DIR/${worktree}-claude.pid"
@@ -162,22 +186,16 @@ list_projects() {
 
 project_state() {
     local project="$1"
-    local state_file="$AUTOPILOT_DIR/state/${project}.json"
-    if [ -f "$state_file" ]; then
-        cat "$state_file"
-    else
-        echo '{"status":"idle"}'
-    fi
+    meta_read_project "$project"
 }
 
 project_history_counts() {
     local project="$1"
-    local hist_dir="$AUTOPILOT_DIR/history/${project}"
-    local completed=0 failed=0
-    if [ -d "$hist_dir" ] && [ "$(ls -A "$hist_dir" 2>/dev/null)" ]; then
-        completed=$(find "$hist_dir" -name "*.json" -exec jq -r '.outcome' {} \; 2>/dev/null | grep -c "completed" || true)
-        failed=$(find "$hist_dir" -name "*.json" -exec jq -r '.outcome' {} \; 2>/dev/null | grep -c "failed" || true)
-    fi
+    local meta
+    meta=$(meta_read_project "$project")
+    local completed failed
+    completed=$(echo "$meta" | jq '[.history[] | select(.outcome == "completed")] | length')
+    failed=$(echo "$meta" | jq '[.history[] | select(.outcome == "failed")] | length')
     echo "$completed $failed"
 }
 
@@ -202,12 +220,12 @@ case "${1:-help}" in
         scheduler_unload
         echo -e "${YELLOW}Autopilot disabled.${NC}"
         # Show any active work
-        for state_file in "$AUTOPILOT_DIR/state/"*.json; do
-            [ -f "$state_file" ] || continue
-            s=$(jq -r '.status' "$state_file" 2>/dev/null || echo "")
+        for meta_file in "$PROJECTS_DIR/"*.state.json; do
+            [ -f "$meta_file" ] || continue
+            s=$(jq -r '.status' "$meta_file" 2>/dev/null || echo "")
             if [ "$s" = "working" ]; then
-                t=$(jq -r '.ticket' "$state_file")
-                p=$(jq -r '.project // "?"' "$state_file")
+                t=$(jq -r '.current.ticket' "$meta_file")
+                p=$(basename "$meta_file" .state.json)
                 echo -e "${BLUE}Note:${NC} $p is working on $t — active session continues, but no new tickets will be picked up."
             fi
         done
@@ -243,34 +261,23 @@ case "${1:-help}" in
                 read -r completed failed <<< "$(project_history_counts "$project")"
 
                 if [ "$pstatus" = "working" ]; then
-                    ticket=$(echo "$state" | jq -r '.ticket')
-                    worktree=$(echo "$state" | jq -r '.worktree_name')
-                    port=$(echo "$state" | jq -r '.port')
-                    started=$(echo "$state" | jq -r '.started_at')
+                    ticket=$(echo "$state" | jq -r '.current.ticket')
+                    worktree=$(echo "$state" | jq -r '.current.worktree_name')
+                    started=$(echo "$state" | jq -r '.current.started_at')
 
                     echo -e "  ${CYAN}$project${NC} ${DIM}($jira_proj)${NC} — ${GREEN}WORKING${NC}"
                     echo "      Ticket:   $ticket"
                     echo "      Worktree: $worktree"
-                    echo "      Port:     $port"
                     echo "      Started:  $started"
                     if session_is_alive "$worktree"; then
-                        waiting_marker="$AUTOPILOT_DIR/markers/${worktree}.waiting"
-                        if [ -f "$waiting_marker" ]; then
-                            if [ "$HAS_TMUX" = true ]; then
-                                echo -e "      Session:  ${YELLOW}NEEDS INPUT${NC}  ← tmux a -t $worktree"
-                            else
-                                echo -e "      Session:  ${YELLOW}NEEDS INPUT${NC}  (check logs/${worktree}-claude.log)"
-                            fi
-                            echo -e "      Question: $(cat "$waiting_marker" | head -1)"
-                        else
-                            echo -e "      Session:  ${GREEN}ALIVE${NC}"
-                        fi
+                        echo -e "      Session:  ${GREEN}ALIVE${NC}"
                     else
                         echo -e "      Session:  ${RED}DEAD${NC}"
                     fi
                 elif [ "$pstatus" = "failed" ]; then
-                    ticket=$(echo "$state" | jq -r '.ticket')
-                    echo -e "  ${CYAN}$project${NC} ${DIM}($jira_proj)${NC} — ${RED}FAILED${NC} ($ticket)"
+                    # Get last failed ticket from history
+                    last_ticket=$(echo "$state" | jq -r '.history[-1].ticket // "unknown"')
+                    echo -e "  ${CYAN}$project${NC} ${DIM}($jira_proj)${NC} — ${RED}FAILED${NC} ($last_ticket)"
                     echo -e "      Run: ${DIM}autopilot reset $project${NC} to retry"
                 else
                     echo -e "  ${CYAN}$project${NC} ${DIM}($jira_proj)${NC} — ${YELLOW}IDLE${NC}"
@@ -326,19 +333,17 @@ case "${1:-help}" in
         fi
 
         # Check if currently working
-        state_file="$AUTOPILOT_DIR/state/${project_name}.json"
-        if [ -f "$state_file" ]; then
-            s=$(jq -r '.status' "$state_file" 2>/dev/null || echo "")
-            if [ "$s" = "working" ]; then
-                echo -e "${RED}Project '$project_name' is currently working on a ticket.${NC}"
-                echo "Run 'autopilot reset $project_name' first, or wait for it to finish."
-                exit 1
-            fi
+        meta=$(meta_read_project "$project_name")
+        s=$(echo "$meta" | jq -r '.status')
+        if [ "$s" = "working" ]; then
+            echo -e "${RED}Project '$project_name' is currently working on a ticket.${NC}"
+            echo "Run 'autopilot reset $project_name' first, or wait for it to finish."
+            exit 1
         fi
 
         rm -f "$target"
         echo -e "${GREEN}Removed project '$project_name'.${NC}"
-        echo -e "${DIM}State and history preserved in $AUTOPILOT_DIR/state/ and $AUTOPILOT_DIR/history/${project_name}/${NC}"
+        echo -e "${DIM}State and history preserved in $(meta_file_for "$project_name")${NC}"
         ;;
 
     list)
@@ -352,7 +357,7 @@ case "${1:-help}" in
                 state=$(project_state "$p")
                 pstatus=$(echo "$state" | jq -r '.status')
                 if [ "$pstatus" = "working" ]; then
-                    ticket=$(echo "$state" | jq -r '.ticket')
+                    ticket=$(echo "$state" | jq -r '.current.ticket')
                     echo -e "  ${CYAN}$p${NC} ${DIM}($jira_proj)${NC} — ${GREEN}working on $ticket${NC}"
                 else
                     echo -e "  ${CYAN}$p${NC} ${DIM}($jira_proj)${NC} — ${YELLOW}idle${NC}"
@@ -397,31 +402,32 @@ case "${1:-help}" in
     history)
         project_name="${2:-}"
         if [ -n "$project_name" ]; then
-            hist_dir="$AUTOPILOT_DIR/history/${project_name}"
+            projects_to_show="$project_name"
         else
-            hist_dir="$AUTOPILOT_DIR/history"
+            projects_to_show=$(list_projects)
         fi
 
-        found=false
-        for f in "$hist_dir"/*.json "$hist_dir"/**/*.json; do
-            [ -f "$f" ] || continue
-            found=true
-            h_ticket=$(jq -r '.ticket' "$f")
-            h_outcome=$(jq -r '.outcome' "$f")
-            h_completed=$(jq -r '.completed_at' "$f")
-            h_details=$(jq -r '.details // "N/A"' "$f")
-            h_project=$(jq -r '.project // "?"' "$f")
-
-            if [ "$h_outcome" = "completed" ]; then
-                echo -e "  ${GREEN}$h_ticket${NC} ${DIM}($h_project)${NC} — completed ($h_completed)"
-                echo "    PR: $h_details"
-            else
-                echo -e "  ${RED}$h_ticket${NC} ${DIM}($h_project)${NC} — failed ($h_completed)"
-                echo "    Reason: $h_details"
+        has_any=false
+        while read -r p; do
+            [ -z "$p" ] && continue
+            meta=$(meta_read_project "$p")
+            history_len=$(echo "$meta" | jq '.history | length')
+            if [ "$history_len" -gt 0 ]; then
+                has_any=true
+                echo "$meta" | jq -r --arg proj "$p" '.history[] | "\(.outcome)\t\(.ticket)\t\($proj)\t\(.completed_at // "?")\t\(.details // "N/A")"' | \
+                while IFS=$'\t' read -r h_outcome h_ticket h_project h_completed h_details; do
+                    if [ "$h_outcome" = "completed" ]; then
+                        echo -e "  ${GREEN}$h_ticket${NC} ${DIM}($h_project)${NC} — completed ($h_completed)"
+                        echo "    PR: $h_details"
+                    else
+                        echo -e "  ${RED}$h_ticket${NC} ${DIM}($h_project)${NC} — failed ($h_completed)"
+                        echo "    Reason: $h_details"
+                    fi
+                    echo ""
+                done
             fi
-            echo ""
-        done
-        if [ "$found" = false ]; then
+        done <<< "$projects_to_show"
+        if [ "$has_any" = false ]; then
             echo "No history yet."
         fi
         ;;
@@ -435,15 +441,16 @@ case "${1:-help}" in
             exit 1
         fi
 
-        state_file="$AUTOPILOT_DIR/state/${project_name}.json"
-        if [ ! -f "$state_file" ] || [ "$(jq -r '.status' "$state_file" 2>/dev/null)" != "working" ]; then
+        meta=$(meta_read_project "$project_name")
+        pstatus=$(echo "$meta" | jq -r '.status')
+        if [ "$pstatus" != "working" ]; then
             echo -e "${YELLOW}$project_name is not working on anything.${NC}"
             exit 0
         fi
 
-        ticket=$(jq -r '.ticket' "$state_file")
-        worktree=$(jq -r '.worktree_name' "$state_file")
-        worktree_path=$(jq -r '.worktree_path' "$state_file")
+        ticket=$(echo "$meta" | jq -r '.current.ticket')
+        worktree=$(echo "$meta" | jq -r '.current.worktree_name')
+        worktree_path=$(echo "$meta" | jq -r '.current.worktree_path')
 
         echo -e "${YELLOW}Stopping $ticket ($worktree)...${NC}"
 
@@ -457,7 +464,6 @@ case "${1:-help}" in
             # Kill background processes via PID files
             for pidfile in "$PIDS_DIR/${worktree}"-*.pid; do
                 [ -f "$pidfile" ] || continue
-                local pid
                 pid=$(cat "$pidfile" 2>/dev/null || echo "")
                 if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
                     kill "$pid" 2>/dev/null && echo "  Killed process $pid ($(basename "$pidfile" .pid))"
@@ -481,13 +487,13 @@ case "${1:-help}" in
             git -C "${PROJECT_DIR:-}" worktree prune 2>/dev/null
         fi
 
-        # Clean markers
-        rm -f "$AUTOPILOT_DIR/markers/${worktree}".{done,failed,exit_code} 2>/dev/null
+        # Clean up any leftover prompt files
         rm -f "$AUTOPILOT_DIR/prompts/${worktree}".{sh,md} 2>/dev/null
 
-        # Reset state
-        echo '{"status":"idle"}' > "$state_file"
-        rm -f "$AUTOPILOT_DIR/state/${project_name}.lock"
+        # Update metadata: add to history as stopped, set idle
+        meta_write_project "$project_name" "$(echo "$meta" | jq \
+            --arg now "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+            '.status = "idle" | .history += [.current + {outcome: "failed", details: "Manually stopped", completed_at: $now}] | .current = null')"
 
         echo -e "${GREEN}Stopped. $project_name is idle.${NC}"
         ;;
@@ -502,22 +508,17 @@ case "${1:-help}" in
 
         if [ "$project_name" = "--all" ]; then
             echo -e "${YELLOW}Resetting ALL projects to idle...${NC}"
-            for sf in "$AUTOPILOT_DIR/state/"*.json; do
-                [ -f "$sf" ] && echo '{"status":"idle"}' > "$sf"
+            for mf in "$PROJECTS_DIR/"*.state.json; do
+                [ -f "$mf" ] || continue
+                p=$(basename "$mf" .state.json)
+                meta=$(cat "$mf")
+                # Preserve history, just reset status and current
+                meta_write_project "$p" "$(echo "$meta" | jq '.status = "idle" | .current = null | .lock_pid = null')"
             done
-            rm -f "$AUTOPILOT_DIR/markers/"*.done "$AUTOPILOT_DIR/markers/"*.failed "$AUTOPILOT_DIR/markers/"*.exit_code
-            rm -f "$AUTOPILOT_DIR/state/"*.lock
         else
             echo -e "${YELLOW}Resetting $project_name to idle...${NC}"
-            echo '{"status":"idle"}' > "$AUTOPILOT_DIR/state/${project_name}.json"
-            rm -f "$AUTOPILOT_DIR/state/${project_name}.lock"
-            # Clean markers for this project's worktrees
-            if [ -f "$PROJECTS_DIR/${project_name}.env" ]; then
-                # shellcheck source=/dev/null
-                source "$PROJECTS_DIR/${project_name}.env" 2>/dev/null
-                pn="${PROJECT_NAME:-$project_name}"
-                rm -f "$AUTOPILOT_DIR/markers/${pn}-"*.done "$AUTOPILOT_DIR/markers/${pn}-"*.failed "$AUTOPILOT_DIR/markers/${pn}-"*.exit_code 2>/dev/null || true
-            fi
+            meta=$(meta_read_project "$project_name")
+            meta_write_project "$project_name" "$(echo "$meta" | jq '.status = "idle" | .current = null | .lock_pid = null')"
         fi
         echo -e "${GREEN}Done.${NC}"
         ;;
