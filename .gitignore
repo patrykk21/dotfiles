@@ -70,3 +70,17 @@ zed/embeddings/
 zed/prompts/
 
 !starship.toml
+
+!autopilot/
+!autopilot/**
+
+# Exclude machine-local autopilot files
+autopilot/projects/
+autopilot/state/
+autopilot/history/
+autopilot/logs/
+autopilot/markers/
+autopilot/prompts/
+autopilot/enabled
+autopilot/launchd-stdout.log
+autopilot/launchd-stderr.log

@@ -24,6 +24,9 @@ git clone https://github.com/patrykk21/dotfiles.git ~/.config
 - **[Git](./git/)** - Version control configuration and aliases
 - **[GitHub CLI](./gh/)** - GitHub command-line tool settings
 
+### Automation
+- **[Autopilot](./autopilot/)** - Autonomous Jira-to-PR pipeline powered by Claude Code
+
 ### System & Productivity
 - **[Aerospace](./aerospace/)** - Tiling window manager for macOS
 - **[Karabiner](./karabiner/)** - Keyboard customization for macOS
