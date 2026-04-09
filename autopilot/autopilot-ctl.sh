@@ -66,7 +66,7 @@ scheduler_load() {
             runner_path=$(cygpath -w "$AUTOPILOT_DIR/autopilot-runner.sh" 2>/dev/null || echo "$AUTOPILOT_DIR/autopilot-runner.sh")
             local bash_path
             bash_path=$(cygpath -w "$(command -v bash)" 2>/dev/null || echo "bash")
-            schtasks.exe //Create //F //TN "$task_name" //SC MINUTE //MO 5 \
+            schtasks.exe //Create //F //TN "$task_name" //SC MINUTE //MO 1 \
                 //TR "\"$bash_path\" \"$runner_path\"" 2>/dev/null || true
             ;;
     esac
@@ -116,7 +116,7 @@ scheduler_status_line() {
         windows)
             local task_name="Autopilot-${SERVICE_NAME}"
             if schtasks.exe //Query //TN "$task_name" &>/dev/null; then
-                echo -e "  Schedule: ${GREEN}ACTIVE${NC} (Task Scheduler, every 5m)"
+                echo -e "  Schedule: ${GREEN}ACTIVE${NC} (Task Scheduler, every 1m)"
             else
                 echo -e "  Schedule: ${YELLOW}NOT CONFIGURED${NC} (run 'autopilot setup')"
             fi

@@ -121,7 +121,7 @@ install_task_scheduler() {
     local bash_path
     bash_path=$(cygpath -w "$(command -v bash)" 2>/dev/null || echo "bash")
 
-    schtasks.exe //Create //F //TN "$task_name" //SC MINUTE //MO 5 \
+    schtasks.exe //Create //F //TN "$task_name" //SC MINUTE //MO 1 \
         //TR "\"$bash_path\" \"$runner_path\"" 2>&1
 
     if [ $? -eq 0 ]; then
