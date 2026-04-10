@@ -64,9 +64,8 @@ Work autonomously to implement it end-to-end:
 4. **Verify** — run the project's test, lint, typecheck commands. Fix any errors.
 5. **Commit & push** — format: `[TICKET-KEY] Description`. Push to current branch.
 6. **Create PR** — against the project's base branch with a descriptive summary. Do NOT assign the PR — the autopilot scheduler handles assignment after CI and reviews pass.
-7. **Request CodeRabbit review** — after creating the PR, post a comment `@coderabbitai review` on the PR to trigger an automated code review. Use `gh pr comment <number> --body "@coderabbitai review"`.
-8. **Comment on ticket** — add the PR link and brief summary back on the original ticket (use the platform's MCP tools if available)
-9. **Transition ticket** — move the ticket to "Code Review" status. For Jira: get available transitions and prefer these names in order: "Code Review", "Review", "In Review". Do NOT use "Design Review" or "Design in progress" — those are for design work, not code. For other platforms: update status if the MCP tools support it.
+7. **Comment on ticket** — add the PR link and brief summary back on the original ticket (use the platform's MCP tools if available)
+8. **Transition ticket** — move the ticket to "Code Review" status. For Jira: get available transitions and prefer these names in order: "Code Review", "Review", "In Review". Do NOT use "Design Review" or "Design in progress" — those are for design work, not code. For other platforms: update status if the MCP tools support it.
 
 ### Step 3: Signal completion
 If the environment variables are set (they are when launched by the autopilot scheduler):

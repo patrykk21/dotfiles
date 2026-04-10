@@ -1302,6 +1302,35 @@ check_pending_assignment() {
     return 0
 }
 
+# --- Stale Marker Cleanup ---
+# Remove markers for worktrees with no active session (tmux or PID)
+cleanup_stale_markers() {
+    local markers_dir="$AUTOPILOT_DIR/markers"
+    [ -d "$markers_dir" ] || return 0
+
+    for f in "$markers_dir"/*; do
+        [ -f "$f" ] || continue
+        local name wt
+        name=$(basename "$f")
+        # Extract worktree name — strip .done/.waiting/.failed/.exit_code suffix
+        wt=$(echo "$name" | sed 's/\.\(done\|waiting\|failed\|exit_code\)$//')
+
+        # Keep markers for worktrees with live sessions
+        if [ "$HAS_TMUX" = true ] && tmux has-session -t "$wt" 2>/dev/null; then
+            continue
+        fi
+        # Check PID file fallback
+        if [ -f "$PIDS_DIR/${wt}-claude.pid" ]; then
+            local pid
+            pid=$(cat "$PIDS_DIR/${wt}-claude.pid" 2>/dev/null || echo "")
+            [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null && continue
+        fi
+
+        # No live session — remove stale marker
+        rm -f "$f"
+    done
+}
+
 # --- Main Flow ---
 main() {
     mkdir -p "$AUTOPILOT_DIR/logs" "$AUTOPILOT_DIR/prompts" "$AUTOPILOT_DIR/projects"
@@ -1317,6 +1346,9 @@ main() {
     fi
 
     log "INFO" "=== Autopilot cycle started ($PROJECT_NAME, tracker: $TRACKER) ==="
+
+    # Clean up markers for dead sessions
+    cleanup_stale_markers
 
     local meta
     meta=$(meta_read)
