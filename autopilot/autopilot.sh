@@ -1060,10 +1060,14 @@ STATES (write exactly these):
 WHEN TO TRANSITION:
   Session starts                → echo \"working|reading ticket and planning\" > \$AUTOPILOT_STATE_MARKER
   Actively implementing         → echo \"working|implementing changes\" > \$AUTOPILOT_STATE_MARKER
-  Created or updated a PR       → echo \"awaiting_ci|PR_URL\" > \$AUTOPILOT_STATE_MARKER
+  Created or updated a PR       → echo \"awaiting_ci|PR_URL\" > \$AUTOPILOT_STATE_MARKER, then MONITOR CI (poll gh pr checks every 30s, wait 60s after pass for CodeRabbit, check reviews, fix if needed, then set awaiting_review)
+  CI passed + reviews done      → echo \"awaiting_review|PR_URL\" > \$AUTOPILOT_STATE_MARKER
+  Review requested changes      → echo \"working|fixing review comments\" > \$AUTOPILOT_STATE_MARKER, fix, push, go back to awaiting_ci
   Need user input               → echo \"needs_input|your question\" > \$AUTOPILOT_STATE_MARKER
   User responded                → echo \"working|addressing feedback\" > \$AUTOPILOT_STATE_MARKER
   Cannot complete               → echo \"failed|reason\" > \$AUTOPILOT_STATE_MARKER
+
+CRITICAL: After setting awaiting_ci, DO NOT STOP. Poll CI, wait for CodeRabbit, address review comments, then set awaiting_review.
 
 IMPORTANT: Update this file EVERY time your state changes. The tmux worktree picker and autopilot scheduler read it to show your current status.
 

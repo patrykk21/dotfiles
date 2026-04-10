@@ -91,6 +91,37 @@ Then update it throughout your work. Format: `STATE|details`
 
 After the user responds to a question, transition back to `working|addressing feedback`.
 
+### Step 4: Monitor CI and reviews after PR creation
+After setting `awaiting_ci`, **do not stop working**. Actively monitor the PR:
+
+1. **Poll CI status** every 30 seconds using `gh pr checks <number>`. Watch for all checks to complete.
+   ```bash
+   # Loop until CI finishes
+   while true; do
+       STATES=$(gh pr checks <PR_NUMBER> --json state -q '.[].state' 2>/dev/null | sort -u)
+       if echo "$STATES" | grep -q "PENDING\|QUEUED"; then
+           sleep 30
+           continue
+       fi
+       break
+   done
+   ```
+
+2. **Wait 60 seconds after CI passes** — CodeRabbit marks its check as passed before it finishes posting review comments. Give it time.
+
+3. **Check for review comments** — read the PR reviews and comments:
+   ```bash
+   gh pr view <PR_NUMBER> --json reviews,comments
+   ```
+
+4. **If CodeRabbit or any reviewer requested changes**, update the marker to `working|addressing review comments` and fix the issues. Then push, and go back to step 1.
+
+5. **If all reviews pass or only have minor comments**, update the marker:
+   ```bash
+   echo "awaiting_review|PR_URL" > "$AUTOPILOT_STATE_MARKER"
+   ```
+   This means CI passed and you're waiting for the human assignee to review.
+
 This marker is how the tmux worktree picker and autopilot scheduler show your current status. **Always update it.**
 
 ### Rules for ticket mode
