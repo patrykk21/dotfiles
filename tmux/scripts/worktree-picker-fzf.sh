@@ -141,28 +141,28 @@ get_worktrees() {
                 # Extract the status after ticket=
                 rest = substr(autopilot_states, index(autopilot_states, pattern) + length(pattern))
                 sub(/;.*/, "", rest)
-                if (rest == "pending_assignment") status_text = "CI/Review"
-                else if (rest == "working") status_text = "AI Working"
+                if (rest == "pending_assignment") status_text = "[CI/REVIEW]"
+                else if (rest == "working") status_text = "[AI WORKING]"
             }
         }
 
         # Check waiting marker (overrides working status)
-        if (status_text == "" || status_text == "AI Working") {
+        if (status_text == "" || status_text == "[AI WORKING]") {
             waiting_marker = autopilot_dir "/markers/" ticket ".waiting"
             if (system("test -f " waiting_marker) == 0) {
                 needs_input = 1
-                status_text = "⚠ Needs input"
+                status_text = "[NEEDS INPUT]"
             }
         }
 
         # Fallback to session-based status
         if (status_text == "") {
             if (session_status == "active") {
-                status_text = "● Active"
+                status_text = "[ACTIVE]"
             } else if (system("test -f " metadata_file) == 0) {
-                status_text = "○ Saved"
+                status_text = "[SAVED]"
             } else {
-                status_text = "○ Inactive"
+                status_text = "[INACTIVE]"
             }
         }
 
@@ -255,7 +255,7 @@ fi
 # Use fzf (tmux display-popup creates the popup window)
 selected=$(echo "$WORKTREE_DATA" | fzf \
     --prompt=" Select worktree: " \
-    --header=$'\n'"$SEPARATOR"$'\n    🤖 AI working   ⚠ Needs input   ⏳ CI/Review   ● Active   ○ Saved   → Current   [AUTO] Autopilot\n'"$SEPARATOR"$'\n    ↵ switch   ctrl-x delete   ctrl-k kill session   ctrl-r reload' \
+    --header=$'\n'"$SEPARATOR"$'\n    [AI WORKING] [NEEDS INPUT] [CI/REVIEW] [ACTIVE] [SAVED] [AUTO] Autopilot  > Needs you\n'"$SEPARATOR"$'\n    enter switch   ctrl-x delete   ctrl-k kill session   ctrl-r reload' \
     --header-lines=2 \
     --ansi \
     --color="fg:250,bg:235,hl:114,fg+:235,bg+:114,hl+:235,prompt:114,pointer:114,header:243,border:114" \
