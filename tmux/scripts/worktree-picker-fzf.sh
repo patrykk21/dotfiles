@@ -166,14 +166,12 @@ get_worktrees() {
             }
         }
 
-        # Status icon
+        # Status icon — only arrow for current, dot for active/inactive
         if (path == current) {
-            if (needs_input) status_icon = "→ > "
-            else if (session_status == "active") status_icon = "→ ● "
+            if (session_status == "active") status_icon = "→ ● "
             else status_icon = "→ ○ "
         } else {
-            if (needs_input) status_icon = "  > "
-            else if (session_status == "active") status_icon = "  ● "
+            if (session_status == "active") status_icon = "  ● "
             else status_icon = "  ○ "
         }
 
@@ -255,7 +253,7 @@ fi
 # Use fzf (tmux display-popup creates the popup window)
 selected=$(echo "$WORKTREE_DATA" | fzf \
     --prompt=" Select worktree: " \
-    --header=$'\n'"$SEPARATOR"$'\n    [AI WORKING] [NEEDS INPUT] [CI/REVIEW] [ACTIVE] [SAVED] [AUTO] Autopilot  > Needs you\n'"$SEPARATOR"$'\n    enter switch   ctrl-x delete   ctrl-k kill session   ctrl-r reload' \
+    --header=$'\n'"$SEPARATOR"$'\n    [AI WORKING] [NEEDS INPUT] [CI/REVIEW] [ACTIVE] [SAVED] [AUTO] Autopilot\n'"$SEPARATOR"$'\n    enter switch   ctrl-x delete   ctrl-k kill session   ctrl-r reload' \
     --header-lines=2 \
     --ansi \
     --color="fg:250,bg:235,hl:114,fg+:235,bg+:114,hl+:235,prompt:114,pointer:114,header:243,border:114" \
