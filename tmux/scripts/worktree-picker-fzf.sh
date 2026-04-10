@@ -36,8 +36,8 @@ write_switch_session() {
 # Get list of worktrees with metadata-enhanced info
 get_worktrees() {
     # Print header (without delimiter so it shows in fzf)
-    printf "%-4s %-50s %-10s %-10s %-6s %s\n" "" "NAME" "TYPE" "SESSION" "PORT" "BRANCH"
-    printf "%-4s %-50s %-10s %-10s %-6s %s\n" "" "────" "────" "───────" "────" "──────"
+    printf "%-4s %-50s %-10s %-16s %-6s %s\n" "" "NAME" "TYPE" "STATUS" "PORT" "BRANCH"
+    printf "%-4s %-50s %-10s %-16s %-6s %s\n" "" "────" "────" "──────" "────" "──────"
     
     # Process each worktree
     git worktree list --porcelain | awk -v current="$CURRENT_WORKTREE" -v repo_name="$REPO_NAME" -v safe_repo_name="$SAFE_REPO_NAME" -v worktrees_base="$WORKTREES_BASE" '
@@ -90,95 +90,91 @@ get_worktrees() {
         
         # Check session status
         if (type_text == "[BASE]") {
-            # For base repo, check if repository-specific base session exists
+            # For base repo
             base_session_name = safe_repo_name "-base"
             cmd = "tmux has-session -t " base_session_name " 2>/dev/null && echo active || echo inactive"
             cmd | getline session_status
             close(cmd)
-            
-            if (session_status == "active") {
-                session_text = "[SESSION]"
-            } else {
-                # Check if metadata exists for base
-                metadata_file = worktrees_base "/" repo_name "/.worktree-meta/sessions/" base_session_name ".json"
-                if (system("test -f " metadata_file) == 0) {
-                    session_text = "[METADATA]"
-                }
-            }
         } else {
-            # For worktrees, check metadata and session as before
-            metadata_file = worktrees_base "/" repo_name "/.worktree-meta/sessions/" ticket ".json"
-            if (system("test -f " metadata_file) == 0) {
-                # Metadata exists, check if tmux session also exists
-                cmd = "tmux has-session -t " ticket " 2>/dev/null && echo active || echo inactive"
-                cmd | getline session_status
-                close(cmd)
-                
-                if (session_status == "active") {
-                    session_text = "[SESSION]"
-                } else {
-                    session_text = "[METADATA]"  # Has metadata but no active session
-                }
-            } else {
-                # No metadata, check if session exists anyway
-                cmd = "tmux has-session -t " ticket " 2>/dev/null && echo active || echo inactive"
-                cmd | getline session_status
-                close(cmd)
-                
-                if (session_status == "active") {
-                    session_text = "[ORPHAN]"  # Has session but no metadata
-                }
-            }
-        }
-        
-        # Check if autopilot is waiting for input on this worktree
-        waiting_marker = ENVIRON["HOME"] "/.config/autopilot/markers/" ticket ".waiting"
-        needs_input = 0
-        if (system("test -f " waiting_marker) == 0) {
-            needs_input = 1
+            # For worktrees — check tmux session
+            cmd = "tmux has-session -t " ticket " 2>/dev/null && echo active || echo inactive"
+            cmd | getline session_status
+            close(cmd)
         }
 
-        # Format output — > means active + needs your attention
-        if (path == current) {
-            if (needs_input) {
-                status_icon = "→ > "
-            } else if (session_status == "active") {
-                status_icon = "→ ● "
-            } else {
-                status_icon = "→ ○ "
-            }
-        } else {
-            if (needs_input) {
-                status_icon = "  > "
-            } else if (session_status == "active") {
-                status_icon = "  ● "
-            } else {
-                status_icon = "  ○ "
-            }
-        }
-
-        # Get port and autopilot flag from metadata if it is a worktree session
-        port_text = "-"
+        # --- Determine STATUS (single source of truth) ---
+        # Priority: autopilot state > waiting marker > session status > metadata
+        autopilot_dir = ENVIRON["HOME"] "/.config/autopilot"
+        status_text = ""
         is_autopilot = 0
-        if (type_text == "[WORKTREE]" && session_text != "[NO SESSION]") {
-            metadata_file = worktrees_base "/" repo_name "/.worktree-meta/sessions/" ticket ".json"
-            cmd = "test -f " metadata_file " && jq -r \".port // \\\"-\\\"\" " metadata_file " 2>/dev/null || echo \"-\""
+        needs_input = 0
+        port_text = "-"
+
+        # Read worktree metadata (port, autopilot flag)
+        metadata_file = worktrees_base "/" repo_name "/.worktree-meta/sessions/" ticket ".json"
+        if (system("test -f " metadata_file) == 0) {
+            cmd = "jq -r \".port // \\\"-\\\"\" " metadata_file " 2>/dev/null || echo \"-\""
             cmd | getline port_text
             close(cmd)
-            cmd = "test -f " metadata_file " && jq -r \".autopilot // false\" " metadata_file " 2>/dev/null || echo \"false\""
+            cmd = "jq -r \".autopilot // false\" " metadata_file " 2>/dev/null || echo \"false\""
             cmd | getline ap_flag
             close(cmd)
             if (ap_flag == "true") is_autopilot = 1
         }
 
-        # Show autopilot origin in type column
         if (is_autopilot) type_text = "[AUTO]"
+
+        # Check autopilot project state for this worktree
+        if (is_autopilot) {
+            # Find the project state file that references this worktree
+            cmd = "for f in " autopilot_dir "/projects/*.state.json; do [ -f \"$f\" ] && jq -r '.status + \"|\" + (.current.worktree_name // \"\")' \"$f\" 2>/dev/null; done"
+            while ((cmd | getline state_line) > 0) {
+                split(state_line, sp, "|")
+                if (sp[2] == ticket) {
+                    if (sp[1] == "pending_assignment") status_text = "⏳ CI/Review"
+                    else if (sp[1] == "working") status_text = "🤖 Working"
+                    break
+                }
+            }
+            close(cmd)
+        }
+
+        # Check waiting marker (overrides working status)
+        if (status_text == "" || status_text == "🤖 Working") {
+            waiting_marker = autopilot_dir "/markers/" ticket ".waiting"
+            if (system("test -f " waiting_marker) == 0) {
+                needs_input = 1
+                status_text = "⚠ Needs input"
+            }
+        }
+
+        # Fallback to session-based status
+        if (status_text == "") {
+            if (session_status == "active") {
+                status_text = "● Active"
+            } else if (system("test -f " metadata_file) == 0) {
+                status_text = "○ Saved"
+            } else {
+                status_text = "○ Inactive"
+            }
+        }
+
+        # Status icon
+        if (path == current) {
+            if (needs_input) status_icon = "→ > "
+            else if (session_status == "active") status_icon = "→ ● "
+            else status_icon = "→ ○ "
+        } else {
+            if (needs_input) status_icon = "  > "
+            else if (session_status == "active") status_icon = "  ● "
+            else status_icon = "  ○ "
+        }
 
         # Truncate ticket name to 48 chars for alignment
         display_name = substr(ticket, 1, 48)
 
-        # Output format — no PATH column (derived from name when needed)
-        printf "%s%-50s %-10s %-10s %-6s %s\n", status_icon, display_name, type_text, session_text, port_text, branch
+        # Output format
+        printf "%s%-50s %-10s %-16s %-6s %s\n", status_icon, display_name, type_text, status_text, port_text, branch
     }'
 }
 
@@ -252,7 +248,7 @@ fi
 # Use fzf (tmux display-popup creates the popup window)
 selected=$(echo "$WORKTREE_DATA" | fzf \
     --prompt=" Select worktree: " \
-    --header=$'\n'"$SEPARATOR"$'\n    ● Active   ○ Inactive   > Needs input   → Current   [AUTO] Autopilot   [SESSION] Active   [METADATA] Saved\n'"$SEPARATOR"$'\n    ↵ switch   ctrl-x delete   ctrl-k kill session   ctrl-r reload' \
+    --header=$'\n'"$SEPARATOR"$'\n    🤖 AI working   ⚠ Needs input   ⏳ CI/Review   ● Active   ○ Saved   → Current   [AUTO] Autopilot\n'"$SEPARATOR"$'\n    ↵ switch   ctrl-x delete   ctrl-k kill session   ctrl-r reload' \
     --header-lines=2 \
     --ansi \
     --color="fg:250,bg:235,hl:114,fg+:235,bg+:114,hl+:235,prompt:114,pointer:114,header:243,border:114" \
