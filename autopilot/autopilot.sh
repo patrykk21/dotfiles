@@ -1378,12 +1378,12 @@ monitor_awaiting_reviews() {
 
         case "$review_decision" in
             CHANGES_REQUESTED)
-                log "INFO" "PR #$pr_number ($wt_name): changes requested — sending /fix-pr-comments"
+                log "INFO" "PR #$pr_number ($wt_name): changes requested — sending /with-markers /fix-pr-comments"
                 # Update marker so we don't re-send next cycle
                 echo "working|fixing review comments" > "$f"
                 # Send command to Claude session
                 if [ "$HAS_TMUX" = true ] && tmux has-session -t "$wt_name" 2>/dev/null; then
-                    tmux send-keys -t "$wt_name:1" "/fix-pr-comments" Enter
+                    tmux send-keys -t "$wt_name:1" "/with-markers /fix-pr-comments" Enter
                 fi
                 ;;
             APPROVED)
