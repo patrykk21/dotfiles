@@ -1332,8 +1332,12 @@ check_pending_assignment() {
     # CI done + reviews done (or submitted) — assign and move to idle
     log "INFO" "PR #$pr_number ($ticket): ready — assigning to $PR_ASSIGNEE"
     # Run gh from project dir so it picks up the correct remote
-    if gh pr edit "$pr_number" --add-assignee "$PR_ASSIGNEE" 2>/dev/null; then
-        log "INFO" "PR #$pr_number assigned to $PR_ASSIGNEE"
+    # Get current user to unassign
+    local current_user
+    current_user=$(gh api user -q '.login' 2>/dev/null || echo "")
+
+    if gh pr edit "$pr_number" --add-assignee "$PR_ASSIGNEE" ${current_user:+--remove-assignee "$current_user"} 2>/dev/null; then
+        log "INFO" "PR #$pr_number assigned to $PR_ASSIGNEE${current_user:+, unassigned $current_user}"
     else
         log "WARN" "Failed to assign PR #$pr_number (continuing anyway)"
     fi
