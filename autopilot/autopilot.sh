@@ -574,11 +574,24 @@ You are choosing the next task for an autonomous coding agent to implement.
 ## Instructions
 - Pick the task that should be done NEXT considering dependencies and priority.
 - If task B depends on task A, A must be completed first (check completed history for matching task IDs).
-- If the picked task depends on a completed task whose branch still exists in "Existing Branches", set base_branch to that branch name so the new work builds on top of it.
-- Otherwise set base_branch to the default base branch shown below.
-- If NO task can be picked (all blocked by unmet dependencies), return {"pick": null, "reasoning": "..."}.
 - Priority ordering: 1=urgent, 2=high, 3=normal, 4=low, null=none. Prefer higher priority.
 - Consider task descriptions and tags for context about what makes sense to do first.
+
+## Branch Selection (CRITICAL)
+Determine which branch the new worktree should be based on:
+
+1. **Check existing branches for related work.** Look at "Existing Branches" and "Existing Worktrees" for branches that match the same epic, story, or feature area as the picked task. Indicators of related work:
+   - Branches with the same parent ticket key (e.g., ECH-571, ECH-572, ECH-573 are siblings under the same epic)
+   - Branches with similar names suggesting the same feature area (e.g., "biome-linting-phase-1" and a task for "biome-linting-phase-2")
+   - Tasks that are sequential phases of the same work (Phase 1, Phase 2, etc.)
+
+2. **If a related branch exists**, set base_branch to that branch name. The new work should build on top of existing changes rather than starting fresh from the default branch.
+
+3. **If multiple related branches exist**, prefer the most recently completed one (check completed_history), or the one whose ticket number is closest and highest (e.g., for ECH-575, prefer ECH-574 over ECH-571).
+
+4. **If no related branches exist**, use the default base branch.
+
+- If NO task can be picked (all blocked by unmet dependencies), return {"pick": null, "reasoning": "..."}.
 
 Return ONLY valid JSON with no markdown fences:
 {"pick": {"task_id": "...", "name": "...", "base_branch": "...", "url": "..."}, "reasoning": "one sentence explaining your choice"}
