@@ -274,8 +274,13 @@ case "${1:-help}" in
                     else
                         echo -e "      Session:  ${RED}DEAD${NC}"
                     fi
+                elif [ "$pstatus" = "pending_assignment" ]; then
+                    ticket=$(echo "$state" | jq -r '.current.ticket')
+                    pr_url=$(echo "$state" | jq -r '.current.pr_url // "?"')
+                    echo -e "  ${CYAN}$project${NC} ${DIM}($jira_proj)${NC} — ${BLUE}AWAITING CI/REVIEW${NC}"
+                    echo "      Ticket:   $ticket"
+                    echo -e "      PR:       ${DIM}$pr_url${NC}"
                 elif [ "$pstatus" = "failed" ]; then
-                    # Get last failed ticket from history
                     last_ticket=$(echo "$state" | jq -r '.history[-1].ticket // "unknown"')
                     echo -e "  ${CYAN}$project${NC} ${DIM}($jira_proj)${NC} — ${RED}FAILED${NC} ($last_ticket)"
                     echo -e "      Run: ${DIM}autopilot reset $project${NC} to retry"

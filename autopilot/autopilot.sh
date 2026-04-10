@@ -948,9 +948,17 @@ NOW=\$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
 if [ -f "\$COMPLETION_MARKER" ] && [ -s "\$COMPLETION_MARKER" ]; then
     DETAILS=\$(cat "\$COMPLETION_MARKER")
-    jq --arg details "\$DETAILS" --arg now "\$NOW" \\
-      '.status = "idle" | .history += [.current + {outcome: "completed", details: \$details, completed_at: \$now}] | .current = null' \\
-      "\$META_FILE" > "\${META_FILE}.tmp" && mv "\${META_FILE}.tmp" "\$META_FILE"
+    if [ -n "\$AUTOPILOT_PR_ASSIGNEE" ]; then
+        # PR needs CI/review before assignment — stay in pending_assignment
+        jq --arg details "\$DETAILS" --arg now "\$NOW" \\
+          '.status = "pending_assignment" | .current.pr_url = \$details | .current.completed_at = \$now' \\
+          "\$META_FILE" > "\${META_FILE}.tmp" && mv "\${META_FILE}.tmp" "\$META_FILE"
+    else
+        # No assignee configured — go straight to idle
+        jq --arg details "\$DETAILS" --arg now "\$NOW" \\
+          '.status = "idle" | .history += [.current + {outcome: "completed", details: \$details, completed_at: \$now}] | .current = null' \\
+          "\$META_FILE" > "\${META_FILE}.tmp" && mv "\${META_FILE}.tmp" "\$META_FILE"
+    fi
 elif [ -f "\$FAILURE_MARKER" ] && [ -s "\$FAILURE_MARKER" ]; then
     REASON=\$(cat "\$FAILURE_MARKER")
     jq --arg reason "\$REASON" --arg now "\$NOW" \\
@@ -1092,6 +1100,68 @@ check_active_work() {
     return 0
 }
 
+# --- Post-Completion PR Monitor ---
+# When status is "pending_assignment": check if CI passed + reviews done, then assign PR
+check_pending_assignment() {
+    [ -z "${PR_ASSIGNEE:-}" ] && return 1
+
+    local meta
+    meta=$(meta_read)
+    local status
+    status=$(echo "$meta" | jq -r '.status')
+    [ "$status" != "pending_assignment" ] && return 1
+
+    local pr_url ticket pr_number
+    pr_url=$(echo "$meta" | jq -r '.current.pr_url // empty')
+    ticket=$(echo "$meta" | jq -r '.current.ticket // empty')
+    pr_number=$(echo "$pr_url" | grep -oE '/pull/[0-9]+' | grep -oE '[0-9]+')
+
+    if [ -z "$pr_number" ]; then
+        log "WARN" "pending_assignment but no PR number found — moving to idle"
+        meta_set_idle_from_completion "$pr_url"
+        return 0
+    fi
+
+    # Check CI status
+    local ci_states
+    ci_states=$(gh pr checks "$pr_number" --json 'state' -q '.[].state' 2>/dev/null)
+
+    if echo "$ci_states" | grep -q "FAILURE"; then
+        log "WARN" "PR #$pr_number ($ticket): CI failed — assigning anyway for review"
+        # Assign even on CI failure so someone can fix it
+    elif echo "$ci_states" | grep -q "PENDING\|QUEUED"; then
+        log "INFO" "PR #$pr_number ($ticket): CI still running"
+        return 0
+    fi
+
+    # Check review status
+    local review_state
+    review_state=$(gh pr view "$pr_number" --json 'reviewDecision' -q '.reviewDecision' 2>/dev/null)
+
+    if [ "$review_state" != "APPROVED" ] && [ -n "$review_state" ] && [ "$review_state" != "null" ]; then
+        # Check if reviews have been submitted (even if not approved)
+        local review_count
+        review_count=$(gh pr view "$pr_number" --json 'reviews' -q '.reviews | length' 2>/dev/null || echo "0")
+        if [ "$review_count" = "0" ]; then
+            log "INFO" "PR #$pr_number ($ticket): no reviews submitted yet"
+            return 0
+        fi
+        log "INFO" "PR #$pr_number ($ticket): reviews submitted (state: $review_state) — assigning"
+    fi
+
+    # CI done + reviews done (or submitted) — assign and move to idle
+    log "INFO" "PR #$pr_number ($ticket): ready — assigning to $PR_ASSIGNEE"
+    if gh pr edit "$pr_number" --add-assignee "$PR_ASSIGNEE" 2>/dev/null; then
+        log "INFO" "PR #$pr_number assigned to $PR_ASSIGNEE"
+    else
+        log "WARN" "Failed to assign PR #$pr_number (continuing anyway)"
+    fi
+
+    # Move to idle + record in history
+    meta_set_idle_from_completion "$pr_url"
+    return 0
+}
+
 # --- Main Flow ---
 main() {
     mkdir -p "$AUTOPILOT_DIR/logs" "$AUTOPILOT_DIR/prompts" "$AUTOPILOT_DIR/projects"
@@ -1112,6 +1182,18 @@ main() {
     meta=$(meta_read)
     local status
     status=$(echo "$meta" | jq -r '.status')
+
+    # Check if we're waiting for CI/reviews before assigning PR
+    if [ "$status" = "pending_assignment" ]; then
+        check_pending_assignment
+        meta=$(meta_read)
+        status=$(echo "$meta" | jq -r '.status')
+        if [ "$status" = "pending_assignment" ]; then
+            # Still waiting — don't pick new work
+            log "INFO" "=== Autopilot cycle complete (waiting for CI/reviews) ==="
+            exit 0
+        fi
+    fi
 
     if [ "$status" = "working" ]; then
         check_active_work
