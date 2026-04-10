@@ -134,11 +134,14 @@ get_worktrees() {
 
         if (is_autopilot) type_text = "[AUTO]"
 
-        # Read Claude's state marker (format: STATE|details)
+        # Read Claude state marker (STATE then pipe then details)
         state_marker = autopilot_dir "/markers/" ticket ".state"
-        cmd = "test -f " state_marker " && cut -d'|' -f1 " state_marker " 2>/dev/null || echo ''"
-        cmd | getline claude_state
+        cmd = "test -f " state_marker " && head -1 " state_marker " 2>/dev/null"
+        cmd | getline claude_state_line
         close(cmd)
+        # Extract state (everything before first pipe)
+        claude_state = claude_state_line
+        sub(/\x7c.*/, "", claude_state)
 
         if (claude_state == "awaiting_ci") status_text = "[CI/REVIEW]"
         else if (claude_state == "working") status_text = "[AI WORKING]"
