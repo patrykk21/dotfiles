@@ -153,10 +153,98 @@ meta_set_idle_from_completion() {
     local details="$1"
     local meta
     meta=$(meta_read)
+
+    # Write /track entry before clearing current
+    local ticket started_at
+    ticket=$(echo "$meta" | jq -r '.current.ticket // empty')
+    started_at=$(echo "$meta" | jq -r '.current.started_at // empty')
+    if [ -n "$ticket" ] && [ -n "$started_at" ]; then
+        track_time_entry "$ticket" "$started_at" "$details"
+    fi
+
     meta_write "$(echo "$meta" | jq \
         --arg details "$details" \
         --arg now "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
         '.status = "idle" | .history += [.current + {outcome: "completed", details: $details, completed_at: $now}] | .current = null')"
+}
+
+# Write an entry to ~/.claude/time-track.md
+# Duration = from started_at to now (includes working + CI/review + feedback loops)
+track_time_entry() {
+    local ticket="$1" started_at="$2" details="$3"
+    local track_file="$HOME/.claude/time-track.md"
+    local now_epoch started_epoch
+
+    # Cross-platform epoch conversion
+    if date -j &>/dev/null; then
+        started_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$started_at" "+%s" 2>/dev/null || echo "0")
+    else
+        started_epoch=$(date -d "$started_at" "+%s" 2>/dev/null || echo "0")
+    fi
+    now_epoch=$(date "+%s")
+
+    local elapsed_secs=$(( now_epoch - started_epoch ))
+    local elapsed_hours=$(( elapsed_secs / 3600 ))
+    local elapsed_mins=$(( (elapsed_secs % 3600) / 60 ))
+
+    # Format duration
+    local duration
+    if [ "$elapsed_hours" -eq 0 ]; then
+        duration="${elapsed_mins}m"
+    elif [ "$elapsed_mins" -eq 0 ]; then
+        duration="${elapsed_hours}h"
+    else
+        duration="${elapsed_hours}h${elapsed_mins}m"
+    fi
+
+    local today today_header time_now day_name
+    today=$(date '+%Y-%m-%d')
+    day_name=$(date '+%A')
+    today_header="## $today ($day_name)"
+    time_now=$(date '+%H:%M')
+
+    # Extract PR number from details if it's a URL
+    local activity="Autopilot: $ticket"
+    local pr_num
+    pr_num=$(echo "$details" | grep -oE '/pull/[0-9]+' | grep -oE '[0-9]+')
+    [ -n "$pr_num" ] && activity="Autopilot: $ticket -> PR #$pr_num"
+
+    # Create file if it doesn't exist
+    if [ ! -f "$track_file" ]; then
+        cat > "$track_file" << 'EOF'
+# Time Track
+
+A running log of daily work activities.
+
+---
+
+EOF
+    fi
+
+    # Check if today's section exists
+    if grep -q "^## $today" "$track_file" 2>/dev/null; then
+        # Append to existing day section
+        local tmp
+        tmp=$(mktemp)
+        awk -v header="$today_header" -v entry="| $time_now | \`$ticket\` | $activity | $duration |" '
+            $0 == header { found=1 }
+            found && /^$/ && !added { print entry; added=1 }
+            { print }
+            END { if (found && !added) print entry }
+        ' "$track_file" > "$tmp" && mv "$tmp" "$track_file"
+    else
+        # Add new day section at the end
+        cat >> "$track_file" << EOF
+
+$today_header
+
+| Time | Category | Activity | Duration |
+|------|----------|----------|----------|
+| $time_now | \`$ticket\` | $activity | $duration |
+EOF
+    fi
+
+    log "INFO" "Tracked $ticket: $duration to time-track.md"
 }
 
 meta_set_failed() {
