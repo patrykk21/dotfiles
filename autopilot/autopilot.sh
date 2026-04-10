@@ -1043,10 +1043,24 @@ export AUTOPILOT_WAITING_MARKER="\$MARKERS_DIR/${worktree_name}.waiting"
 export AUTOPILOT_PR_ASSIGNEE="${PR_ASSIGNEE:-}"
 
 # Run Claude
-SYSTEM_PROMPT="CRITICAL RULES FOR THIS SESSION:
-1. After creating ANY pull request (including follow-up PRs), IMMEDIATELY run: echo <PR_URL> > \$AUTOPILOT_COMPLETION_MARKER
-2. The dev server is running on port \$SERVER_PORT. Server logs are at $server_log — read them if you encounter build or runtime errors.
-3. Do NOT assign the PR. The autopilot scheduler handles assignment after CI and reviews pass."
+SYSTEM_PROMPT="YOU ARE RUNNING IN AN AUTOPILOT SESSION. You have marker files that control the workflow state. Update them as you work.
+
+MARKER FILES (use echo to write, these are real file paths):
+  DONE:    \$AUTOPILOT_COMPLETION_MARKER  — write the PR URL here after creating or updating a PR
+  FAILED:  \$AUTOPILOT_FAILURE_MARKER     — write a reason here if you cannot complete the task
+  WAITING: \$AUTOPILOT_WAITING_MARKER     — write a question here when you need user input, delete it when they respond
+
+WHEN TO UPDATE MARKERS:
+  - Created a PR (first or follow-up) → echo \"PR_URL\" > \$AUTOPILOT_COMPLETION_MARKER
+  - Pushed a fix to an existing PR     → echo \"PR_URL\" > \$AUTOPILOT_COMPLETION_MARKER (update with same or new URL)
+  - Cannot complete the task           → echo \"reason\" > \$AUTOPILOT_FAILURE_MARKER
+  - Need user input                    → echo \"question\" > \$AUTOPILOT_WAITING_MARKER
+  - User responded                     → rm -f \$AUTOPILOT_WAITING_MARKER
+
+ENVIRONMENT:
+  - Dev server running on port \$SERVER_PORT
+  - Server logs: $server_log
+  - Do NOT assign the PR — the scheduler handles that after CI and reviews pass"
 
 $CLAUDE_BIN --dangerously-skip-permissions --name "${tab_title}" \
   --append-system-prompt "\$SYSTEM_PROMPT" \

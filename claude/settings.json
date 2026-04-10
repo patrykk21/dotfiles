@@ -16,26 +16,6 @@
             "command": "C:/Users/Patryk/.claude/notify.cmd Stop"
           }
         ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.claude/hooks/worktree-waiting-marker.sh",
-            "timeout": 5
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.claude/hooks/worktree-waiting-marker.sh",
-            "timeout": 5
-          }
-        ]
       }
     ],
     "Notification": [
@@ -64,15 +44,6 @@
           {
             "type": "command",
             "command": "node \"C:/Users/Patryk/.claude/hooks/gsd-context-monitor.js\""
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.config/claude/hooks/worktree-pr-tracker.sh",
-            "timeout": 5
           }
         ]
       }
