@@ -1350,7 +1350,7 @@ cleanup_stale_markers() {
         local name wt
         name=$(basename "$f")
         # Extract worktree name — strip marker suffix
-        wt=$(echo "$name" | sed 's/\.\(state\|done\|waiting\|failed\|exit_code\)$//')
+        wt=$(echo "$name" | sed -E 's/\.(state|done|waiting|failed|exit_code)$//')
 
         # Keep markers for worktrees with live sessions
         if [ "$HAS_TMUX" = true ] && tmux has-session -t "$wt" 2>/dev/null; then
