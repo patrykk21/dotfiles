@@ -66,6 +66,15 @@
             "command": "node \"C:/Users/Patryk/.claude/hooks/gsd-context-monitor.js\""
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.config/claude/hooks/worktree-pr-tracker.sh",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "CwdChanged": [
