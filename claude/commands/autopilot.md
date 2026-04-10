@@ -68,13 +68,29 @@ Work autonomously to implement it end-to-end:
 8. **Transition ticket** — move the ticket to "Code Review" status. For Jira: get available transitions and prefer these names in order: "Code Review", "Review", "In Review". Do NOT use "Design Review" or "Design in progress" — those are for design work, not code. For other platforms: update status if the MCP tools support it.
 
 ### Step 3: Update state marker
-If `$AUTOPILOT_STATE_MARKER` is set, update it as you work. Format: `STATE|details`
+**ALWAYS maintain a state marker file**, even if this session wasn't launched by the autopilot scheduler.
 
-The system prompt has the full list of states, but the key transition here is:
+First, ensure the marker path is set. If `$AUTOPILOT_STATE_MARKER` is not set, derive it from the current worktree:
 ```bash
-echo "awaiting_ci|PR_URL" > "$AUTOPILOT_STATE_MARKER"
+if [ -z "$AUTOPILOT_STATE_MARKER" ]; then
+    WORKTREE_NAME=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)")
+    export AUTOPILOT_STATE_MARKER="$HOME/.config/autopilot/markers/${WORKTREE_NAME}.state"
+    mkdir -p "$(dirname "$AUTOPILOT_STATE_MARKER")"
+fi
 ```
-This tells the scheduler your PR is ready for CI and review monitoring.
+
+Then update it throughout your work. Format: `STATE|details`
+
+| State | When to write |
+|-------|--------------|
+| `working\|description` | When actively coding, testing, committing |
+| `awaiting_ci\|PR_URL` | After creating or updating a PR |
+| `needs_input\|question` | When you need the user to answer something |
+| `failed\|reason` | When you cannot complete the task |
+
+After the user responds to a question, transition back to `working|addressing feedback`.
+
+This marker is how the tmux worktree picker and autopilot scheduler show your current status. **Always update it.**
 
 ### Rules for ticket mode
 - Work autonomously, but if genuinely uncertain, ask — the user may be watching
