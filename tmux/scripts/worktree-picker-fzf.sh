@@ -134,24 +134,25 @@ get_worktrees() {
 
         if (is_autopilot) type_text = "[AUTO]"
 
-        # Check autopilot project state for this worktree (pre-computed)
-        if (is_autopilot && autopilot_states != "") {
+        # Read Claude's state marker (format: STATE|details)
+        state_marker = autopilot_dir "/markers/" ticket ".state"
+        cmd = "test -f " state_marker " && cut -d'|' -f1 " state_marker " 2>/dev/null || echo ''"
+        cmd | getline claude_state
+        close(cmd)
+
+        if (claude_state == "awaiting_ci") status_text = "[CI/REVIEW]"
+        else if (claude_state == "working") status_text = "[AI WORKING]"
+        else if (claude_state == "needs_input") { status_text = "[NEEDS INPUT]"; needs_input = 1 }
+        else if (claude_state == "failed") status_text = "[FAILED]"
+
+        # Fallback: check autopilot project state (pre-computed from state.json)
+        if (status_text == "" && is_autopilot && autopilot_states != "") {
             pattern = ticket "="
             if (index(autopilot_states, pattern) > 0) {
-                # Extract the status after ticket=
                 rest = substr(autopilot_states, index(autopilot_states, pattern) + length(pattern))
                 sub(/;.*/, "", rest)
                 if (rest == "pending_assignment") status_text = "[CI/REVIEW]"
                 else if (rest == "working") status_text = "[AI WORKING]"
-            }
-        }
-
-        # Check waiting marker (overrides working status)
-        if (status_text == "" || status_text == "[AI WORKING]") {
-            waiting_marker = autopilot_dir "/markers/" ticket ".waiting"
-            if (system("test -f " waiting_marker) == 0) {
-                needs_input = 1
-                status_text = "[NEEDS INPUT]"
             }
         }
 

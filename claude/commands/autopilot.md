@@ -67,26 +67,14 @@ Work autonomously to implement it end-to-end:
 7. **Comment on ticket** — add the PR link and brief summary back on the original ticket (use the platform's MCP tools if available)
 8. **Transition ticket** — move the ticket to "Code Review" status. For Jira: get available transitions and prefer these names in order: "Code Review", "Review", "In Review". Do NOT use "Design Review" or "Design in progress" — those are for design work, not code. For other platforms: update status if the MCP tools support it.
 
-### Step 3: Signal completion
-If the environment variables are set (they are when launched by the autopilot scheduler):
-```bash
-[ -n "$AUTOPILOT_COMPLETION_MARKER" ] && echo "PR_URL" > "$AUTOPILOT_COMPLETION_MARKER"
-```
-On failure:
-```bash
-[ -n "$AUTOPILOT_FAILURE_MARKER" ] && echo "reason" > "$AUTOPILOT_FAILURE_MARKER"
-```
+### Step 3: Update state marker
+If `$AUTOPILOT_STATE_MARKER` is set, update it as you work. Format: `STATE|details`
 
-### Signaling when you need input
-If you need to ask the user a question, write the question to the waiting marker BEFORE asking:
+The system prompt has the full list of states, but the key transition here is:
 ```bash
-[ -n "$AUTOPILOT_WAITING_MARKER" ] && echo "Brief question summary" > "$AUTOPILOT_WAITING_MARKER"
+echo "awaiting_ci|PR_URL" > "$AUTOPILOT_STATE_MARKER"
 ```
-After the user responds, clear it:
-```bash
-[ -n "$AUTOPILOT_WAITING_MARKER" ] && rm -f "$AUTOPILOT_WAITING_MARKER"
-```
-This lets `autopilot status` show which sessions need attention.
+This tells the scheduler your PR is ready for CI and review monitoring.
 
 ### Rules for ticket mode
 - Work autonomously, but if genuinely uncertain, ask — the user may be watching

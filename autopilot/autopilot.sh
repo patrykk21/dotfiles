@@ -1037,25 +1037,34 @@ cd '$worktree_path'
 # so state updates even while Claude is still running in the TUI
 MARKERS_DIR="$AUTOPILOT_DIR/markers"
 mkdir -p "\$MARKERS_DIR"
+export AUTOPILOT_STATE_MARKER="\$MARKERS_DIR/${worktree_name}.state"
+# Legacy compat — some commands may still reference these
 export AUTOPILOT_COMPLETION_MARKER="\$MARKERS_DIR/${worktree_name}.done"
 export AUTOPILOT_FAILURE_MARKER="\$MARKERS_DIR/${worktree_name}.failed"
 export AUTOPILOT_WAITING_MARKER="\$MARKERS_DIR/${worktree_name}.waiting"
 export AUTOPILOT_PR_ASSIGNEE="${PR_ASSIGNEE:-}"
 
 # Run Claude
-SYSTEM_PROMPT="YOU ARE RUNNING IN AN AUTOPILOT SESSION. You have marker files that control the workflow state. Update them as you work.
+SYSTEM_PROMPT="YOU ARE RUNNING IN AN AUTOPILOT SESSION with a state marker file at:
+  \$AUTOPILOT_STATE_MARKER
 
-MARKER FILES (use echo to write, these are real file paths):
-  DONE:    \$AUTOPILOT_COMPLETION_MARKER  — write the PR URL here after creating or updating a PR
-  FAILED:  \$AUTOPILOT_FAILURE_MARKER     — write a reason here if you cannot complete the task
-  WAITING: \$AUTOPILOT_WAITING_MARKER     — write a question here when you need user input, delete it when they respond
+This file controls the workflow. Write to it whenever your state changes. Format: STATE|details
 
-WHEN TO UPDATE MARKERS:
-  - Created a PR (first or follow-up) → echo \"PR_URL\" > \$AUTOPILOT_COMPLETION_MARKER
-  - Pushed a fix to an existing PR     → echo \"PR_URL\" > \$AUTOPILOT_COMPLETION_MARKER (update with same or new URL)
-  - Cannot complete the task           → echo \"reason\" > \$AUTOPILOT_FAILURE_MARKER
-  - Need user input                    → echo \"question\" > \$AUTOPILOT_WAITING_MARKER
-  - User responded                     → rm -f \$AUTOPILOT_WAITING_MARKER
+STATES (write exactly these):
+  working|description of what you're doing     — you are actively coding, testing, committing
+  awaiting_ci|PR_URL                           — you created/updated a PR, CI and reviews will run
+  needs_input|your question                    — you need the user to answer something
+  failed|reason                                — you cannot complete the task
+
+WHEN TO TRANSITION:
+  Session starts                → echo \"working|reading ticket and planning\" > \$AUTOPILOT_STATE_MARKER
+  Actively implementing         → echo \"working|implementing changes\" > \$AUTOPILOT_STATE_MARKER
+  Created or updated a PR       → echo \"awaiting_ci|PR_URL\" > \$AUTOPILOT_STATE_MARKER
+  Need user input               → echo \"needs_input|your question\" > \$AUTOPILOT_STATE_MARKER
+  User responded                → echo \"working|addressing feedback\" > \$AUTOPILOT_STATE_MARKER
+  Cannot complete               → echo \"failed|reason\" > \$AUTOPILOT_STATE_MARKER
+
+IMPORTANT: Update this file EVERY time your state changes. The tmux worktree picker and autopilot scheduler read it to show your current status.
 
 ENVIRONMENT:
   - Dev server running on port \$SERVER_PORT
@@ -1165,45 +1174,51 @@ check_active_work() {
         return 1
     fi
 
-    # Status is "working" — check if Claude wrote a completion/failure marker
+    # Status is "working" — check Claude's state marker for transitions
     local ticket worktree_name
     ticket=$(echo "$meta" | jq -r '.current.ticket')
     worktree_name=$(echo "$meta" | jq -r '.current.worktree_name')
 
     log "INFO" "Checking active work: $ticket ($worktree_name)"
 
-    # Check for completion marker (Claude writes this while still running in TUI)
-    local done_marker="$AUTOPILOT_DIR/markers/${worktree_name}.done"
-    if [ -f "$done_marker" ] && [ -s "$done_marker" ]; then
-        local pr_url
-        pr_url=$(cat "$done_marker")
-        log "INFO" "$ticket completed! PR: $pr_url"
-        rm -f "$done_marker"
+    # Read the unified state marker (format: STATE|details)
+    local state_marker="$AUTOPILOT_DIR/markers/${worktree_name}.state"
+    if [ -f "$state_marker" ] && [ -s "$state_marker" ]; then
+        local marker_content marker_state marker_details
+        marker_content=$(cat "$state_marker")
+        marker_state=$(echo "$marker_content" | cut -d'|' -f1)
+        marker_details=$(echo "$marker_content" | cut -d'|' -f2-)
 
-        if [ -n "${PR_ASSIGNEE:-}" ]; then
-            # Move to pending_assignment — runner will monitor CI/reviews
-            meta_write "$(echo "$meta" | jq \
-                --arg pr "$pr_url" \
-                --arg now "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
-                '.status = "pending_assignment" | .current.pr_url = $pr | .current.completed_at = $now')"
-            log "INFO" "State: pending_assignment (waiting for CI/reviews before assigning to $PR_ASSIGNEE)"
-        else
-            meta_set_idle_from_completion "$pr_url"
-            log "INFO" "State: idle"
-        fi
-        return 0
-    fi
-
-    # Check for failure marker
-    local fail_marker="$AUTOPILOT_DIR/markers/${worktree_name}.failed"
-    if [ -f "$fail_marker" ] && [ -s "$fail_marker" ]; then
-        local reason
-        reason=$(cat "$fail_marker")
-        log "WARN" "$ticket failed: $reason"
-        rm -f "$fail_marker"
-        comment_on_ticket "$ticket" "Autopilot encountered an issue. Reason: $reason"
-        meta_set_failed "$reason"
-        return 0
+        case "$marker_state" in
+            awaiting_ci)
+                log "INFO" "$ticket: PR created, transitioning to pending_assignment. PR: $marker_details"
+                if [ -n "${PR_ASSIGNEE:-}" ]; then
+                    meta_write "$(echo "$meta" | jq \
+                        --arg pr "$marker_details" \
+                        --arg now "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+                        '.status = "pending_assignment" | .current.pr_url = $pr | .current.completed_at = $now')"
+                    log "INFO" "State: pending_assignment (waiting for CI/reviews)"
+                else
+                    meta_set_idle_from_completion "$marker_details"
+                    log "INFO" "State: idle"
+                fi
+                return 0
+                ;;
+            failed)
+                log "WARN" "$ticket failed: $marker_details"
+                comment_on_ticket "$ticket" "Autopilot encountered an issue. Reason: $marker_details"
+                meta_set_failed "$marker_details"
+                rm -f "$state_marker"
+                return 0
+                ;;
+            needs_input)
+                log "INFO" "$ticket: Claude needs input — $marker_details"
+                # Don't transition — just log. User will attach to tmux.
+                ;;
+            working)
+                log "INFO" "$ticket: Claude is working — $marker_details"
+                ;;
+        esac
     fi
 
     # On tmux: check if session is still alive as secondary signal
@@ -1333,8 +1348,8 @@ cleanup_stale_markers() {
         [ -f "$f" ] || continue
         local name wt
         name=$(basename "$f")
-        # Extract worktree name — strip .done/.waiting/.failed/.exit_code suffix
-        wt=$(echo "$name" | sed 's/\.\(done\|waiting\|failed\|exit_code\)$//')
+        # Extract worktree name — strip marker suffix
+        wt=$(echo "$name" | sed 's/\.\(state\|done\|waiting\|failed\|exit_code\)$//')
 
         # Keep markers for worktrees with live sessions
         if [ "$HAS_TMUX" = true ] && tmux has-session -t "$wt" 2>/dev/null; then
