@@ -919,13 +919,15 @@ launch_claude() {
 echo -ne "\\033]0;${tab_title}\\007"
 cd '$worktree_path'
 
-# Temp marker files (Claude's /autopilot command writes to these)
+# Marker files (Claude's /autopilot command writes to these)
+MARKERS_DIR="$AUTOPILOT_DIR/markers"
+mkdir -p "\$MARKERS_DIR"
 COMPLETION_MARKER=\$(mktemp)
 FAILURE_MARKER=\$(mktemp)
-WAITING_MARKER=\$(mktemp)
+# Waiting marker uses a fixed path so the tmux worktree picker can find it
 export AUTOPILOT_COMPLETION_MARKER="\$COMPLETION_MARKER"
 export AUTOPILOT_FAILURE_MARKER="\$FAILURE_MARKER"
-export AUTOPILOT_WAITING_MARKER="\$WAITING_MARKER"
+export AUTOPILOT_WAITING_MARKER="\$MARKERS_DIR/${worktree_name}.waiting"
 
 # Run Claude
 $CLAUDE_BIN --dangerously-skip-permissions --name "${tab_title}" "/autopilot $ticket_url"
