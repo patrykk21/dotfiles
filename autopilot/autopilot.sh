@@ -1347,6 +1347,64 @@ check_pending_assignment() {
     return 0
 }
 
+# --- Review Monitor ---
+# Check all worktrees in awaiting_review state. If new review with changes
+# requested → send /fix-pr-comments to the Claude session automatically.
+# If approved → transition to idle.
+monitor_awaiting_reviews() {
+    local markers_dir="$AUTOPILOT_DIR/markers"
+    [ -d "$markers_dir" ] || return 0
+
+    for f in "$markers_dir"/*.state; do
+        [ -f "$f" ] || continue
+        local content state details wt_name
+        content=$(cat "$f")
+        state=$(echo "$content" | cut -d'|' -f1)
+        details=$(echo "$content" | cut -d'|' -f2-)
+
+        [ "$state" = "awaiting_review" ] || continue
+
+        wt_name=$(basename "$f" .state)
+        local pr_number
+        pr_number=$(echo "$details" | grep -oE '/pull/[0-9]+' | grep -oE '[0-9]+')
+        [ -z "$pr_number" ] && continue
+
+        # Must run gh from project dir
+        cd "$PROJECT_DIR" 2>/dev/null || continue
+
+        # Check review decision
+        local review_decision
+        review_decision=$(gh pr view "$pr_number" --json reviewDecision -q '.reviewDecision' 2>/dev/null)
+
+        case "$review_decision" in
+            CHANGES_REQUESTED)
+                log "INFO" "PR #$pr_number ($wt_name): changes requested — sending /fix-pr-comments"
+                # Update marker so we don't re-send next cycle
+                echo "working|fixing review comments" > "$f"
+                # Send command to Claude session
+                if [ "$HAS_TMUX" = true ] && tmux has-session -t "$wt_name" 2>/dev/null; then
+                    tmux send-keys -t "$wt_name:1" "/fix-pr-comments" Enter
+                fi
+                ;;
+            APPROVED)
+                log "INFO" "PR #$pr_number ($wt_name): approved!"
+                # Assign and transition to idle
+                if [ -n "${PR_ASSIGNEE:-}" ]; then
+                    local current_user
+                    current_user=$(gh api user -q '.login' 2>/dev/null || echo "")
+                    gh pr edit "$pr_number" --add-assignee "$PR_ASSIGNEE" ${current_user:+--remove-assignee "$current_user"} 2>/dev/null
+                    log "INFO" "PR #$pr_number assigned to $PR_ASSIGNEE"
+                fi
+                rm -f "$f"
+                meta_set_idle_from_completion "$details"
+                ;;
+            *)
+                # No decision yet or review pending — do nothing
+                ;;
+        esac
+    done
+}
+
 # --- Stale Marker Cleanup ---
 # Remove markers for worktrees with no active session (tmux or PID)
 cleanup_stale_markers() {
@@ -1394,6 +1452,9 @@ main() {
 
     # Clean up markers for dead sessions
     cleanup_stale_markers
+
+    # Check worktrees awaiting review — auto-fix if changes requested
+    monitor_awaiting_reviews
 
     local meta
     meta=$(meta_read)
