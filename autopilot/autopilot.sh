@@ -1052,7 +1052,8 @@ This file controls the workflow. Write to it whenever your state changes. Format
 
 STATES (write exactly these):
   working|description of what you're doing     — you are actively coding, testing, committing
-  awaiting_ci|PR_URL                           — you created/updated a PR, CI and reviews will run
+  awaiting_ci|PR_URL                           — you created/updated a PR, CI is running
+  awaiting_review|PR_URL                       — CI passed, waiting for human review (assignee)
   needs_input|your question                    — you need the user to answer something
   failed|reason                                — you cannot complete the task
 
@@ -1190,8 +1191,8 @@ check_active_work() {
         marker_details=$(echo "$marker_content" | cut -d'|' -f2-)
 
         case "$marker_state" in
-            awaiting_ci)
-                log "INFO" "$ticket: PR created, transitioning to pending_assignment. PR: $marker_details"
+            awaiting_ci|awaiting_review)
+                log "INFO" "$ticket: $marker_state. PR: $marker_details"
                 if [ -n "${PR_ASSIGNEE:-}" ]; then
                     meta_write "$(echo "$meta" | jq \
                         --arg pr "$marker_details" \

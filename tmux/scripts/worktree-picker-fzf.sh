@@ -143,7 +143,8 @@ get_worktrees() {
         claude_state = claude_state_line
         sub(/\x7c.*/, "", claude_state)
 
-        if (claude_state == "awaiting_ci") status_text = "[CI/REVIEW]"
+        if (claude_state == "awaiting_ci") status_text = "[AWAITING CI]"
+        else if (claude_state == "awaiting_review") status_text = "[AWAITING REVIEW]"
         else if (claude_state == "working") status_text = "[AI WORKING]"
         else if (claude_state == "needs_input") { status_text = "[NEEDS INPUT]"; needs_input = 1 }
         else if (claude_state == "failed") status_text = "[FAILED]"
@@ -257,7 +258,7 @@ fi
 # Use fzf (tmux display-popup creates the popup window)
 selected=$(echo "$WORKTREE_DATA" | fzf \
     --prompt=" Select worktree: " \
-    --header=$'\n'"$SEPARATOR"$'\n    [AI WORKING] [NEEDS INPUT] [CI/REVIEW] [ACTIVE] [SAVED] [AUTO] Autopilot\n'"$SEPARATOR"$'\n    enter switch   ctrl-x delete   ctrl-k kill session   ctrl-r reload' \
+    --header=$'\n'"$SEPARATOR"$'\n    [AI WORKING] [NEEDS INPUT] [AWAITING CI] [AWAITING REVIEW] [ACTIVE] [SAVED] [AUTO]\n'"$SEPARATOR"$'\n    enter switch   ctrl-x delete   ctrl-k kill session   ctrl-r reload' \
     --header-lines=2 \
     --ansi \
     --color="fg:250,bg:235,hl:114,fg+:235,bg+:114,hl+:235,prompt:114,pointer:114,header:243,border:114" \

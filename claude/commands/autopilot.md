@@ -84,7 +84,8 @@ Then update it throughout your work. Format: `STATE|details`
 | State | When to write |
 |-------|--------------|
 | `working\|description` | When actively coding, testing, committing |
-| `awaiting_ci\|PR_URL` | After creating or updating a PR |
+| `awaiting_ci\|PR_URL` | After creating or updating a PR, CI is running |
+| `awaiting_review\|PR_URL` | CI passed, waiting for human review (CodeRabbit done, needs assignee review) |
 | `needs_input\|question` | When you need the user to answer something |
 | `failed\|reason` | When you cannot complete the task |
 
