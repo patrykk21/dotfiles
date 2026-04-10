@@ -848,7 +848,9 @@ start_dev_server() {
 
     if [ "$HAS_TMUX" = true ]; then
         # Send command to tmux pane — $SERVER_PORT is set in pane env
-        tmux send-keys -t "$worktree_name:2" "$DEV_SERVER_CMD" Enter
+        # Tee output to log so Claude can read server errors
+        local server_log="$AUTOPILOT_DIR/logs/${worktree_name}-server.log"
+        tmux send-keys -t "$worktree_name:2" "$DEV_SERVER_CMD 2>&1 | tee $server_log" Enter
     else
         # Run dev server as background process with PID tracking
         local port
@@ -934,6 +936,7 @@ FAILURE_MARKER=\$(mktemp)
 export AUTOPILOT_COMPLETION_MARKER="\$COMPLETION_MARKER"
 export AUTOPILOT_FAILURE_MARKER="\$FAILURE_MARKER"
 export AUTOPILOT_WAITING_MARKER="\$MARKERS_DIR/${worktree_name}.waiting"
+export AUTOPILOT_PR_ASSIGNEE="${PR_ASSIGNEE:-}"
 
 # Run Claude
 $CLAUDE_BIN --dangerously-skip-permissions --name "${tab_title}" "/autopilot $ticket_url"
