@@ -1031,14 +1031,12 @@ launch_claude() {
 echo -ne "\\033]0;${tab_title}\\007"
 cd '$worktree_path'
 
-# Marker files (Claude's /autopilot command writes to these)
+# Marker files at fixed paths — the runner checks these each cycle
+# so state updates even while Claude is still running in the TUI
 MARKERS_DIR="$AUTOPILOT_DIR/markers"
 mkdir -p "\$MARKERS_DIR"
-COMPLETION_MARKER=\$(mktemp)
-FAILURE_MARKER=\$(mktemp)
-# Waiting marker uses a fixed path so the tmux worktree picker can find it
-export AUTOPILOT_COMPLETION_MARKER="\$COMPLETION_MARKER"
-export AUTOPILOT_FAILURE_MARKER="\$FAILURE_MARKER"
+export AUTOPILOT_COMPLETION_MARKER="\$MARKERS_DIR/${worktree_name}.done"
+export AUTOPILOT_FAILURE_MARKER="\$MARKERS_DIR/${worktree_name}.failed"
 export AUTOPILOT_WAITING_MARKER="\$MARKERS_DIR/${worktree_name}.waiting"
 export AUTOPILOT_PR_ASSIGNEE="${PR_ASSIGNEE:-}"
 
@@ -1144,12 +1142,46 @@ check_active_work() {
         return 1
     fi
 
-    # Status is "working" — Claude is still running (launcher hasn't updated yet)
+    # Status is "working" — check if Claude wrote a completion/failure marker
     local ticket worktree_name
     ticket=$(echo "$meta" | jq -r '.current.ticket')
     worktree_name=$(echo "$meta" | jq -r '.current.worktree_name')
 
     log "INFO" "Checking active work: $ticket ($worktree_name)"
+
+    # Check for completion marker (Claude writes this while still running in TUI)
+    local done_marker="$AUTOPILOT_DIR/markers/${worktree_name}.done"
+    if [ -f "$done_marker" ] && [ -s "$done_marker" ]; then
+        local pr_url
+        pr_url=$(cat "$done_marker")
+        log "INFO" "$ticket completed! PR: $pr_url"
+        rm -f "$done_marker"
+
+        if [ -n "${PR_ASSIGNEE:-}" ]; then
+            # Move to pending_assignment — runner will monitor CI/reviews
+            meta_write "$(echo "$meta" | jq \
+                --arg pr "$pr_url" \
+                --arg now "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+                '.status = "pending_assignment" | .current.pr_url = $pr | .current.completed_at = $now')"
+            log "INFO" "State: pending_assignment (waiting for CI/reviews before assigning to $PR_ASSIGNEE)"
+        else
+            meta_set_idle_from_completion "$pr_url"
+            log "INFO" "State: idle"
+        fi
+        return 0
+    fi
+
+    # Check for failure marker
+    local fail_marker="$AUTOPILOT_DIR/markers/${worktree_name}.failed"
+    if [ -f "$fail_marker" ] && [ -s "$fail_marker" ]; then
+        local reason
+        reason=$(cat "$fail_marker")
+        log "WARN" "$ticket failed: $reason"
+        rm -f "$fail_marker"
+        comment_on_ticket "$ticket" "Autopilot encountered an issue. Reason: $reason"
+        meta_set_failed "$reason"
+        return 0
+    fi
 
     # On tmux: check if session is still alive as secondary signal
     if [ "$HAS_TMUX" = true ]; then
