@@ -1372,13 +1372,27 @@ monitor_awaiting_reviews() {
         # Must run gh from project dir
         cd "$PROJECT_DIR" 2>/dev/null || continue
 
+        # Check latest review timestamp — only act if new review arrived
+        local latest_review_at last_seen_file last_seen
+        latest_review_at=$(gh pr view "$pr_number" --json reviews -q '[.reviews[-1].submittedAt // ""] | .[0]' 2>/dev/null || echo "")
+        last_seen_file="$AUTOPILOT_DIR/markers/${wt_name}.last_review_at"
+        last_seen=$(cat "$last_seen_file" 2>/dev/null || echo "")
+
+        if [ "$latest_review_at" = "$last_seen" ] || [ -z "$latest_review_at" ]; then
+            # No new reviews — skip
+            continue
+        fi
+
+        # New review detected — update tracker
+        echo "$latest_review_at" > "$last_seen_file"
+
         # Check review decision
         local review_decision
         review_decision=$(gh pr view "$pr_number" --json reviewDecision -q '.reviewDecision' 2>/dev/null)
 
         case "$review_decision" in
             CHANGES_REQUESTED)
-                log "INFO" "PR #$pr_number ($wt_name): changes requested — sending /with-markers /fix-pr-comments"
+                log "INFO" "PR #$pr_number ($wt_name): changes requested (review $last_seen→$review_count) — sending /with-markers /fix-pr-comments"
                 # Update marker so we don't re-send next cycle
                 echo "working|fixing review comments" > "$f"
                 # Send command to Claude session
@@ -1416,7 +1430,7 @@ cleanup_stale_markers() {
         local name wt
         name=$(basename "$f")
         # Extract worktree name — strip marker suffix
-        wt=$(echo "$name" | sed -E 's/\.(state|done|waiting|failed|exit_code)$//')
+        wt=$(echo "$name" | sed -E 's/\.(state|done|waiting|failed|exit_code|last_review_at)$//')
 
         # Keep markers for worktrees with live sessions
         if [ "$HAS_TMUX" = true ] && tmux has-session -t "$wt" 2>/dev/null; then
