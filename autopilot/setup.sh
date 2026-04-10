@@ -43,7 +43,7 @@ install_launchd() {
     </array>
 
     <key>StartInterval</key>
-    <integer>300</integer>
+    <integer>60</integer>
 
     <key>RunAtLoad</key>
     <false/>
