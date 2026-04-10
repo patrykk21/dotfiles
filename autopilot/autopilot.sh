@@ -1043,7 +1043,14 @@ export AUTOPILOT_WAITING_MARKER="\$MARKERS_DIR/${worktree_name}.waiting"
 export AUTOPILOT_PR_ASSIGNEE="${PR_ASSIGNEE:-}"
 
 # Run Claude
-$CLAUDE_BIN --dangerously-skip-permissions --name "${tab_title}" "/autopilot $ticket_url --- Dev server is running on port $port. Server logs: $server_log"
+SYSTEM_PROMPT="CRITICAL RULES FOR THIS SESSION:
+1. After creating ANY pull request (including follow-up PRs), IMMEDIATELY run: echo <PR_URL> > \$AUTOPILOT_COMPLETION_MARKER
+2. The dev server is running on port \$SERVER_PORT. Server logs are at $server_log — read them if you encounter build or runtime errors.
+3. Do NOT assign the PR. The autopilot scheduler handles assignment after CI and reviews pass."
+
+$CLAUDE_BIN --dangerously-skip-permissions --name "${tab_title}" \
+  --append-system-prompt "\$SYSTEM_PROMPT" \
+  "/autopilot $ticket_url"
 EXIT_CODE=\$?
 
 # Update metadata JSON based on outcome
