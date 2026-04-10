@@ -37,10 +37,20 @@ write_switch_session() {
 get_worktrees() {
     # Print header (without delimiter so it shows in fzf)
     printf "%-4s %-50s %-10s %-16s %-6s %s\n" "" "NAME" "TYPE" "STATUS" "PORT" "BRANCH"
-    printf "%-4s %-50s %-10s %-16s %-6s %s\n" "" "────" "────" "──────" "────" "──────"
+    printf "%-4s %-50s %-10s %-16s %-6s %s\n" "" "─────" "────" "──────" "────" "──────"
     
+    # Pre-compute autopilot state for all projects (avoids quoting hell in awk)
+    local autopilot_states=""
+    for sf in "$HOME/.config/autopilot/projects/"*.state.json; do
+        [ -f "$sf" ] || continue
+        local ap_st ap_wt
+        ap_st=$(jq -r '.status // ""' "$sf" 2>/dev/null)
+        ap_wt=$(jq -r '.current.worktree_name // ""' "$sf" 2>/dev/null)
+        [ -n "$ap_wt" ] && autopilot_states="${autopilot_states}${ap_wt}=${ap_st};"
+    done
+
     # Process each worktree
-    git worktree list --porcelain | awk -v current="$CURRENT_WORKTREE" -v repo_name="$REPO_NAME" -v safe_repo_name="$SAFE_REPO_NAME" -v worktrees_base="$WORKTREES_BASE" '
+    git worktree list --porcelain | awk -v current="$CURRENT_WORKTREE" -v repo_name="$REPO_NAME" -v safe_repo_name="$SAFE_REPO_NAME" -v worktrees_base="$WORKTREES_BASE" -v autopilot_states="$autopilot_states" '
     BEGIN {
         # Function to check metadata file
         metadata_cmd = "source " ENVIRON["HOME"] "/.config/tmux/scripts/worktree-metadata.sh"
@@ -124,23 +134,20 @@ get_worktrees() {
 
         if (is_autopilot) type_text = "[AUTO]"
 
-        # Check autopilot project state for this worktree
-        if (is_autopilot) {
-            # Find the project state file that references this worktree
-            cmd = "for f in " autopilot_dir "/projects/*.state.json; do [ -f \"$f\" ] && jq -r '.status + \"|\" + (.current.worktree_name // \"\")' \"$f\" 2>/dev/null; done"
-            while ((cmd | getline state_line) > 0) {
-                split(state_line, sp, "|")
-                if (sp[2] == ticket) {
-                    if (sp[1] == "pending_assignment") status_text = "⏳ CI/Review"
-                    else if (sp[1] == "working") status_text = "🤖 Working"
-                    break
-                }
+        # Check autopilot project state for this worktree (pre-computed)
+        if (is_autopilot && autopilot_states != "") {
+            pattern = ticket "="
+            if (index(autopilot_states, pattern) > 0) {
+                # Extract the status after ticket=
+                rest = substr(autopilot_states, index(autopilot_states, pattern) + length(pattern))
+                sub(/;.*/, "", rest)
+                if (rest == "pending_assignment") status_text = "CI/Review"
+                else if (rest == "working") status_text = "AI Working"
             }
-            close(cmd)
         }
 
         # Check waiting marker (overrides working status)
-        if (status_text == "" || status_text == "🤖 Working") {
+        if (status_text == "" || status_text == "AI Working") {
             waiting_marker = autopilot_dir "/markers/" ticket ".waiting"
             if (system("test -f " waiting_marker) == 0) {
                 needs_input = 1
