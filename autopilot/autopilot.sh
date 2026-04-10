@@ -1009,7 +1009,9 @@ generate_prompt() {
 launch_claude() {
     local worktree_name="$1"
     local ticket_key="$2"
+    local port="${3:-}"
     local worktree_path="${RESOLVED_WORKTREE_PATH:-$WORKTREES_BASE/$worktree_name}"
+    local server_log="$AUTOPILOT_DIR/logs/${worktree_name}-server.log"
 
     # Build ticket URL (tracker-agnostic)
     local ticket_url
@@ -1041,7 +1043,7 @@ export AUTOPILOT_WAITING_MARKER="\$MARKERS_DIR/${worktree_name}.waiting"
 export AUTOPILOT_PR_ASSIGNEE="${PR_ASSIGNEE:-}"
 
 # Run Claude
-$CLAUDE_BIN --dangerously-skip-permissions --name "${tab_title}" "/autopilot $ticket_url"
+$CLAUDE_BIN --dangerously-skip-permissions --name "${tab_title}" "/autopilot $ticket_url --- Dev server is running on port $port. Server logs: $server_log"
 EXIT_CODE=\$?
 
 # Update metadata JSON based on outcome
@@ -1422,7 +1424,7 @@ main() {
     # Set metadata to working BEFORE launching Claude
     meta_set_working "$TICKET_KEY" "$ticket_url" "$worktree_name" "${RESOLVED_WORKTREE_PATH:-$WORKTREES_BASE/$worktree_name}" "$effective_base"
 
-    launch_claude "$worktree_name" "$TICKET_KEY"
+    launch_claude "$worktree_name" "$TICKET_KEY" "$port"
 
     comment_on_ticket "$TICKET_KEY" "Autopilot: Started working on this ticket. Worktree: $worktree_name, Port: $port"
 
