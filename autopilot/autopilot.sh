@@ -1258,6 +1258,9 @@ check_pending_assignment() {
         return 0
     fi
 
+    # Run gh commands from project dir so it picks up the correct remote
+    cd "$PROJECT_DIR" 2>/dev/null || true
+
     # Check CI status
     local ci_states
     ci_states=$(gh pr checks "$pr_number" --json 'state' -q '.[].state' 2>/dev/null)
@@ -1270,23 +1273,22 @@ check_pending_assignment() {
         return 0
     fi
 
-    # Check review status
+    # Check review status — wait for at least one review to be submitted
+    local review_count
+    review_count=$(gh pr view "$pr_number" --json 'reviews' -q '.reviews | length' 2>/dev/null || echo "0")
+
+    if [ "$review_count" = "0" ]; then
+        log "INFO" "PR #$pr_number ($ticket): no reviews submitted yet — waiting"
+        return 0
+    fi
+
     local review_state
     review_state=$(gh pr view "$pr_number" --json 'reviewDecision' -q '.reviewDecision' 2>/dev/null)
-
-    if [ "$review_state" != "APPROVED" ] && [ -n "$review_state" ] && [ "$review_state" != "null" ]; then
-        # Check if reviews have been submitted (even if not approved)
-        local review_count
-        review_count=$(gh pr view "$pr_number" --json 'reviews' -q '.reviews | length' 2>/dev/null || echo "0")
-        if [ "$review_count" = "0" ]; then
-            log "INFO" "PR #$pr_number ($ticket): no reviews submitted yet"
-            return 0
-        fi
-        log "INFO" "PR #$pr_number ($ticket): reviews submitted (state: $review_state) — assigning"
-    fi
+    log "INFO" "PR #$pr_number ($ticket): $review_count review(s), decision: ${review_state:-pending}"
 
     # CI done + reviews done (or submitted) — assign and move to idle
     log "INFO" "PR #$pr_number ($ticket): ready — assigning to $PR_ASSIGNEE"
+    # Run gh from project dir so it picks up the correct remote
     if gh pr edit "$pr_number" --add-assignee "$PR_ASSIGNEE" 2>/dev/null; then
         log "INFO" "PR #$pr_number assigned to $PR_ASSIGNEE"
     else
