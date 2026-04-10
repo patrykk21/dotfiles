@@ -82,6 +82,9 @@ PICKER_MODEL="${PICKER_MODEL:-sonnet}"
 # Concurrency: max tickets worked on simultaneously
 MAX_CONCURRENT_TICKETS="${MAX_CONCURRENT_TICKETS:-1}"
 
+# Max worktrees per project — won't pick new tickets if this limit is reached
+MAX_WORKTREES="${MAX_WORKTREES:-8}"
+
 # Unified metadata file (single source of truth per project)
 META_FILE="$AUTOPILOT_DIR/projects/${PROJECT_NAME}.state.json"
 LOG_FILE="$AUTOPILOT_DIR/logs/${PROJECT_NAME}.log"
@@ -1328,6 +1331,19 @@ main() {
         log "INFO" "Concurrency limit reached ($active_count/$MAX_CONCURRENT_TICKETS). Waiting."
         log "INFO" "=== Autopilot cycle complete ==="
         exit 0
+    fi
+
+    # Enforce max worktrees limit — count existing worktrees for this project
+    if [ -d "$PROJECT_DIR/.git" ] || [ -f "$PROJECT_DIR/.git" ]; then
+        local wt_count
+        wt_count=$(git -C "$PROJECT_DIR" worktree list 2>/dev/null | wc -l | tr -d ' ')
+        # Subtract 1 for the main worktree (base repo)
+        wt_count=$((wt_count - 1))
+        if [ "$wt_count" -ge "$MAX_WORKTREES" ]; then
+            log "INFO" "Worktree limit reached ($wt_count/$MAX_WORKTREES). Clean up existing worktrees before picking new tickets."
+            log "INFO" "=== Autopilot cycle complete ==="
+            exit 0
+        fi
     fi
 
     if ! find_ticket; then
