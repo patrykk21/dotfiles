@@ -804,6 +804,12 @@ setup_session() {
         log "INFO" "No tmux available — will run processes in background (PID-tracked)"
     fi
 
+    # Tag worktree metadata with autopilot=true
+    local meta_session_file="$WORKTREES_BASE/.worktree-meta/sessions/${worktree_name}.json"
+    if [ -f "$meta_session_file" ]; then
+        jq '.autopilot = true' "$meta_session_file" > "${meta_session_file}.tmp" && mv "${meta_session_file}.tmp" "$meta_session_file"
+    fi
+
     return 0
 }
 

@@ -157,15 +157,22 @@ get_worktrees() {
             }
         }
 
-        # Get port from metadata if it is a worktree session
+        # Get port and autopilot flag from metadata if it is a worktree session
         port_text = "-"
+        is_autopilot = 0
         if (type_text == "[WORKTREE]" && session_text != "[NO SESSION]") {
-            # Read port from metadata file
             metadata_file = worktrees_base "/" repo_name "/.worktree-meta/sessions/" ticket ".json"
             cmd = "test -f " metadata_file " && jq -r \".port // \\\"-\\\"\" " metadata_file " 2>/dev/null || echo \"-\""
             cmd | getline port_text
             close(cmd)
+            cmd = "test -f " metadata_file " && jq -r \".autopilot // false\" " metadata_file " 2>/dev/null || echo \"false\""
+            cmd | getline ap_flag
+            close(cmd)
+            if (ap_flag == "true") is_autopilot = 1
         }
+
+        # Show autopilot origin in type column
+        if (is_autopilot) type_text = "[AUTO]"
 
         # Truncate ticket name to 48 chars for alignment
         display_name = substr(ticket, 1, 48)
@@ -245,7 +252,7 @@ fi
 # Use fzf (tmux display-popup creates the popup window)
 selected=$(echo "$WORKTREE_DATA" | fzf \
     --prompt=" Select worktree: " \
-    --header=$'\n'"$SEPARATOR"$'\n    ● Active   ○ Inactive   > Needs input   → Current   [SESSION] Active   [METADATA] Saved\n'"$SEPARATOR"$'\n    ↵ switch   ctrl-x delete   ctrl-k kill session   ctrl-r reload' \
+    --header=$'\n'"$SEPARATOR"$'\n    ● Active   ○ Inactive   > Needs input   → Current   [AUTO] Autopilot   [SESSION] Active   [METADATA] Saved\n'"$SEPARATOR"$'\n    ↵ switch   ctrl-x delete   ctrl-k kill session   ctrl-r reload' \
     --header-lines=2 \
     --ansi \
     --color="fg:250,bg:235,hl:114,fg+:235,bg+:114,hl+:235,prompt:114,pointer:114,header:243,border:114" \
