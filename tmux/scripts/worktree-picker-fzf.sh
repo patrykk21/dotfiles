@@ -36,8 +36,8 @@ write_switch_session() {
 # Get list of worktrees with metadata-enhanced info
 get_worktrees() {
     # Print header (without delimiter so it shows in fzf)
-    printf "%-4s %-15s %-10s %-12s %-6s %-30s %s\n" "" "NAME" "TYPE" "SESSION" "PORT" "BRANCH" "PATH"
-    printf "%-4s %-15s %-10s %-12s %-6s %-30s %s\n" "" "----" "----" "-------" "----" "------" "----"
+    printf "%-4s %-50s %-10s %-10s %-6s %s\n" "" "NAME" "TYPE" "SESSION" "PORT" "BRANCH"
+    printf "%-4s %-50s %-10s %-10s %-6s %s\n" "" "────" "────" "───────" "────" "──────"
     
     # Process each worktree
     git worktree list --porcelain | awk -v current="$CURRENT_WORKTREE" -v repo_name="$REPO_NAME" -v safe_repo_name="$SAFE_REPO_NAME" -v worktrees_base="$WORKTREES_BASE" '
@@ -167,8 +167,11 @@ get_worktrees() {
             close(cmd)
         }
 
-        # Output format with type column and port
-        printf "%s%-15s %-10s %-12s %-6s %-30s %s\n", status_icon, ticket, type_text, session_text, port_text, branch, path
+        # Truncate ticket name to 48 chars for alignment
+        display_name = substr(ticket, 1, 48)
+
+        # Output format — no PATH column (derived from name when needed)
+        printf "%s%-50s %-10s %-10s %-6s %s\n", status_icon, display_name, type_text, session_text, port_text, branch
     }'
 }
 
@@ -288,38 +291,40 @@ if [ -n "$selected" ]; then
         gsub(/^[[:space:]]+/, "", $0)
         
         # Remove status icon and spaces
-        sub(/^[●○][[:space:]]+/, "", $0)
-        
-        # Now we have: "name type session port branch path..."
+        sub(/^[●○>][[:space:]]+/, "", $0)
+
+        # Now we have: "name type session port branch"
         # Extract fields
         name = $1
         type = $2
         session = $3
         port = $4
         branch = $5
-        
+
         # Determine icon based on arrow presence and original content
         if (has_arrow) {
             icon = "→"
         } else {
-            # Extract status icon from original line (● or ○)
-            if (match(original, /[●○]/)) {
+            if (match(original, /[●○>]/)) {
                 icon = substr(original, RSTART, 1)
             } else {
                 icon = "?"
             }
         }
-        
-        # Path is the last field of the ORIGINAL line
-        n = split(original, arr, " ")
-        path = arr[n]
-        
-        # Output as tab-separated values
-        print icon "\t" name "\t" type "\t" session "\t" port "\t" branch "\t" path "\t" has_arrow
+
+        # Output as tab-separated values (no path — derived downstream)
+        print icon "\t" name "\t" type "\t" session "\t" port "\t" branch "\t" has_arrow
     }')
 
     # Parse the tab-separated values
-    IFS=$'\t' read -r icon name type session port branch worktree_path has_arrow <<< "$parsed_fields"
+    IFS=$'\t' read -r icon name type session port branch has_arrow <<< "$parsed_fields"
+
+    # Derive worktree_path from name
+    if [ "$type" = "[BASE]" ]; then
+        worktree_path="$MAIN_REPO"
+    else
+        worktree_path="$WORKTREES_BASE/$REPO_NAME/$name"
+    fi
     
     echo "[PICKER DEBUG] Parsed - icon:'$icon' name:'$name' type:'$type' session:'$session' path:'$worktree_path'" >> /tmp/tmux-worktree-debug.log
     
