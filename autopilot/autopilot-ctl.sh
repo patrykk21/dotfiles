@@ -373,6 +373,14 @@ case "${1:-help}" in
 
     run)
         project_name="${2:-}"
+        force_flag=""
+        # Check for --force in any position
+        for arg in "$@"; do
+            [ "$arg" = "--force" ] && force_flag="--force"
+        done
+        # Strip --force from project_name if it was $2
+        [ "$project_name" = "--force" ] && project_name="${3:-}"
+
         if [ -n "$project_name" ]; then
             config="$PROJECTS_DIR/${project_name}.env"
             if [ ! -f "$config" ]; then
@@ -380,7 +388,7 @@ case "${1:-help}" in
                 exit 1
             fi
             echo -e "${BLUE}Running autopilot cycle for $project_name...${NC}"
-            AUTOPILOT_CONF="$config" "$AUTOPILOT_DIR/autopilot.sh"
+            AUTOPILOT_CONF="$config" "$AUTOPILOT_DIR/autopilot.sh" $force_flag
         else
             echo -e "${BLUE}Running autopilot cycle for all projects...${NC}"
             "$AUTOPILOT_DIR/autopilot-runner.sh"
@@ -547,7 +555,7 @@ case "${1:-help}" in
         echo "  list               List configured projects"
         echo ""
         echo "Execution:"
-        echo "  run [project]      Run one cycle (all projects, or specific one)"
+        echo "  run [project] [--force]  Run one cycle (--force ignores worktree limit)"
         echo "  stop <project>     Stop active ticket (kill session, remove worktree, reset)"
         echo "  logs [project] [N] Show last N log lines"
         echo "  history [project]  Show completed/failed tickets"

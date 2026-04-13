@@ -1540,6 +1540,11 @@ cleanup_stale_markers() {
 
 # --- Main Flow ---
 main() {
+    # Parse flags
+    for arg in "$@"; do
+        [ "$arg" = "--force" ] && export AUTOPILOT_FORCE=true
+    done
+
     mkdir -p "$AUTOPILOT_DIR/logs" "$AUTOPILOT_DIR/prompts" "$AUTOPILOT_DIR/projects"
 
     if [ ! -f "$ENABLED_FILE" ]; then
@@ -1618,8 +1623,8 @@ main() {
         local wt_count
         # Count only worktrees under WORKTREES_BASE (exclude Cursor/IDE worktrees)
         wt_count=$(git -C "$PROJECT_DIR" worktree list 2>/dev/null | grep -c "$WORKTREES_BASE" || echo "0")
-        if [ "$wt_count" -ge "$MAX_WORKTREES" ]; then
-            log "INFO" "Worktree limit reached ($wt_count/$MAX_WORKTREES). Clean up existing worktrees before picking new tickets."
+        if [ "$wt_count" -ge "$MAX_WORKTREES" ] && [ "${AUTOPILOT_FORCE:-}" != "true" ]; then
+            log "INFO" "Worktree limit reached ($wt_count/$MAX_WORKTREES). Clean up existing worktrees or use --force."
             log "INFO" "=== Autopilot cycle complete ==="
             exit 0
         fi
