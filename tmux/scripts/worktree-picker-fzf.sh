@@ -224,14 +224,14 @@ reload_worktrees() {
 "
             fi
         done
-        if [ -n "$ts_lines" ]; then
-            printf '%s' "$ts_lines" | sort -t$'\t' -k1 -n | cut -f2-
+        if [ -n "$base_lines" ]; then
+            echo "$base_lines"
         fi
         if [ -n "$no_ts_lines" ]; then
             printf '%s' "$no_ts_lines"
         fi
-        if [ -n "$base_lines" ]; then
-            echo "$base_lines"
+        if [ -n "$ts_lines" ]; then
+            printf '%s' "$ts_lines" | sort -t$'\t' -k1 -rn | cut -f2-
         fi
     }
 }
@@ -264,17 +264,17 @@ WORKTREE_DATA=$(get_worktrees | {
 "
         fi
     done
-    # Timestamped ascending (oldest first, most recent at bottom)
-    if [ -n "$ts_lines" ]; then
-        printf '%s' "$ts_lines" | sort -t$'\t' -k1 -n | cut -f2-
+    # Base first (bottom of fzf = first in output)
+    if [ -n "$base_lines" ]; then
+        echo "$base_lines"
     fi
     # No timestamp
     if [ -n "$no_ts_lines" ]; then
         printf '%s' "$no_ts_lines"
     fi
-    # Base always last
-    if [ -n "$base_lines" ]; then
-        echo "$base_lines"
+    # Timestamped descending (most recent first in output = bottom of fzf)
+    if [ -n "$ts_lines" ]; then
+        printf '%s' "$ts_lines" | sort -t$'\t' -k1 -rn | cut -f2-
     fi
 })
 
