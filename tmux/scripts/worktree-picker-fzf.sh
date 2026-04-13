@@ -208,7 +208,31 @@ reload_worktrees() {
     get_worktrees | {
         IFS= read -r line1; echo "$line1"
         IFS= read -r line2; echo "$line2"
-        sort -t$'\t' -k2 -n | cut -f1
+        base_lines=""
+        no_ts_lines=""
+        ts_lines=""
+        while IFS= read -r line; do
+            epoch=$(echo "$line" | cut -f2)
+            display=$(echo "$line" | cut -f1)
+            if echo "$display" | grep -q '\[BASE\]'; then
+                base_lines="$display"
+            elif [ "$epoch" = "0" ] || [ -z "$epoch" ]; then
+                no_ts_lines="${no_ts_lines}${display}
+"
+            else
+                ts_lines="${ts_lines}${epoch}	${display}
+"
+            fi
+        done
+        if [ -n "$ts_lines" ]; then
+            printf '%s' "$ts_lines" | sort -t$'\t' -k1 -n | cut -f2-
+        fi
+        if [ -n "$no_ts_lines" ]; then
+            printf '%s' "$no_ts_lines"
+        fi
+        if [ -n "$base_lines" ]; then
+            echo "$base_lines"
+        fi
     }
 }
 
@@ -219,13 +243,39 @@ if [ "$1" = "reload" ]; then
 fi
 
 # Get the worktree data
-# Get worktrees, sort data rows by epoch (0=no date first, then ascending), strip sort key
+# Sort: base at bottom, then no-timestamp, then timestamped descending (most recent at bottom)
 WORKTREE_DATA=$(get_worktrees | {
-    # Read and output header lines (first 2 lines)
     IFS= read -r line1; echo "$line1"
     IFS= read -r line2; echo "$line2"
-    # Sort remaining lines: by epoch (tab-separated last field), 0 first then ascending
-    sort -t$'\t' -k2 -n | cut -f1
+    # Split into 3 groups, reassemble in order
+    base_lines=""
+    no_ts_lines=""
+    ts_lines=""
+    while IFS= read -r line; do
+        epoch=$(echo "$line" | cut -f2)
+        display=$(echo "$line" | cut -f1)
+        if echo "$display" | grep -q '\[BASE\]'; then
+            base_lines="$display"
+        elif [ "$epoch" = "0" ] || [ -z "$epoch" ]; then
+            no_ts_lines="${no_ts_lines}${display}
+"
+        else
+            ts_lines="${ts_lines}${epoch}	${display}
+"
+        fi
+    done
+    # Timestamped ascending (oldest first, most recent at bottom)
+    if [ -n "$ts_lines" ]; then
+        printf '%s' "$ts_lines" | sort -t$'\t' -k1 -n | cut -f2-
+    fi
+    # No timestamp
+    if [ -n "$no_ts_lines" ]; then
+        printf '%s' "$no_ts_lines"
+    fi
+    # Base always last
+    if [ -n "$base_lines" ]; then
+        echo "$base_lines"
+    fi
 })
 
 # Find the longest visual line for consistent padding
