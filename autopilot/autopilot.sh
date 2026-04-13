@@ -1390,14 +1390,28 @@ monitor_awaiting_reviews() {
         local review_decision
         review_decision=$(gh pr view "$pr_number" --json reviewDecision -q '.reviewDecision' 2>/dev/null)
 
+        # Check latest review state (not just decision — handles COMMENTED reviews)
+        local latest_review_state
+        latest_review_state=$(gh pr view "$pr_number" --json reviews -q '.reviews[-1].state // ""' 2>/dev/null || echo "")
+
         case "$review_decision" in
             CHANGES_REQUESTED)
-                log "INFO" "PR #$pr_number ($wt_name): changes requested (review $last_seen→$review_count) — sending /with-markers /fix-pr-comments"
-                # Update marker so we don't re-send next cycle
+                log "INFO" "PR #$pr_number ($wt_name): changes requested — sending /with-markers /fix-pr-comments"
                 echo "working|fixing review comments" > "$f"
-                # Send command to Claude session
                 if [ "$HAS_TMUX" = true ] && tmux has-session -t "$wt_name" 2>/dev/null; then
                     tmux send-keys -t "$wt_name:1" "/with-markers /fix-pr-comments" Enter
+                fi
+                ;;
+            COMMENTED|"")
+                # No formal decision — check if the latest review left comments
+                if [ "$latest_review_state" = "COMMENTED" ] || [ "$latest_review_state" = "CHANGES_REQUESTED" ]; then
+                    log "INFO" "PR #$pr_number ($wt_name): review with comments (state: $latest_review_state) — sending /with-markers /fix-pr-comments"
+                    echo "working|fixing review comments" > "$f"
+                    if [ "$HAS_TMUX" = true ] && tmux has-session -t "$wt_name" 2>/dev/null; then
+                        tmux send-keys -t "$wt_name:1" "/with-markers /fix-pr-comments" Enter
+                    fi
+                else
+                    log "INFO" "PR #$pr_number ($wt_name): no actionable review — waiting"
                 fi
                 ;;
             APPROVED)
