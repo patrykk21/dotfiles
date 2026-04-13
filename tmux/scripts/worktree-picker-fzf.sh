@@ -36,8 +36,8 @@ write_switch_session() {
 # Get list of worktrees with metadata-enhanced info
 get_worktrees() {
     # Print header (without delimiter so it shows in fzf)
-    printf "%-4s %-50s %-10s %-16s %-6s %s\n" "" "NAME" "TYPE" "STATUS" "PORT" "BRANCH"
-    printf "%-4s %-50s %-10s %-16s %-6s %s\n" "" "─────" "────" "──────" "────" "──────"
+    printf "%-4s %-50s %-10s %-18s %-6s %-18s %s\n" "" "NAME" "TYPE" "STATUS" "PORT" "LAST ACTIVITY" "BRANCH"
+    printf "%-4s %-50s %-10s %-18s %-6s %-18s %s\n" "" "─────" "────" "──────" "────" "─────────────" "──────"
     
     # Pre-compute autopilot state for all projects (avoids quoting hell in awk)
     local autopilot_states=""
@@ -183,8 +183,17 @@ get_worktrees() {
         # Truncate ticket name to 48 chars for alignment
         display_name = substr(ticket, 1, 48)
 
+        # Get last activity timestamp from .state file mtime
+        last_activity = "-"
+        if (claude_state != "") {
+            cmd = "date -r " state_marker " +\"%m/%d %H:%M\" 2>/dev/null"
+            cmd | getline last_activity
+            close(cmd)
+            if (last_activity == "") last_activity = "-"
+        }
+
         # Output format
-        printf "%s%-50s %-10s %-16s %-6s %s\n", status_icon, display_name, type_text, status_text, port_text, branch
+        printf "%s%-50s %-10s %-18s %-6s %-18s %s\n", status_icon, display_name, type_text, status_text, port_text, last_activity, branch
     }'
 }
 
