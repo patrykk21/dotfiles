@@ -1637,11 +1637,13 @@ main() {
         meta=$(meta_read)
         status=$(echo "$meta" | jq -r '.status')
         if [ "$status" = "idle" ]; then
-            # Only success sets idle — safe to pick next immediately
             log "INFO" "Previous task completed successfully. Checking for next task."
             # fall through to find_ticket below
+        elif [ "$status" = "working" ] && [ "$MAX_CONCURRENT_TICKETS" -gt 1 ]; then
+            # Still working but concurrency allows more — fall through to pick next
+            log "INFO" "Current ticket still working. Checking if we can pick more (concurrency: $MAX_CONCURRENT_TICKETS)."
+            # fall through to concurrency check + find_ticket below
         else
-            # "failed" or still "working" — don't pick new work
             log "INFO" "=== Autopilot cycle complete ==="
             exit 0
         fi
@@ -1651,17 +1653,16 @@ main() {
         exit 0
     fi
 
-    # Enforce concurrency limit via metadata files
-    # States that block new work: "working" (active) and "failed" (needs manual reset)
+    # Enforce concurrency limit — count active state markers (working or awaiting_ci)
     local active_count=0
-    for meta_file in "$AUTOPILOT_DIR/projects/"*.state.json; do
-        [ -f "$meta_file" ] || continue
+    for state_file in "$AUTOPILOT_DIR/markers/"*.state; do
+        [ -f "$state_file" ] || continue
         local s
-        s=$(jq -r '.status' "$meta_file" 2>/dev/null || echo "")
-        [ "$s" = "working" ] || [ "$s" = "failed" ] && active_count=$((active_count + 1))
+        s=$(cut -d'|' -f1 "$state_file")
+        [ "$s" = "working" ] && active_count=$((active_count + 1))
     done
     if [ "$active_count" -ge "$MAX_CONCURRENT_TICKETS" ]; then
-        log "INFO" "Concurrency limit reached ($active_count/$MAX_CONCURRENT_TICKETS). Waiting."
+        log "INFO" "Concurrency limit reached ($active_count/$MAX_CONCURRENT_TICKETS working). Waiting."
         log "INFO" "=== Autopilot cycle complete ==="
         exit 0
     fi
