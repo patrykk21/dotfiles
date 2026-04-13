@@ -533,7 +533,8 @@ clickup_comment() {
 find_ticket() {
     if [ "${AI_PICKER_ENABLED:-true}" = "true" ]; then
         if ai_pick_ticket; then return 0; fi
-        log "WARN" "AI picker failed, falling back to oldest-first"
+        log "WARN" "AI picker failed — not falling back to oldest-first (could pick wrong ticket)"
+        return 1
     fi
     if [ "$TRACKER" = "clickup" ]; then
         find_autopilot_ticket_clickup
@@ -677,10 +678,12 @@ fetch_all_candidates_jira() {
 
     # Format candidates as JSON array for the picker
     CANDIDATE_TASKS_JSON=$(echo "$body" | jq '[.issues[] | {
+        id: .key,
         task_id: .key,
         name: .fields.summary,
         description: (.fields.description // ""),
         priority: (.fields.priority.name // "Medium"),
+        priority_label: (.fields.priority.name // "Medium"),
         type: (.fields.issuetype.name // "Task"),
         parent: (.fields.parent.key // null),
         url: ("https://groupondev.atlassian.net/browse/" + .key),
