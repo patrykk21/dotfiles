@@ -1468,6 +1468,47 @@ monitor_approved_prs() {
     done
 }
 
+# --- Conflict Monitor ---
+# Check idle worktrees (awaiting_review, approved) for merge conflicts with base branch.
+# If conflicts detected and Claude isn't actively working, send /with-markers /merge-base.
+check_pr_conflicts() {
+    local markers_dir="$AUTOPILOT_DIR/markers"
+    [ -d "$markers_dir" ] || return 0
+
+    for f in "$markers_dir"/*.state; do
+        [ -f "$f" ] || continue
+        local content state details wt_name
+        content=$(cat "$f")
+        state=$(echo "$content" | cut -d'|' -f1)
+        details=$(echo "$content" | cut -d'|' -f2-)
+
+        # Only check idle states — not working, not awaiting_ci
+        case "$state" in
+            awaiting_review|approved) ;;
+            *) continue ;;
+        esac
+
+        wt_name=$(basename "$f" .state)
+        local pr_number
+        pr_number=$(echo "$details" | grep -oE '/pull/[0-9]+' | grep -oE '[0-9]+')
+        [ -z "$pr_number" ] && continue
+
+        cd "$PROJECT_DIR" 2>/dev/null || continue
+
+        # Check if PR is mergeable
+        local mergeable
+        mergeable=$(gh pr view "$pr_number" --json mergeable -q '.mergeable' 2>/dev/null)
+
+        if [ "$mergeable" = "CONFLICTING" ]; then
+            log "INFO" "PR #$pr_number ($wt_name): has conflicts — sending /with-markers /merge-base"
+            echo "working|resolving merge conflicts" > "$f"
+            if [ "$HAS_TMUX" = true ] && tmux has-session -t "$wt_name" 2>/dev/null; then
+                tmux send-keys -t "$wt_name:1" "/with-markers /merge-base" Enter
+            fi
+        fi
+    done
+}
+
 # --- Stale Marker Cleanup ---
 # Remove markers for worktrees with no active session (tmux or PID)
 cleanup_stale_markers() {
@@ -1519,6 +1560,7 @@ main() {
     # Check worktrees awaiting review — auto-fix if changes requested
     monitor_awaiting_reviews
     monitor_approved_prs
+    check_pr_conflicts
 
     local meta
     meta=$(meta_read)
