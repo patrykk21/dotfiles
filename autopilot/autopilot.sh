@@ -531,7 +531,7 @@ clickup_comment() {
 
 # --- Tracker-agnostic wrappers ---
 find_ticket() {
-    if [ "$TRACKER" = "clickup" ] && [ "${AI_PICKER_ENABLED:-true}" = "true" ]; then
+    if [ "${AI_PICKER_ENABLED:-true}" = "true" ]; then
         if ai_pick_ticket; then return 0; fi
         log "WARN" "AI picker failed, falling back to oldest-first"
     fi
@@ -647,11 +647,57 @@ gather_local_context() {
         '{completed_history: $history, existing_branches: $branches, existing_worktrees: $worktrees, base_branch: $base_branch}')
 }
 
+fetch_all_candidates_jira() {
+    local jql="project = $JIRA_PROJECT AND labels = \"$JIRA_LABEL\" AND status = \"To Do\" ORDER BY priority ASC, created ASC"
+    local search_body
+    search_body=$(jq -n --arg jql "$jql" '{
+        jql: $jql,
+        maxResults: 20,
+        fields: ["summary", "description", "issuetype", "priority", "status", "parent", "issuelinks"]
+    }')
+
+    local response
+    response=$(jira_api POST "/search/jql" "$search_body")
+    local http_code
+    http_code=$(echo "$response" | tail -1)
+    local body
+    body=$(echo "$response" | sed '$d')
+
+    if [ "$http_code" != "200" ]; then
+        log "ERROR" "Jira candidate fetch failed (HTTP $http_code)"
+        return 1
+    fi
+
+    local issue_count
+    issue_count=$(echo "$body" | jq -r '.issues | length')
+    if [ "$issue_count" = "0" ]; then
+        log "INFO" "No candidate tickets found"
+        return 1
+    fi
+
+    # Format candidates as JSON array for the picker
+    CANDIDATE_TASKS_JSON=$(echo "$body" | jq '[.issues[] | {
+        task_id: .key,
+        name: .fields.summary,
+        description: (.fields.description // ""),
+        priority: (.fields.priority.name // "Medium"),
+        type: (.fields.issuetype.name // "Task"),
+        parent: (.fields.parent.key // null),
+        url: ("https://groupondev.atlassian.net/browse/" + .key),
+        dependencies: [.fields.issuelinks[]? | select(.type.name == "Blocks" or .type.name == "is blocked by") | .inwardIssue.key // .outwardIssue.key]
+    }]')
+
+    log "INFO" "Fetched $issue_count Jira candidates for AI picker"
+    return 0
+}
+
 ai_pick_ticket() {
     log "INFO" "Running AI ticket picker (model: $PICKER_MODEL)"
 
-    if ! fetch_all_candidates_clickup; then
-        return 1
+    if [ "$TRACKER" = "clickup" ]; then
+        if ! fetch_all_candidates_clickup; then return 1; fi
+    else
+        if ! fetch_all_candidates_jira; then return 1; fi
     fi
 
     gather_local_context
@@ -664,8 +710,10 @@ You are choosing the next task for an autonomous coding agent to implement.
 
 ## Instructions
 - Pick the task that should be done NEXT considering dependencies and priority.
-- If task B depends on task A, A must be completed first (check completed history for matching task IDs).
-- Priority ordering: 1=urgent, 2=high, 3=normal, 4=low, null=none. Prefer higher priority.
+- **Priority is king.** Pick the highest priority task that is NOT blocked. Priority ordering: Blocker > Critical > High > Medium > Low > none.
+- **Dependency check:** If a task depends on another task (via explicit dependencies, sequential numbering under the same parent/epic, or description references), the dependency must be completed first. Check completed_history AND existing branches/worktrees. If the dependency is not completed and has no branch, the task is BLOCKED — skip it.
+- **Sequential tickets:** Tickets under the same parent (e.g., ECH-672, ECH-673, ECH-674, ECH-675) are almost always sequential. Pick the lowest number that isn't completed yet. If ECH-672 isn't done, don't pick ECH-673.
+- If ALL high-priority tasks are blocked by unmet dependencies, pick the highest priority unblocked task regardless of priority tier.
 - Consider task descriptions and tags for context about what makes sense to do first.
 
 ## Branch Selection (CRITICAL)
