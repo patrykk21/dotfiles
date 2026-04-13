@@ -1524,9 +1524,8 @@ main() {
     # Enforce max worktrees limit — count existing worktrees for this project
     if [ -d "$PROJECT_DIR/.git" ] || [ -f "$PROJECT_DIR/.git" ]; then
         local wt_count
-        wt_count=$(git -C "$PROJECT_DIR" worktree list 2>/dev/null | wc -l | tr -d ' ')
-        # Subtract 1 for the main worktree (base repo)
-        wt_count=$((wt_count - 1))
+        # Count only worktrees under WORKTREES_BASE (exclude Cursor/IDE worktrees)
+        wt_count=$(git -C "$PROJECT_DIR" worktree list 2>/dev/null | grep -c "$WORKTREES_BASE" || echo "0")
         if [ "$wt_count" -ge "$MAX_WORKTREES" ]; then
             log "INFO" "Worktree limit reached ($wt_count/$MAX_WORKTREES). Clean up existing worktrees before picking new tickets."
             log "INFO" "=== Autopilot cycle complete ==="
