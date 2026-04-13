@@ -1054,6 +1054,7 @@ STATES (write exactly these):
   working|description of what you're doing     — you are actively coding, testing, committing
   awaiting_ci|PR_URL                           — you created/updated a PR, CI is running
   awaiting_review|PR_URL                       — CI passed, waiting for human review (assignee)
+  approved|PR_URL                              — reviewer approved, ready to merge
   needs_input|your question                    — you need the user to answer something
   failed|reason                                — you cannot complete the task
 
@@ -1415,21 +1416,55 @@ monitor_awaiting_reviews() {
                 fi
                 ;;
             APPROVED)
-                log "INFO" "PR #$pr_number ($wt_name): approved!"
-                # Assign and transition to idle
+                log "INFO" "PR #$pr_number ($wt_name): approved — ready to merge!"
+                # Assign to reviewer
                 if [ -n "${PR_ASSIGNEE:-}" ]; then
                     local current_user
                     current_user=$(gh api user -q '.login' 2>/dev/null || echo "")
                     gh pr edit "$pr_number" --add-assignee "$PR_ASSIGNEE" ${current_user:+--remove-assignee "$current_user"} 2>/dev/null
                     log "INFO" "PR #$pr_number assigned to $PR_ASSIGNEE"
                 fi
-                rm -f "$f"
-                meta_set_idle_from_completion "$details"
+                # Set approved state — stays here until manually merged
+                echo "approved|$details" > "$f"
                 ;;
             *)
                 # No decision yet or review pending — do nothing
                 ;;
         esac
+    done
+}
+
+# --- Approved PR Monitor ---
+# Check approved markers — once PR is merged, transition to idle
+monitor_approved_prs() {
+    local markers_dir="$AUTOPILOT_DIR/markers"
+    [ -d "$markers_dir" ] || return 0
+
+    for f in "$markers_dir"/*.state; do
+        [ -f "$f" ] || continue
+        local content state details wt_name
+        content=$(cat "$f")
+        state=$(echo "$content" | cut -d'|' -f1)
+        details=$(echo "$content" | cut -d'|' -f2-)
+
+        [ "$state" = "approved" ] || continue
+
+        wt_name=$(basename "$f" .state)
+        local pr_number
+        pr_number=$(echo "$details" | grep -oE '/pull/[0-9]+' | grep -oE '[0-9]+')
+        [ -z "$pr_number" ] && continue
+
+        cd "$PROJECT_DIR" 2>/dev/null || continue
+
+        local pr_state
+        pr_state=$(gh pr view "$pr_number" --json state -q '.state' 2>/dev/null)
+
+        if [ "$pr_state" = "MERGED" ]; then
+            log "INFO" "PR #$pr_number ($wt_name): merged! Transitioning to idle."
+            rm -f "$f"
+            rm -f "$markers_dir/${wt_name}.last_review_at"
+            meta_set_idle_from_completion "$details"
+        fi
     done
 }
 
@@ -1483,6 +1518,7 @@ main() {
 
     # Check worktrees awaiting review — auto-fix if changes requested
     monitor_awaiting_reviews
+    monitor_approved_prs
 
     local meta
     meta=$(meta_read)
