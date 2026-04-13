@@ -185,22 +185,31 @@ get_worktrees() {
 
         # Get last activity timestamp from .state file mtime
         last_activity = "-"
+        sort_epoch = "0"
         if (claude_state != "") {
             cmd = "date -r " state_marker " +\"%m/%d %H:%M\" 2>/dev/null"
             cmd | getline last_activity
             close(cmd)
             if (last_activity == "") last_activity = "-"
+            cmd = "date -r " state_marker " +\"%s\" 2>/dev/null"
+            cmd | getline sort_epoch
+            close(cmd)
+            if (sort_epoch == "") sort_epoch = "0"
         }
 
-        # Output format
-        printf "%s%-50s %-10s %-18s %-6s %-18s %s\n", status_icon, display_name, type_text, status_text, port_text, last_activity, branch
+        # Output with hidden sort key (epoch, 0 = no date = highest prio)
+        printf "%s%-50s %-10s %-18s %-6s %-18s %s\t%s\n", status_icon, display_name, type_text, status_text, port_text, last_activity, branch, sort_epoch
     }'
 }
 
 
 # Function to reload worktrees list
 reload_worktrees() {
-    get_worktrees
+    get_worktrees | {
+        IFS= read -r line1; echo "$line1"
+        IFS= read -r line2; echo "$line2"
+        sort -t$'\t' -k2 -n | cut -f1
+    }
 }
 
 # Handle script being called with reload argument
@@ -210,7 +219,14 @@ if [ "$1" = "reload" ]; then
 fi
 
 # Get the worktree data
-WORKTREE_DATA=$(get_worktrees)
+# Get worktrees, sort data rows by epoch (0=no date first, then ascending), strip sort key
+WORKTREE_DATA=$(get_worktrees | {
+    # Read and output header lines (first 2 lines)
+    IFS= read -r line1; echo "$line1"
+    IFS= read -r line2; echo "$line2"
+    # Sort remaining lines: by epoch (tab-separated last field), 0 first then ascending
+    sort -t$'\t' -k2 -n | cut -f1
+})
 
 # Find the longest visual line for consistent padding
 # The arrow → is 3 bytes but 1 visual character, so we need to handle this
