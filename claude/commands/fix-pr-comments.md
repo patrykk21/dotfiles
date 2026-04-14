@@ -117,3 +117,4 @@ If `--comment` flag is passed, post this summary as a reply comment on the PR us
 - If a fix would require understanding business context you don't have, mark it DISCUSSION
 - Respect the reviewer's exact wording — if they said "rename to X", use exactly X
 - After fixing, do not stage or commit — leave that to the user
+- **Every unaddressed comment MUST get a reply** — for DISCUSSION and SKIP comments, post a reply on the PR thread explaining why it wasn't actioned (e.g., "This is a design choice because...", "Skipping this nit for now — will address in a follow-up", "This line no longer exists after the refactor"). Never leave a reviewer's comment without a response.
