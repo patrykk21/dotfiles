@@ -1487,7 +1487,7 @@ monitor_awaiting_reviews() {
 
 # --- Approved PR Monitor ---
 # Check approved markers — once PR is merged, transition to idle
-monitor_approved_prs() {
+monitor_pr_merges() {
     local markers_dir="$AUTOPILOT_DIR/markers"
     [ -d "$markers_dir" ] || return 0
 
@@ -1498,7 +1498,11 @@ monitor_approved_prs() {
         state=$(echo "$content" | cut -d'|' -f1)
         details=$(echo "$content" | cut -d'|' -f2-)
 
-        [ "$state" = "approved" ] || continue
+        # Check any state that has a PR URL (awaiting_ci, awaiting_review, approved)
+        case "$state" in
+            awaiting_ci|awaiting_review|approved) ;;
+            *) continue ;;
+        esac
 
         wt_name=$(basename "$f" .state)
         local pr_number
@@ -1511,8 +1515,8 @@ monitor_approved_prs() {
         pr_state=$(gh pr view "$pr_number" --json state -q '.state' 2>/dev/null)
 
         if [ "$pr_state" = "MERGED" ]; then
-            log "INFO" "PR #$pr_number ($wt_name): merged! Transitioning to idle."
-            rm -f "$f"
+            log "INFO" "PR #$pr_number ($wt_name): merged!"
+            echo "merged|$details" > "$f"
             rm -f "$markers_dir/${wt_name}.last_review_at"
             meta_set_idle_from_completion "$details"
         fi
@@ -1615,7 +1619,7 @@ main() {
 
     # Check worktrees awaiting review — auto-fix if changes requested
     monitor_awaiting_reviews
-    monitor_approved_prs
+    monitor_pr_merges
     check_pr_conflicts
 
     local meta
