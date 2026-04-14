@@ -1611,8 +1611,12 @@ cleanup_stale_markers() {
 # --- Main Flow ---
 main() {
     # Parse flags
+    local ticket_override=""
+    local prev=""
     for arg in "$@"; do
         [ "$arg" = "--force" ] && export AUTOPILOT_FORCE=true
+        [ "$prev" = "--ticket" ] && ticket_override="$arg"
+        prev="$arg"
     done
 
     mkdir -p "$AUTOPILOT_DIR/logs" "$AUTOPILOT_DIR/prompts" "$AUTOPILOT_DIR/projects"
@@ -1701,7 +1705,19 @@ main() {
         fi
     fi
 
-    if ! find_ticket; then
+    # If a specific ticket was passed via --ticket, use it directly
+    if [ -n "$ticket_override" ]; then
+        # Extract ticket key from URL
+        TICKET_KEY=$(echo "$ticket_override" | grep -oE '[A-Z]+-[0-9]+' | tail -1)
+        if [ -z "$TICKET_KEY" ]; then
+            log "ERROR" "Could not extract ticket key from: $ticket_override"
+            exit 1
+        fi
+        TICKET_SUMMARY="Manual ticket override"
+        TICKET_TYPE="Task"
+        TICKET_PRIORITY="High"
+        log "INFO" "Ticket override: $TICKET_KEY (from $ticket_override)"
+    elif ! find_ticket; then
         log "INFO" "=== Autopilot cycle complete (no work) ==="
         exit 0
     fi

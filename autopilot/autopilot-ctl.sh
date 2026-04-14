@@ -374,12 +374,15 @@ case "${1:-help}" in
     run)
         project_name="${2:-}"
         force_flag=""
-        # Check for --force in any position
-        for arg in "$@"; do
-            [ "$arg" = "--force" ] && force_flag="--force"
+        ticket_url=""
+        # Check for --force and ticket URL in any position
+        for arg in "${@:2}"; do
+            [ "$arg" = "--force" ] && force_flag="--force" && continue
+            [[ "$arg" == http* ]] && ticket_url="$arg" && continue
         done
-        # Strip --force from project_name if it was $2
+        # Strip flags from project_name if it was $2
         [ "$project_name" = "--force" ] && project_name="${3:-}"
+        [[ "$project_name" == http* ]] && ticket_url="$project_name" && project_name="${3:-}"
 
         if [ -n "$project_name" ]; then
             config="$PROJECTS_DIR/${project_name}.env"
@@ -387,8 +390,13 @@ case "${1:-help}" in
                 echo -e "${RED}Project '$project_name' not found.${NC}"
                 exit 1
             fi
-            echo -e "${BLUE}Running autopilot cycle for $project_name...${NC}"
-            AUTOPILOT_CONF="$config" "$AUTOPILOT_DIR/autopilot.sh" $force_flag
+            if [ -n "$ticket_url" ]; then
+                echo -e "${BLUE}Running autopilot for $project_name with ticket: $ticket_url${NC}"
+                AUTOPILOT_CONF="$config" "$AUTOPILOT_DIR/autopilot.sh" $force_flag --ticket "$ticket_url"
+            else
+                echo -e "${BLUE}Running autopilot cycle for $project_name...${NC}"
+                AUTOPILOT_CONF="$config" "$AUTOPILOT_DIR/autopilot.sh" $force_flag
+            fi
         else
             echo -e "${BLUE}Running autopilot cycle for all projects...${NC}"
             "$AUTOPILOT_DIR/autopilot-runner.sh"
@@ -555,7 +563,7 @@ case "${1:-help}" in
         echo "  list               List configured projects"
         echo ""
         echo "Execution:"
-        echo "  run [project] [--force]  Run one cycle (--force ignores worktree limit)"
+        echo "  run [project] [url] [--force]  Run cycle, optionally with a specific ticket URL"
         echo "  stop <project>     Stop active ticket (kill session, remove worktree, reset)"
         echo "  logs [project] [N] Show last N log lines"
         echo "  history [project]  Show completed/failed tickets"
