@@ -1520,6 +1520,20 @@ monitor_pr_merges() {
             echo "merged|$details" > "$f"
             rm -f "$markers_dir/${wt_name}.last_review_at"
             meta_set_idle_from_completion "$details"
+        elif [ "$pr_state" = "OPEN" ] && [ "$state" != "approved" ]; then
+            # Check if review decision changed to APPROVED
+            local decision
+            decision=$(gh pr view "$pr_number" --json reviewDecision -q '.reviewDecision' 2>/dev/null)
+            if [ "$decision" = "APPROVED" ]; then
+                log "INFO" "PR #$pr_number ($wt_name): approved — ready to merge!"
+                echo "approved|$details" > "$f"
+                if [ -n "${PR_ASSIGNEE:-}" ]; then
+                    local current_user
+                    current_user=$(gh api user -q '.login' 2>/dev/null || echo "")
+                    gh pr edit "$pr_number" --add-assignee "$PR_ASSIGNEE" ${current_user:+--remove-assignee "$current_user"} 2>/dev/null
+                    log "INFO" "PR #$pr_number assigned to $PR_ASSIGNEE"
+                fi
+            fi
         fi
     done
 }
