@@ -92,6 +92,8 @@ Then update it throughout your work. Format: `STATE|details`
 
 After the user responds to a question, transition back to `working|addressing feedback`.
 
+**IMPORTANT:** Before writing to the marker, check if it currently says `merged` or `approved`. If so, do NOT overwrite it — those are terminal states set by the scheduler.
+
 ### Step 4: Monitor CI and reviews after PR creation
 After setting `awaiting_ci`, **do not stop working**. Actively monitor the PR:
 

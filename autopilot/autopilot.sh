@@ -1120,6 +1120,7 @@ WHEN TO TRANSITION:
   Cannot complete               → echo \"failed|reason\" > \$AUTOPILOT_STATE_MARKER
 
 CRITICAL: After setting awaiting_ci, DO NOT STOP. Poll CI, wait for CodeRabbit, address review comments, then set awaiting_review.
+CRITICAL: NEVER overwrite the marker if it currently says 'merged' or 'approved' — those are terminal states set by the scheduler.
 
 IMPORTANT: Update this file EVERY time your state changes. The tmux worktree picker and autopilot scheduler read it to show your current status.
 
