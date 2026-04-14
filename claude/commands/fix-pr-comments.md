@@ -118,3 +118,4 @@ If `--comment` flag is passed, post this summary as a reply comment on the PR us
 - Respect the reviewer's exact wording — if they said "rename to X", use exactly X
 - After fixing, do not stage or commit — leave that to the user
 - **Every unaddressed comment MUST get a reply** — for DISCUSSION and SKIP comments, post a reply on the PR thread explaining why it wasn't actioned (e.g., "This is a design choice because...", "Skipping this nit for now — will address in a follow-up", "This line no longer exists after the refactor"). Never leave a reviewer's comment without a response.
+- **Resolve threads after fixing** — after fixing a CodeRabbit or GitHub quality check comment, resolve the conversation thread. Use `gh api` to resolve the thread: `gh api graphql -f query='mutation { resolveReviewThread(input: {threadId: "ID"}) { thread { isResolved } } }'`. For comments you replied to but didn't fix (DISCUSSION/SKIP), also resolve after posting your rationale reply.
