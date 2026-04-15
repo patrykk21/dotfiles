@@ -376,7 +376,7 @@ transition_to_in_progress() {
     fi
 
     local transition_id
-    transition_id=$(echo "$body" | jq -r '.transitions[] | select(.name | test("In Progress"; "i")) | .id' | head -1)
+    transition_id=$(echo "$body" | jq -r '.transitions[] | select(.name == "In Progress") | .id' | head -1)
 
     if [ -z "$transition_id" ] || [ "$transition_id" = "null" ]; then
         log "WARN" "No 'In Progress' transition found for $ticket_key. Available:"
