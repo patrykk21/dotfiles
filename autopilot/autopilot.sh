@@ -396,6 +396,36 @@ transition_to_in_progress() {
     fi
 }
 
+transition_to_code_review() {
+    local ticket_key="$1"
+    [ "$TRACKER" != "jira" ] && return 0
+
+    local response
+    response=$(jira_api GET "/issue/$ticket_key/transitions")
+    local http_code
+    http_code=$(echo "$response" | tail -1)
+    local body
+    body=$(echo "$response" | sed '$d')
+
+    [ "$http_code" != "200" ] && return 1
+
+    # Exact match: "Code Review" first, then "Review", then "In Review"
+    local transition_id=""
+    for name in "Code Review" "Review" "In Review"; do
+        transition_id=$(echo "$body" | jq -r --arg n "$name" '.transitions[] | select(.name == $n) | .id' | head -1)
+        [ -n "$transition_id" ] && [ "$transition_id" != "null" ] && break
+    done
+
+    [ -z "$transition_id" ] || [ "$transition_id" = "null" ] && return 1
+
+    response=$(jira_api POST "/issue/$ticket_key/transitions" "{\"transition\":{\"id\":\"$transition_id\"}}")
+    http_code=$(echo "$response" | tail -1)
+
+    if [ "$http_code" = "204" ] || [ "$http_code" = "200" ]; then
+        log "INFO" "Transitioned $ticket_key to Code Review"
+    fi
+}
+
 jira_comment() {
     local ticket_key="$1"
     local message="$2"
@@ -1255,6 +1285,8 @@ check_active_work() {
         case "$marker_state" in
             awaiting_ci|awaiting_review)
                 log "INFO" "$ticket: $marker_state. PR: $marker_details"
+                # Transition Jira ticket to Code Review (if not already)
+                transition_to_code_review "$ticket"
                 if [ -n "${PR_ASSIGNEE:-}" ]; then
                     meta_write "$(echo "$meta" | jq \
                         --arg pr "$marker_details" \
