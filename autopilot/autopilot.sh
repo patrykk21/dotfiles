@@ -1725,10 +1725,13 @@ main() {
         s=$(cut -d'|' -f1 "$state_file")
         [ "$s" = "working" ] && active_count=$((active_count + 1))
     done
-    if [ "$active_count" -ge "$MAX_CONCURRENT_TICKETS" ]; then
+    if [ "$active_count" -ge "$MAX_CONCURRENT_TICKETS" ] && [ "${AUTOPILOT_FORCE:-}" != "true" ]; then
         log "INFO" "Concurrency limit reached ($active_count/$MAX_CONCURRENT_TICKETS working). Waiting."
         log "INFO" "=== Autopilot cycle complete ==="
         exit 0
+    fi
+    if [ "$active_count" -ge "$MAX_CONCURRENT_TICKETS" ] && [ "${AUTOPILOT_FORCE:-}" = "true" ]; then
+        log "INFO" "Concurrency limit ($active_count/$MAX_CONCURRENT_TICKETS) bypassed with --force."
     fi
 
     # Enforce max worktrees limit — count existing worktrees for this project

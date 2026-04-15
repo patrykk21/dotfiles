@@ -21,29 +21,41 @@ Read the full Jira ticket using the Atlassian MCP tools:
 - If the ticket references other tickets, read those too for context
 - Understand exactly what needs to be done before writing any code
 
-### 2. Read Project Conventions
+### 2. Triage — Decide What This Ticket Needs
+
+Before doing anything else, classify the ticket into one of these categories based on the ticket type, description, and acceptance criteria:
+
+| Category | Signals | What to do |
+|----------|---------|------------|
+| **Research / Spike / Discussion** | Type is "Spike", "Research", or "Investigation". Description asks to "explore", "evaluate", "investigate", "compare options", "propose a solution", or "come up with an approach". No concrete implementation steps. | **Do NOT write code.** Perform the research, then write your findings as a Jira comment (step 7R). |
+| **Implementation** | Clear acceptance criteria with specific deliverables. Description says "add", "fix", "build", "implement", "create", "update". | Proceed to step 3 (implement). |
+| **Ambiguous** | Could go either way. | Treat as **research** — it's safer to deliver findings than unwanted code. Note your reasoning in the Jira comment. |
+
+**If the ticket is Research / Spike / Discussion, skip to step 7R.**
+
+### 3. Read Project Conventions (Implementation only)
 
 - Read AGENTS.md / CLAUDE.md in the project root for coding standards
 - Check the existing codebase patterns and architecture
 - Identify which files need to change
 
-### 3. Implement the Changes
+### 4. Implement the Changes (Implementation only)
 
 - Follow ALL conventions from the project's configuration files
 - Write clean, typed code matching the project's style
 - Keep changes focused on the ticket scope — no extras
 
-### 4. Verify Your Work
+### 5. Verify Your Work (Implementation only)
 
 Run the project's test/lint/typecheck commands. Fix any errors before proceeding. If tests fail, investigate and fix.
 
-### 5. Commit Your Changes
+### 6. Commit & Push (Implementation only)
 
 - Stage relevant files (not .env, secrets, or generated files)
 - Commit with message format: `[{{TICKET_KEY}}] Description of what was done`
 - Push to remote: `git push -u origin {{WORKTREE_NAME}}`
 
-### 6. Create a Pull Request
+### 7I. Create a Pull Request (Implementation only)
 
 Create a PR against `{{BASE_BRANCH}}` using the GitHub MCP tools or `gh` CLI:
 - Title: `[{{TICKET_KEY}}] {{TICKET_SUMMARY}}`
@@ -54,20 +66,40 @@ Create a PR against `{{BASE_BRANCH}}` using the GitHub MCP tools or `gh` CLI:
   - Screenshots if UI changes were made
 - Target branch: `{{BASE_BRANCH}}`
 
-### 7. Comment on Jira
-
-Add a comment on {{TICKET_KEY}} with:
+Then add a Jira comment on {{TICKET_KEY}} with:
 - The PR link
 - Brief summary of what was implemented
 - Any notes or decisions made during implementation
+
+Then go to step 8.
+
+### 7R. Research Deliverable (Research / Spike only)
+
+Do NOT create a branch, commit, or PR. Instead:
+
+1. Investigate the problem space thoroughly — read relevant code, check existing schema/architecture, search for prior art
+2. Add a **detailed Jira comment** on {{TICKET_KEY}} with:
+   - Your findings organized by topic
+   - Options considered with pros/cons
+   - A recommended approach with rationale
+   - Open questions or risks identified
+   - References to specific files/code you examined
+3. If the ticket has sub-tasks or acceptance criteria that are research-oriented, address each one
+
+Then go to step 8.
 
 ### 8. Signal Completion
 
 This is CRITICAL. You MUST do exactly one of these:
 
-**On success**, write the PR URL to the completion marker:
+**On success (implementation)**, write the PR URL to the completion marker:
 ```bash
 echo "PR_URL_HERE" > "{{COMPLETION_MARKER}}"
+```
+
+**On success (research)**, write "RESEARCH" to the completion marker:
+```bash
+echo "RESEARCH: Findings posted as Jira comment on {{TICKET_KEY}}" > "{{COMPLETION_MARKER}}"
 ```
 
 **On failure** (if you cannot complete the ticket), write the reason:
