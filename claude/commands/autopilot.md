@@ -62,7 +62,13 @@ Work autonomously to implement it end-to-end:
 2. **Plan** — identify files to change, break into tasks if needed
 3. **Implement** — write code following project conventions
 4. **Verify** — run the project's test, lint, typecheck commands. Fix any errors.
-5. **Playwright test** — if a dev server is running (check `$SERVER_PORT` or server log), run Playwright browser tests against the affected pages/components. Use the `/test` skill or run directly via `npx playwright test` or the Playwright MCP tools. Fix any failures before pushing.
+5. **Browser testing** — if a dev server is running (check `$SERVER_PORT` or server log), use the Playwright MCP tools to visually verify your changes:
+   - Navigate to the affected page(s) on the dev server
+   - **Check the FULL page** — not just the component you changed. If other sections on the same page show errors, blank charts, loading spinners that never resolve, or missing data, that's a regression
+   - Check the browser console for errors (`browser_console_messages`)
+   - Check the server log for 500 errors or query failures
+   - If you notice regressions unrelated to your change, note them in the PR description under "Known issues" — do NOT silently ignore them
+   - If regressions ARE caused by your change, fix them before pushing
 6. **Commit & push** — format: `[TICKET-KEY] Description`. Push to current branch.
 7. **Create PR** with the following in the description:
    - Summary of changes
