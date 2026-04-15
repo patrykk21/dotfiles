@@ -902,7 +902,12 @@ setup_worktree() {
             return 1
         fi
 
-        # Run project-specific setup hook if configured (e.g., copy .env, generate configs)
+        # Copy env and settings from main repo to worktree
+        cp "$PROJECT_DIR/.env.local" "$worktree_path/.env.local" 2>/dev/null && log "INFO" "Copied .env.local" || true
+        mkdir -p "$worktree_path/.claude"
+        cp "$PROJECT_DIR/.claude/settings.local.json" "$worktree_path/.claude/settings.local.json" 2>/dev/null && log "INFO" "Copied settings.local.json" || true
+
+        # Run project-specific setup hook if configured
         if [ -n "$WORKTREE_SETUP_HOOK" ] && [ -x "$WORKTREE_SETUP_HOOK" ]; then
             log "INFO" "Running worktree setup hook: $WORKTREE_SETUP_HOOK"
             WORKTREE_PATH="$worktree_path" \
