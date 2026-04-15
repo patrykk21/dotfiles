@@ -49,31 +49,73 @@ Use the appropriate MCP tools or `WebFetch` to get:
 - Acceptance criteria (if any)
 - Comments (for additional context)
 - Priority and type
+- Estimated complexity (LOC, number of files, dependencies)
 
 For **Jira**: use Atlassian MCP tools (extract ticket key from URL, e.g. `ECH-571` from `.../browse/ECH-571`)
 For **ClickUp**: use WebFetch to read the ticket
 For **GitHub Issues**: use GitHub MCP tools
 For **other platforms**: use WebFetch, parse what you can
 
-### Step 2: Implement the ticket
-Work autonomously to implement it end-to-end:
+### Step 2: Evaluate complexity and choose implementation path
+
+After reading the ticket, decide which path to take:
+
+**Simple ticket** (direct implementation) — use when ALL of these are true:
+- Touches 1-3 files
+- Single clear change (bug fix, rename, config change, add a field, small UI tweak)
+- No new architecture or patterns needed
+- Estimated under ~100 LOC
+- No database migrations
+- No new API endpoints or services
+
+**Complex ticket** (GSD flow) — use when ANY of these are true:
+- Touches 4+ files across multiple layers (schema, queries, connectors, services, UI)
+- Requires new architecture decisions (new parallel route, new data pipeline, new integration)
+- Has multiple acceptance criteria or phases
+- Estimated over ~100 LOC
+- Requires database schema changes with migrations
+- Involves new API endpoints, services, or connectors
+- Description explicitly mentions phases, multiple steps, or "spike"
+
+### Path A: Simple ticket (direct implementation)
 
 1. **Read project conventions** — AGENTS.md / CLAUDE.md in the project root
-2. **Plan** — identify files to change, break into tasks if needed
-3. **Implement** — write code following project conventions
-4. **Verify** — run the project's test, lint, typecheck commands. Fix any errors.
-5. **Browser verify** — run `/browser-verify` to visually verify the affected pages. This checks the full page (not just your component), console errors, server logs, and takes screenshots. Fix any regressions before pushing. Screenshots from this step go into the PR description.
-6. **Commit & push** — format: `[TICKET-KEY] Description`. Push to current branch.
-7. **Create PR** with the following in the description:
+2. **Implement** — write code following project conventions
+3. **Verify** — run the project's test, lint, typecheck commands. Fix any errors.
+4. **Browser verify** — run `/browser-verify` to visually verify the affected pages. Fix regressions before pushing.
+5. **Commit & push** — format: `[TICKET-KEY] Description`. Push to current branch.
+6. **Create PR** with:
    - Summary of changes
-   - **Screenshots** — use Playwright MCP (`browser_navigate` + `browser_take_screenshot`) to capture the affected pages/components on the running dev server. Upload screenshots to the PR description. Show before/after if applicable.
-   - **Human testing steps** — numbered list of manual steps a reviewer can follow to verify the changes (e.g., "1. Navigate to /dashboards/ai-analytics, 2. Click the CodeRabbit tab, 3. Verify the chart loads with data"). Be specific about URLs, clicks, and expected results.
-   - Do NOT assign the PR — the autopilot scheduler handles assignment after CI and reviews pass.
-8. **Comment on ticket** — add the PR link and brief summary back on the original ticket (use the platform's MCP tools if available)
+   - **Screenshots** from `/browser-verify`
+   - **Human testing steps** — numbered list a reviewer can follow to verify
+   - Do NOT assign the PR
+7. **Comment on ticket** — add the PR link and brief summary
+
+### Path B: Complex ticket (GSD flow)
+
+1. **Read project conventions** — AGENTS.md / CLAUDE.md in the project root
+2. **Initialize GSD project** — create a `.planning/` directory and run `/gsd:new-project` with the ticket description as the input document. This will:
+   - Analyze requirements
+   - Create a roadmap with phases
+   - Plan each phase with verification criteria
+3. **Execute phases** — run `/gsd:execute-phase` for each phase, or `/gsd:run-all` to execute all phases autonomously. Each phase:
+   - Plans the implementation
+   - Executes with atomic commits
+   - Verifies against acceptance criteria
+4. **Browser verify** — run `/browser-verify` after the final phase. Fix regressions.
+5. **Commit & push** — ensure all phase commits are pushed. Format: `[TICKET-KEY] Description`.
+6. **Create PR** with:
+   - Summary of changes (reference the GSD phases)
+   - **Screenshots** from `/browser-verify`
+   - **Human testing steps** — numbered list a reviewer can follow
+   - Do NOT assign the PR
+7. **Comment on ticket** — add the PR link and brief summary
+
+### Both paths: Post-PR steps
 
 Note: Jira transitions (In Progress, Code Review) are handled by the autopilot scheduler — do NOT transition tickets yourself.
 
-**On subsequent pushes** (e.g., after fixing review comments): re-run Playwright tests before pushing. If the test results or screenshots change, update the PR description.
+**On subsequent pushes** (e.g., after fixing review comments): re-run `/browser-verify` before pushing. Update PR description if screenshots change.
 
 ### Step 3: Update state marker
 **ALWAYS maintain a state marker file**, even if this session wasn't launched by the autopilot scheduler.
