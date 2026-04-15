@@ -1156,6 +1156,7 @@ WHEN TO TRANSITION:
 
 CRITICAL: After setting awaiting_ci, DO NOT STOP. Poll CI, wait for CodeRabbit, address review comments, then set awaiting_review.
 CRITICAL: NEVER overwrite the marker if it currently says 'merged' or 'approved' — those are terminal states set by the scheduler.
+CRITICAL: Before EVERY git push, re-read AGENTS.md/CLAUDE.md and self-review your diff against all project rules. Check architecture, code standards, naming, imports, no console.logs, no commented-out code. Fix violations BEFORE pushing — this applies to initial PRs AND subsequent fixes.
 
 IMPORTANT: Update this file EVERY time your state changes. The tmux worktree picker and autopilot scheduler read it to show your current status.
 

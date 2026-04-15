@@ -111,9 +111,9 @@ After reading the ticket, decide which path to take:
    - Do NOT assign the PR
 7. **Comment on ticket** — add the PR link and brief summary
 
-### Both paths: Self-review before PR
+### Both paths: Self-review before EVERY push
 
-Before creating the PR, do a final self-review against the project's AGENTS.md / CLAUDE.md rules. This is NOT optional — it catches issues before reviewers see them.
+Before EVERY `git push` — whether it's the initial PR creation or a subsequent fix — do a self-review against the project's AGENTS.md / CLAUDE.md rules. This is NOT optional — it catches issues before reviewers see them. This applies to `/fix-pr-comments`, `/merge-base`, and any other command that results in a push.
 
 **Re-read AGENTS.md/CLAUDE.md** and check your changes against every applicable rule:
 

@@ -116,6 +116,6 @@ If `--comment` flag is passed, post this summary as a reply comment on the PR us
 - Never change logic that wasn't mentioned in a comment
 - If a fix would require understanding business context you don't have, mark it DISCUSSION
 - Respect the reviewer's exact wording — if they said "rename to X", use exactly X
-- After fixing, do not stage or commit — leave that to the user
+- After fixing, stage and commit but **before pushing**: re-read AGENTS.md/CLAUDE.md and self-review your diff. Check architecture compliance, code standards, naming, no console.logs, no commented-out code. Fix any violations before pushing.
 - **Every unaddressed comment MUST get a reply** — for DISCUSSION and SKIP comments, post a reply on the PR thread explaining why it wasn't actioned (e.g., "This is a design choice because...", "Skipping this nit for now — will address in a follow-up", "This line no longer exists after the refactor"). Never leave a reviewer's comment without a response.
 - **Resolve threads after fixing** — after fixing a CodeRabbit or GitHub quality check comment, resolve the conversation thread. Use `gh api` to resolve the thread: `gh api graphql -f query='mutation { resolveReviewThread(input: {threadId: "ID"}) { thread { isResolved } } }'`. For comments you replied to but didn't fix (DISCUSSION/SKIP), also resolve after posting your rationale reply.

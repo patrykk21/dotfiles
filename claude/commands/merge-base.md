@@ -40,7 +40,9 @@ Merge the PR's base branch into the current branch to resolve conflicts.
    - Run typecheck, lint, and tests if available
    - Fix any issues introduced by the merge
 
-7. **Push**:
+7. **Self-review** — re-read AGENTS.md/CLAUDE.md and check the full diff (`git diff HEAD~1`) against all project rules. Fix any violations.
+
+8. **Push**:
    ```bash
    git push
    ```
