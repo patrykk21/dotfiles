@@ -111,6 +111,45 @@ After reading the ticket, decide which path to take:
    - Do NOT assign the PR
 7. **Comment on ticket** — add the PR link and brief summary
 
+### Both paths: Self-review before PR
+
+Before creating the PR, do a final self-review against the project's AGENTS.md / CLAUDE.md rules. This is NOT optional — it catches issues before reviewers see them.
+
+**Re-read AGENTS.md/CLAUDE.md** and check your changes against every applicable rule:
+
+1. **Architecture compliance**
+   - Services only call connectors, never queries directly
+   - Connectors wrap results in `ServerActionResult<T>`
+   - No `import from "../../queries/*"` in service files
+   - Caching uses `createRequestCache` / `createDbCache`, never raw `cache()`
+
+2. **Code standards**
+   - No `any` types
+   - No JSDoc comments (TypeScript types are sufficient)
+   - No `@deprecated` markers
+   - No `AbortSignal` / signal parameters
+   - No dynamic imports in Server Actions
+   - Naming: PascalCase components, camelCase functions, kebab-case files
+
+3. **Data fetching**
+   - Server Actions for data fetching (not API routes) unless external access needed
+   - GET for fetching, POST for mutations (REST principles)
+   - No backwards-compatibility shims or unused re-exports
+
+4. **Files & structure**
+   - No unnecessary new files (prefer editing existing)
+   - No documentation files unless explicitly requested
+   - No files outside ticket scope modified
+   - Changelog updated if user-facing changes
+
+5. **Review your diff** — run `git diff --stat` and `git diff` to see exactly what you're submitting. Look for:
+   - Accidental debug logs (`console.log`) left in
+   - Commented-out code
+   - Files that shouldn't have been modified
+   - Missing imports or unused imports
+
+If you find violations, **fix them before creating the PR**. Do not note them as "known issues" — fix them.
+
 ### Both paths: Post-PR steps
 
 Note: Jira transitions (In Progress, Code Review) are handled by the autopilot scheduler — do NOT transition tickets yourself.
