@@ -62,10 +62,17 @@ Work autonomously to implement it end-to-end:
 2. **Plan** — identify files to change, break into tasks if needed
 3. **Implement** — write code following project conventions
 4. **Verify** — run the project's test, lint, typecheck commands. Fix any errors.
-5. **Commit & push** — format: `[TICKET-KEY] Description`. Push to current branch.
-6. **Create PR** — against the project's base branch with a descriptive summary. Do NOT assign the PR — the autopilot scheduler handles assignment after CI and reviews pass.
-7. **Comment on ticket** — add the PR link and brief summary back on the original ticket (use the platform's MCP tools if available)
-8. **Transition ticket** — move the ticket to "Code Review" status. For Jira: get available transitions and prefer these names in order: "Code Review", "Review", "In Review". Do NOT use "Design Review" or "Design in progress" — those are for design work, not code. For other platforms: update status if the MCP tools support it.
+5. **Playwright test** — if a dev server is running (check `$SERVER_PORT` or server log), run Playwright browser tests against the affected pages/components. Use the `/test` skill or run directly via `npx playwright test` or the Playwright MCP tools. Fix any failures before pushing.
+6. **Commit & push** — format: `[TICKET-KEY] Description`. Push to current branch.
+7. **Create PR** with the following in the description:
+   - Summary of changes
+   - **Screenshots** — use Playwright MCP (`browser_navigate` + `browser_take_screenshot`) to capture the affected pages/components on the running dev server. Upload screenshots to the PR description. Show before/after if applicable.
+   - **Human testing steps** — numbered list of manual steps a reviewer can follow to verify the changes (e.g., "1. Navigate to /dashboards/ai-analytics, 2. Click the CodeRabbit tab, 3. Verify the chart loads with data"). Be specific about URLs, clicks, and expected results.
+   - Do NOT assign the PR — the autopilot scheduler handles assignment after CI and reviews pass.
+8. **Comment on ticket** — add the PR link and brief summary back on the original ticket (use the platform's MCP tools if available)
+9. **Transition ticket** — move the ticket to "Code Review" status. For Jira: get available transitions and prefer these names in order: "Code Review", "Review", "In Review". Do NOT use "Design Review" or "Design in progress" — those are for design work, not code. For other platforms: update status if the MCP tools support it.
+
+**On subsequent pushes** (e.g., after fixing review comments): re-run Playwright tests before pushing. If the test results or screenshots change, update the PR description.
 
 ### Step 3: Update state marker
 **ALWAYS maintain a state marker file**, even if this session wasn't launched by the autopilot scheduler.
