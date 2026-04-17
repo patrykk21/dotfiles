@@ -57,12 +57,39 @@ def load_registry(registry_path: Path) -> list[dict]:
         return []
 
 
+def discover_worktree_paths(repo_path: str) -> list[str]:
+    """Discover git worktree paths for a given repo by running git worktree list."""
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["git", "-C", repo_path, "worktree", "list", "--porcelain"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode != 0:
+            return []
+        paths = []
+        for line in result.stdout.splitlines():
+            if line.startswith("worktree "):
+                wt_path = line[len("worktree "):]
+                # Skip the main repo itself — it's already registered
+                if str(Path(wt_path).resolve()) != str(Path(repo_path).resolve()):
+                    paths.append(wt_path)
+        return paths
+    except (subprocess.TimeoutExpired, OSError):
+        return []
+
+
 def build_project_index(registry: list[dict]) -> list[tuple[str, str]]:
     """Return [(mangled_prefix, project_id)] sorted longest-prefix-first.
 
     Longest-first ordering lets a nested path (e.g. `-Users-me-repo-apps-x`)
     still attribute to its parent project (`repo`) via prefix match, while
     more-specific registry entries win over less-specific ones.
+
+    Also discovers git worktrees for each registered project and adds them
+    to the index under the same project id, so sessions run in worktrees
+    are correctly attributed to their parent project.
     """
     items: list[tuple[str, str]] = []
     for p in registry:
@@ -73,6 +100,10 @@ def build_project_index(registry: list[dict]) -> list[tuple[str, str]]:
         mangled = mangle_path(path)
         pid = p.get("id", Path(path).name)
         items.append((mangled, pid))
+        # Discover worktrees and add them under the same project id
+        for wt_path in discover_worktree_paths(path):
+            wt_mangled = mangle_path(wt_path)
+            items.append((wt_mangled, pid))
     items.sort(key=lambda x: -len(x[0]))
     return items
 

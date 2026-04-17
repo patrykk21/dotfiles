@@ -173,13 +173,33 @@ get_worktrees() {
             }
         }
 
-        # Status icon — only arrow for current, dot for active/inactive
+        # Check if this worktree has unseen activity
+        seen_dir = ENVIRON["HOME"] "/.config/autopilot/seen"
+        seen_file = seen_dir "/" ticket ".seen"
+        has_unseen = 0
+        if (claude_state != "" && claude_state != "merged") {
+            # Get marker mtime epoch
+            marker_epoch = 0
+            cmd = "stat -f \"%m\" " state_marker " 2>/dev/null"
+            cmd | getline marker_epoch
+            close(cmd)
+            # Get seen epoch
+            seen_epoch = 0
+            cmd = "cat " seen_file " 2>/dev/null"
+            cmd | getline seen_epoch
+            close(cmd)
+            if (seen_epoch == "") seen_epoch = 0
+            if (marker_epoch + 0 > seen_epoch + 0) has_unseen = 1
+        }
+
+        # Status icon — arrow for current, ● for unread, nothing for read
+        unseen_tag = ""
         if (path == current) {
-            if (session_status == "active") status_icon = "→ ● "
-            else status_icon = "→ ○ "
+            status_icon = "→   "
+        } else if (has_unseen) {
+            status_icon = "  ● "
         } else {
-            if (session_status == "active") status_icon = "  ● "
-            else status_icon = "  ○ "
+            status_icon = "    "
         }
 
         # Truncate ticket name to 48 chars for alignment
@@ -335,7 +355,7 @@ fi
 # Use fzf (tmux display-popup creates the popup window)
 selected=$(echo "$WORKTREE_DATA" | fzf \
     --prompt=" Select worktree: " \
-    --header=$'\n'"$SEPARATOR"$'\n    [AI WORKING] [NEEDS INPUT] [AWAITING CI] [AWAITING REVIEW] [APPROVED] [MERGED] [ACTIVE] [SAVED] [AUTO]\n'"$SEPARATOR"$'\n    enter switch   ctrl-x delete   ctrl-k kill session   ctrl-r reload' \
+    --header=$'\n'"$SEPARATOR"$'\n    [AI WORKING] [NEEDS INPUT] [AWAITING CI] [AWAITING REVIEW] [APPROVED] [MERGED] [ACTIVE] [SAVED] [AUTO]   ● = unread\n'"$SEPARATOR"$'\n    enter switch   ctrl-x delete   ctrl-k kill session   ctrl-r reload' \
     --header-lines=2 \
     --ansi \
     --color="fg:250,bg:235,hl:114,fg+:235,bg+:114,hl+:235,prompt:114,pointer:114,header:243,border:114" \
@@ -418,6 +438,10 @@ if [ -n "$selected" ]; then
     
     echo "[PICKER DEBUG] Parsed - icon:'$icon' name:'$name' type:'$type' session:'$session' path:'$worktree_path'" >> /tmp/tmux-worktree-debug.log
     
+    # Mark this worktree as seen
+    mkdir -p "$HOME/.config/autopilot/seen"
+    date +%s > "$HOME/.config/autopilot/seen/${name}.seen"
+
     # Check if we selected the current session (indicated by arrow)
     if [ "$has_arrow" = "1" ]; then
         echo "[PICKER DEBUG] Already in current session, no switch needed" >> /tmp/tmux-worktree-debug.log

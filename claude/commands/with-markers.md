@@ -26,7 +26,16 @@ echo "working|running $ARGUMENTS" > "$AUTOPILOT_STATE_MARKER"
 
 ## Step 3: Execute the command
 
-Run the command/prompt specified in `$ARGUMENTS`. This could be a slash command like `/fix-pr-comments` or any other instruction.
+**CRITICAL**: You MUST invoke the Skill tool to run `$ARGUMENTS`. Do NOT attempt to perform the command's logic yourself — always delegate to the skill. For example, if `$ARGUMENTS` is `/fix-pr-comments`, you MUST call the Skill tool with skill="fix-pr-comments". Never short-circuit by checking comments or CI yourself — that is the inner skill's job.
+
+## Step 3.5: Self-review before pushing
+
+If the command produced code changes that will be pushed (e.g., `/fix-pr-comments` fixed issues), run `/review --fix` before pushing. This spawns a review team to catch bugs, security issues, and architecture violations in your changes. Apply any CRITICAL/IMPORTANT fixes.
+
+Skip this step if:
+- The command was read-only (no files changed)
+- The command was `/review` itself (avoid recursion)
+- The command was `/merge-base` (merge commits don't need review)
 
 ## Step 4: Update marker based on outcome
 

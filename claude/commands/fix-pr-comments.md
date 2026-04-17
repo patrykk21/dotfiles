@@ -28,17 +28,49 @@ Arguments: $ARGUMENTS
 
 ### STEP 2 — Fetch all review comments
 
-Fetch in parallel:
-- **Review thread comments** via `get_pull_request_reviews` (includes review body + state)
-- **Inline code comments** via `get_pull_request_comments` (line-level comments)
+You MUST fetch from BOTH sources. Do NOT skip either one.
 
-Filter to only **unresolved/open** comments:
-- For reviews: state is `CHANGES_REQUESTED` or `COMMENTED` (not `APPROVED` and not `DISMISSED`)
-- For inline comments: include all (GitHub doesn't expose resolved state via API — treat all as candidates)
+**Source A: Review bodies** (CRITICAL — most human reviewers write feedback here, not as inline comments):
+```bash
+gh api repos/{owner}/{repo}/pulls/{pr_number}/reviews --paginate \
+  --jq '[.[] | select(.state == "CHANGES_REQUESTED" or .state == "COMMENTED") | select(.body != null and .body != "") | {id: .id, author: .user.login, state: .state, body: .body, submitted_at: .submitted_at}]'
+```
+**IMPORTANT**: You MUST use `--paginate` because PRs with many CodeRabbit reviews can exceed the default 30-per-page limit, causing the latest human reviews to be on page 2+.
+This returns reviews with substantive body text. These often contain numbered issues like `[C1]`, `[I1]`, `### Critical`, `### Important` etc. **Each issue in the body is a separate comment to triage.**
+
+**Source B: Inline thread comments** (code-level comments attached to specific lines):
+```bash
+gh api graphql -f query='{ repository(owner: "{owner}", name: "{repo}") { pullRequest(number: {pr_number}) { reviewThreads(first: 100) { nodes { isResolved comments(first: 10) { nodes { body author { login } path line } } } } } } }'
+```
+Filter to unresolved threads only.
+
+**IMPORTANT**:
+- If Source A returns reviews with body text, those MUST be triaged even if Source B returns zero inline comments.
+- When a reviewer has multiple reviews, triage the **latest** one from each reviewer (by `submitted_at`). Earlier reviews may have been addressed already — but the latest one reflects what the reviewer currently wants fixed.
+- A `COMMENTED` review with substantive issues (numbered items, file references, code suggestions) is just as actionable as `CHANGES_REQUESTED` — the reviewer chose "comment" instead of "request changes" but still expects fixes.
 
 ### STEP 3 — Triage comments
 
-For each comment, classify it into one of:
+There are TWO sources of feedback to triage:
+
+#### 3a. Review body comments
+
+Reviews with state `CHANGES_REQUESTED` or `COMMENTED` may contain structured feedback **in the review body itself** (not attached to any code line). These are common when reviewers write summary reviews with numbered issues (e.g., "[C1] No rate limiting", "[I1] Misleading column name").
+
+Parse the review body for actionable items. Look for:
+- Numbered/labeled issues (e.g., `### Critical`, `**[C1]**`, `### Important`, `**[I1]**`)
+- Bullet points describing specific code changes needed
+- File paths and code suggestions in the body text
+
+Include these in the triage table with "Review body" as the File column.
+
+#### 3b. Inline code comments
+
+Line-level comments attached to specific files and lines.
+
+#### Classification
+
+For each comment (from body or inline), classify it into one of:
 - ✅ **ACTIONABLE** — Clear code change requested (naming, refactor, bug, missing logic, style)
 - ⚠️ **DISCUSSION** — Opinion, question, or debate — no clear action, skip
 - ❌ **SKIP** — Nitpick marked `nit:`, already addressed, or out of scope
@@ -48,17 +80,19 @@ Use this judgment:
 - If the reviewer says "rename this to X", "extract this", "this will cause Y bug" → ACTIONABLE
 - If comment starts with `nit:` or `optional:` → SKIP (unless --fix-nits flag passed)
 - If comment references a line that no longer exists in the diff → SKIP
+- If the review body lists Critical/Important issues with specific file references → ACTIONABLE
 
 Print the triage table before making any changes:
 
 ```
 ## PR Comment Triage
 
-| # | File | Line | Author | Status | Action |
-|---|------|------|--------|--------|--------|
-| 1 | src/foo.ts | 42 | @alice | ✅ ACTIONABLE | Rename variable to `userId` |
-| 2 | src/bar.ts | 17 | @bob | ⚠️ DISCUSSION | Asked about approach — skipping |
-| 3 | src/baz.ts | 88 | @carol | ❌ SKIP | Nit about formatting |
+| # | Source | File | Author | Status | Action |
+|---|--------|------|--------|--------|--------|
+| 1 | Review body [C1] | src/app/api/public/... | @alice | ✅ ACTIONABLE | Add rate limiting |
+| 2 | Review body [I1] | packages/db/src/... | @alice | ✅ ACTIONABLE | Rename misleading column |
+| 3 | Inline | src/foo.ts:42 | @bob | ⚠️ DISCUSSION | Asked about approach |
+| 4 | Inline | src/baz.ts:88 | @carol | ❌ SKIP | Nit about formatting |
 ```
 
 If `--dry-run` is passed, stop here.

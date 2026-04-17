@@ -31,7 +31,7 @@ Before doing anything else, classify the ticket into one of these categories bas
 | **Implementation** | Clear acceptance criteria with specific deliverables. Description says "add", "fix", "build", "implement", "create", "update". | Proceed to step 3 (implement). |
 | **Ambiguous** | Could go either way. | Treat as **research** — it's safer to deliver findings than unwanted code. Note your reasoning in the Jira comment. |
 
-**If the ticket is Research / Spike / Discussion, skip to step 7R.**
+**If the ticket is Research / Spike / Discussion, skip to step 9R.**
 
 ### 3. Read Project Conventions (Implementation only)
 
@@ -49,13 +49,31 @@ Before doing anything else, classify the ticket into one of these categories bas
 
 Run the project's test/lint/typecheck commands. Fix any errors before proceeding. If tests fail, investigate and fix.
 
-### 6. Commit & Push (Implementation only)
+### 6. Self-Review (Implementation only)
+
+Before committing, run `/review --fix` to spawn a review team that checks your changes for bugs, security issues, and architecture violations. This runs an agent team that:
+- Finds logic errors, null dereferences, unhandled error paths
+- Checks for security issues (injection, auth bypasses, exposed secrets)
+- Verifies compliance with AGENTS.md patterns (layered architecture, caching wrappers, etc.)
+
+Apply any CRITICAL and IMPORTANT fixes the review team identifies. Skip MINOR findings.
+
+### 7. Self-Test (Implementation only)
+
+Run `/test` to spawn a test team that:
+- Writes unit tests for new/changed logic
+- Runs browser tests against the dev server on port {{SERVER_PORT}}
+- Verifies happy paths and edge cases work
+
+Fix any bugs the test team discovers. Commit new test files with the implementation.
+
+### 8. Commit & Push (Implementation only)
 
 - Stage relevant files (not .env, secrets, or generated files)
 - Commit with message format: `[{{TICKET_KEY}}] Description of what was done`
 - Push to remote: `git push -u origin {{WORKTREE_NAME}}`
 
-### 7I. Create a Pull Request (Implementation only)
+### 9I. Create a Pull Request (Implementation only)
 
 Create a PR against `{{BASE_BRANCH}}` using the GitHub MCP tools or `gh` CLI:
 - Title: `[{{TICKET_KEY}}] {{TICKET_SUMMARY}}`
@@ -71,9 +89,9 @@ Then add a Jira comment on {{TICKET_KEY}} with:
 - Brief summary of what was implemented
 - Any notes or decisions made during implementation
 
-Then go to step 8.
+Then go to step 10.
 
-### 7R. Research Deliverable (Research / Spike only)
+### 9R. Research Deliverable (Research / Spike only)
 
 Do NOT create a branch, commit, or PR. Instead:
 
@@ -86,9 +104,9 @@ Do NOT create a branch, commit, or PR. Instead:
    - References to specific files/code you examined
 3. If the ticket has sub-tasks or acceptance criteria that are research-oriented, address each one
 
-Then go to step 8.
+Then go to step 10.
 
-### 8. Signal Completion
+### 10. Signal Completion
 
 This is CRITICAL. You MUST do exactly one of these:
 

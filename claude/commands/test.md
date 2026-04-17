@@ -1,123 +1,96 @@
 ---
-description: Detects the current worktree's dev server port and runs thorough Playwright browser tests for the active branch's changes
-allowed-tools: Bash, mcp__playwright__browser_navigate, mcp__playwright__browser_snapshot, mcp__playwright__browser_click, mcp__playwright__browser_take_screenshot, mcp__playwright__browser_type, mcp__playwright__browser_select_option, mcp__playwright__browser_wait_for, mcp__playwright__browser_press_key, mcp__playwright__browser_fill_form, mcp__playwright__browser_evaluate, mcp__playwright__browser_network_requests, Read, Grep, Glob
+description: Spawn an agent team to write and run tests for the current branch's changes
+allowed-tools: Agent, Bash, Read, Write, Edit, MultiEdit, Grep, Glob, mcp__playwright__browser_navigate, mcp__playwright__browser_snapshot, mcp__playwright__browser_click, mcp__playwright__browser_take_screenshot, mcp__playwright__browser_type, mcp__playwright__browser_select_option, mcp__playwright__browser_wait_for, mcp__playwright__browser_press_key, mcp__playwright__browser_fill_form, mcp__playwright__browser_evaluate, mcp__playwright__browser_network_requests
 ---
 
-# /test — Worktree Browser Testing
+# /test — Agent Team Testing
 
-Detect the active dev server port for this git worktree and run thorough Playwright browser tests against it.
+Spawn an agent team to write tests and verify the current branch's changes via browser and unit tests.
 
 Usage:
-- `/test` — auto-detect port and test the current branch's changes
-- `/test <url-path>` — test a specific path (e.g. `/test /dashboards/ai-analytics`)
+- `/test` — auto-detect what changed and test it
+- `/test <url-path>` — test a specific page path
 
-**Arguments:** $ARGUMENTS
+Arguments: $ARGUMENTS
 
-## Step 1 — Verify we're in a worktree
-
-```bash
-git rev-parse --show-toplevel
-git worktree list
-```
-
-Check if the current directory is a worktree (not the main repo). Note the worktree path.
-
-## Step 2 — Find the correct port
-
-The Next.js dev script hardcodes `-p 3000`, but worktrees start on different ports.
-
-Run this to find which port belongs to this worktree:
+## Step 1 — Determine what changed and the dev server port
 
 ```bash
-# Find all listening node/bun processes and their ports
-lsof -i -P -n | grep LISTEN | grep -E "^node|^bun" | grep -E "[0-9]{4,5}"
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+git diff --name-only main-do...HEAD
 ```
 
-Then cross-reference with the worktree path by checking which process is serving files from this directory:
-
+Find the dev server port for this worktree:
 ```bash
 WORKTREE_PATH=$(git rev-parse --show-toplevel)
-
-# Find the PID of the process running from this worktree
-lsof -i -P -n | grep LISTEN | while read line; do
+lsof -i -P -n | grep LISTEN | grep -E "^node|^bun" | while read line; do
   PID=$(echo $line | awk '{print $2}')
   PORT=$(echo $line | grep -oE '[0-9]+$' | head -1)
   CWD=$(lsof -p $PID 2>/dev/null | grep cwd | awk '{print $NF}')
   if [[ "$CWD" == *"$WORKTREE_PATH"* ]] || [[ "$WORKTREE_PATH" == *"$CWD"* ]]; then
-    echo "PORT=$PORT PID=$PID CWD=$CWD"
+    echo "$PORT"
     break
   fi
 done
 ```
 
-If the above doesn't find it, try:
-```bash
-# Check .claude/launch.json for port hints
-cat .claude/launch.json 2>/dev/null | grep -i port
-# Or check for port in process list
-ps aux | grep "next dev" | grep -v grep
-```
+Fallback: check `.claude/launch.json` or worktree metadata for port. Last resort: port 3000.
 
-Fall back to port 3000 only if no other port is found.
+If the diff is small (under 3 files, no UI changes), use a **single agent** instead of a team.
 
-## Step 3 — Determine what to test
+## Step 2 — Spawn the test team
 
-Identify what changed in this branch vs main-do:
+Create an agent team with these teammates. Give each the diff, changed file list, and dev server port.
 
-```bash
-git diff main-do...HEAD --name-only
-```
+**Teammates:**
 
-Read the key changed files to understand what functionality to test. Focus on user-facing changes.
+1. **Unit Test Writer** — Write Vitest unit tests for changed logic. Focus on:
+   - New/modified functions in services, connectors, queries, utils
+   - Edge cases: null inputs, empty arrays, boundary values, error paths
+   - Place tests next to source files as `*.test.ts(x)`
+   - Use existing test patterns in the codebase as reference
+   - Run `bun run test` after writing to verify they pass
 
-If `$ARGUMENTS` specifies a URL path, start testing there. Otherwise infer the correct URL from the changed files:
-- Files under `@filters/` → `/dashboards/ai-analytics`
-- Files under `dashboards/teams/` → `/dashboards/teams`
-- etc.
+2. **Browser Tester** — Run Playwright tests against `http://localhost:{PORT}`. Focus on:
+   - Navigate to pages affected by the diff
+   - Verify the happy path works (page loads, data renders, interactions work)
+   - Check error states and empty states if applicable
+   - Take screenshots of key states as evidence
+   - Report PASS/FAIL with specific observations
 
-## Step 4 — Run thorough browser tests
+**Instructions for all teammates:**
+- Only test code in the **diff**, not the entire app
+- Share findings: if the browser tester finds a bug, tell the unit test writer to add a regression test
+- If a test fails, investigate whether it's a real bug or a test issue
 
-Navigate to `http://localhost:{PORT}{path}` and test systematically.
+## Step 3 — Report
 
-### For each user-facing change, verify:
-
-1. **Happy path** — the feature works as intended
-2. **Edge cases** — boundary conditions, empty states, error states
-3. **Regression check** — previously working behavior still works
-4. **Visual check** — take screenshots of key states
-
-### Testing approach:
-- Use `browser_snapshot` to understand page structure before clicking
-- Use `browser_take_screenshot` to capture before/after states for key interactions
-- Use `browser_click` to interact with UI elements
-- Use `browser_navigate` to test different URL param combinations
-- Use `browser_evaluate` to inspect DOM/state if needed
-
-### Reporting:
-
-After each test scenario, report:
-- ✅ PASS — what was tested, what was observed
-- ❌ FAIL — what was tested, what went wrong, screenshot reference
-
-## Step 5 — Final summary
-
-Provide a concise test report:
+After all teammates complete, synthesize:
 
 ```
-## Test Results — [branch name]
-**Port:** [port]
-**URL:** [tested URL]
+## Test Results: [branch]
 
-### Scenarios Tested
-| Scenario | Result | Notes |
-|----------|--------|-------|
-| [scenario] | ✅/❌ | [notes] |
+### Unit Tests
+- [X] new tests written
+- [X] existing tests pass
+- Files: [list of test files created/modified]
+
+### Browser Tests
+| Page | Scenario | Result | Notes |
+|------|----------|--------|-------|
+| /path | [scenario] | PASS/FAIL | [notes] |
 
 ### Screenshots
-[list any saved screenshots]
+[list any captured screenshots]
 
-### Verdict
-[PASS/FAIL with summary]
+### Verdict: [PASS / FAIL]
+[If FAIL: list specific failures and whether they're bugs or test issues]
 ```
 
-If tests fail, propose specific fixes.
+## Step 4 — Fix (if running inside autopilot)
+
+If this is called from `/with-markers` or autopilot context:
+1. If browser tests found bugs, fix them
+2. If unit tests fail, fix the code (not the tests, unless the test is wrong)
+3. Stage new test files and fixes
+4. Report what was fixed

@@ -1453,7 +1453,8 @@ monitor_awaiting_reviews() {
         state=$(echo "$content" | cut -d'|' -f1)
         details=$(echo "$content" | cut -d'|' -f2-)
 
-        [ "$state" = "awaiting_review" ] || continue
+        # Monitor both awaiting_review and approved states — approval can be revoked
+        [ "$state" = "awaiting_review" ] || [ "$state" = "approved" ] || continue
 
         wt_name=$(basename "$f" .state)
         local pr_number

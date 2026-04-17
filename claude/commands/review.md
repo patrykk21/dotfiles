@@ -1,69 +1,77 @@
 ---
 description: Orchestrates code reviews by dispatching specialized review agents concurrently to analyze code quality, security, performance, and patterns
-allowed-tools: Task, Read, Write, MultiEdit, Bash, Grep
+allowed-tools: Agent, Bash, Read, Grep, Glob, Write
 ---
 
-# Review Command
+# /review — Agent Team Code Review
 
-This command performs comprehensive code reviews using specialized agents working in parallel.
+Spawn an agent team to review the current branch's changes. Teammates review independently, share findings, challenge each other, and produce a single consolidated report.
 
-Usage: 
-- `/review` - Review current branch vs main
-- `/review https://github.com/org/repo/pull/123` - Review specific PR
-- `/review src/components/UserAuth.tsx` - Review specific files
+Usage:
+- `/review` - Review current branch vs main-do
 - `/review --fix` - Review with auto-fix enabled
 
-You are a code review orchestrator that coordinates multiple specialized review agents.
+Arguments: $ARGUMENTS
 
-Your workflow for: $ARGUMENTS
+## Step 1 — Determine the diff
 
-PHASE 1 - TARGET ANALYSIS:
-1. Determine review target:
-   - If GitHub PR URL: Extract PR info and files changed
-   - If file paths: Review specified files
-   - If none: Compare current branch to main/master
-2. Create evidence directory: `mkdir -p .claude/review`
+```bash
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+BASE="main-do"
+git diff --stat "$BASE"...HEAD
+git diff --name-only "$BASE"...HEAD
+```
 
-PHASE 2 - ARCHITECTURAL REVIEW (CRITICAL):
-3. Lead with code-quality-guardian for comprehensive architectural analysis:
-   - code-quality-guardian: "Conduct comprehensive architectural review of [target]. Analyze SOLID principle compliance, React/Next.js patterns, composition strategies, abstraction opportunities, and overall code quality. Focus on: SRP violations, OCP opportunities, interface design, dependency injection, performance patterns, and maintainability. Write findings to .claude/review/architectural-analysis.md"
+If the diff is empty, inform the user and stop.
 
-4. Spawn specialized review agents CONCURRENTLY in a single message:
-   - refactor-specialist: "Review [target] for refactoring opportunities, code smells, and modernization needs following SOLID principles. Write findings to .claude/review/refactoring-opportunities.md"
-   - react-performance-optimizer: "Analyze [target] for React/Next.js performance issues, re-render optimization, and bundle optimization. Write findings to .claude/review/performance-issues.md"
-   - accessibility-guardian: "Check [target] for WCAG compliance, accessibility patterns, and inclusive design. Write findings to .claude/review/accessibility-issues.md"
-   - test-writer: "Review test coverage, quality, and testing strategies for [target]. Identify missing tests and architectural testability issues. Write findings to .claude/review/test-gaps.md"
-   - api-architect: "Review API design, validation, error handling, and type safety in [target]. Write findings to .claude/review/api-design.md"
+Count the changed files and lines. If fewer than 5 files and under 100 lines changed, use a **single agent** instead of a team (overhead not worth it for small changes). For anything larger, proceed with the team.
 
-5. Wait for ALL agents to complete (they work in parallel)
+## Step 2 — Spawn the review team
 
-PHASE 3 - ARCHITECTURAL SYNTHESIS:
-6. Use code-quality-guardian to synthesize all findings into comprehensive architectural assessment
-7. Read all evidence files from `.claude/review/*.md`
-8. Create summary report at `.claude/review/summary-report.md` with:
-   - **SOLID Principle Violations**: Critical architectural issues requiring immediate attention
-   - **Composition Opportunities**: Areas where inheritance should be replaced with composition
-   - **Abstraction Improvements**: Specific implementations that should be generalized
-   - **Performance & Maintainability**: Technical debt and optimization opportunities
-   - **Pattern Consistency**: Deviations from established architectural patterns
-   - **Overall Architectural Score**: Assessment of code quality and adherence to principles
+Create an agent team with these teammates. Give each teammate the full diff context and the list of changed files. Teammates should share findings with each other and challenge questionable calls.
 
-PHASE 4 - ACTION (if --fix flag present):
-9. Apply architectural auto-fixes for:
-   - SOLID principle violations (simple cases)
-   - Interface segregation opportunities
-   - Composition over inheritance refactoring
-   - Generic type extraction
-   - Dependency injection improvements
-10. Create fix report showing what was changed
+**Teammates:**
 
-PHASE 5 - OUTPUT:
-11. Display summary report to user
-12. If PR review: Offer to post as GitHub PR comment
-13. If critical issues: Offer to create JIRA tickets
+1. **Bug Hunter** — Find actual bugs: logic errors, off-by-one, null dereferences, race conditions, unhandled error paths, wrong return types. Ignore style. Only report issues that would cause incorrect behavior at runtime.
 
-Remember:
-- ALL agents must work CONCURRENTLY for efficiency
-- Each agent writes to their own evidence file
-- Evidence files use consistent markdown format with severity levels
-- Summary synthesizes ALL findings into actionable report
+2. **Security Auditor** — Find security issues: injection vectors, auth bypasses, exposed secrets, missing input validation at system boundaries, unsafe data handling. Check OWASP top 10 against the diff. Ignore internal-only code paths with no user input.
+
+3. **Architecture Reviewer** — Check against AGENTS.md patterns: layered architecture (services -> connectors -> queries), correct caching wrappers, proper error handling with ServerActionResult, no AbortSignal usage, correct import paths. Flag violations of the project's established patterns.
+
+**Instructions for all teammates:**
+- Only review the **diff**, not the entire codebase
+- Be specific: cite file:line, quote the problematic code, explain the bug
+- Severity levels: CRITICAL (will break), IMPORTANT (should fix), MINOR (nice to have)
+- If you're unsure, say so — don't pad findings with false positives
+- Share findings with teammates so they can validate or challenge
+
+## Step 3 — Synthesize
+
+After all teammates report, synthesize findings into a single report:
+
+```
+## Review: [branch] vs [base]
+
+### Critical (must fix before merge)
+- [file:line] — [description]
+
+### Important (should fix)
+- [file:line] — [description]
+
+### Minor (consider fixing)
+- [file:line] — [description]
+
+### Verdict: [PASS / PASS WITH FIXES / FAIL]
+```
+
+Deduplicate findings reported by multiple teammates. If teammates disagree on severity, use the higher one.
+
+## Step 4 — Fix (if --fix flag or called from autopilot)
+
+If `--fix` is present or this is running inside `/with-markers`:
+1. Apply fixes for all CRITICAL and IMPORTANT findings
+2. Run `bun run typecheck` and `bun run lint` after fixes
+3. Fix any new errors introduced
+4. Report what was fixed
+
+If this is a dry review (no --fix), just display the report.
