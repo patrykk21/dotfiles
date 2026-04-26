@@ -3,6 +3,7 @@
 
 # Source metadata functions
 source ~/.config/tmux/scripts/worktree-metadata.sh
+source ~/.config/tmux/scripts/os-utils.sh
 
 # Get current directory and session
 CURRENT_DIR=$(tmux display-message -p '#{pane_current_path}')
@@ -52,15 +53,13 @@ fi
 # Construct localhost URL
 LOCALHOST_URL="http://localhost:$SERVER_PORT"
 
-# Open in browser
-if command -v open >/dev/null 2>&1; then
-    open "$LOCALHOST_URL"
+if open_url "$LOCALHOST_URL"; then
     if [ "$PORT_SOURCE" = "metadata" ]; then
         tmux display-message "Opened localhost:$SERVER_PORT (from $SESSION metadata)"
     else
         tmux display-message "Opened localhost:$SERVER_PORT (default port)"
     fi
 else
-    tmux display-message "Cannot open browser: 'open' command not found"
+    tmux display-message "Cannot open browser on $(detect_os)"
     exit 1
 fi

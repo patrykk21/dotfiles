@@ -16,11 +16,11 @@ fi
 # Construct Jira URL
 JIRA_URL="https://groupondev.atlassian.net/browse/$TICKET_ID"
 
-# Open in browser
-if command -v open >/dev/null 2>&1; then
-    open "$JIRA_URL"
+source ~/.config/tmux/scripts/os-utils.sh
+
+if open_url "$JIRA_URL"; then
     tmux display-message "Opened Jira ticket: $TICKET_ID"
 else
-    tmux display-message "Cannot open browser: 'open' command not found"
+    tmux display-message "Cannot open browser on $(detect_os)"
     exit 1
 fi

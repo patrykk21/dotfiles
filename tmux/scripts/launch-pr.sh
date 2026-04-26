@@ -27,15 +27,14 @@ fi
 # Try to find existing PR for current branch
 PR_URL=$(cd "$CURRENT_DIR" && gh pr list --head "$CURRENT_BRANCH" --json url --jq '.[0].url' 2>/dev/null)
 
+source ~/.config/tmux/scripts/os-utils.sh
+
 if [ -n "$PR_URL" ] && [ "$PR_URL" != "null" ]; then
-    # Found existing PR - open it
-    if command -v open >/dev/null 2>&1; then
-        open "$PR_URL"
+    if open_url "$PR_URL"; then
         tmux display-message "Opened PR for branch: $CURRENT_BRANCH"
     else
-        tmux display-message "Cannot open browser: 'open' command not found"
+        tmux display-message "Cannot open browser on $(detect_os)"
     fi
 else
-    # No existing PR found
     tmux display-message "No PR found for branch: $CURRENT_BRANCH"
 fi

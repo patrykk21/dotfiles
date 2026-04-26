@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Launch repository in browser
 
+source ~/.config/tmux/scripts/os-utils.sh
+
 # Get current directory
 CURRENT_DIR=$(tmux display-message -p '#{pane_current_path}')
 
@@ -15,12 +17,11 @@ if command -v gh >/dev/null 2>&1; then
     REPO_URL=$(cd "$CURRENT_DIR" && gh repo view --json url --jq '.url' 2>/dev/null)
     
     if [ -n "$REPO_URL" ] && [ "$REPO_URL" != "null" ]; then
-        if command -v open >/dev/null 2>&1; then
-            open "$REPO_URL"
+        if open_url "$REPO_URL"; then
             tmux display-message "Opened repository in browser"
             exit 0
         else
-            tmux display-message "Cannot open browser: 'open' command not found"
+            tmux display-message "Cannot open browser on $(detect_os)"
             exit 1
         fi
     fi
@@ -46,11 +47,9 @@ else
     exit 1
 fi
 
-# Open in browser
-if command -v open >/dev/null 2>&1; then
-    open "$REPO_URL"
+if open_url "$REPO_URL"; then
     tmux display-message "Opened repository in browser"
 else
-    tmux display-message "Cannot open browser: 'open' command not found"
+    tmux display-message "Cannot open browser on $(detect_os)"
     exit 1
 fi

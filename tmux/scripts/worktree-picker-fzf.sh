@@ -15,7 +15,11 @@ cd "$CURRENT_DIR" 2>/dev/null || cd "$HOME"
 # Get the main repository path
 MAIN_REPO=$(git worktree list 2>/dev/null | head -1 | awk '{print $1}')
 if [ -z "$MAIN_REPO" ]; then
-    echo "Error: Not in a git repository" >&2
+    printf '\033[1;31mNot in a git repository\033[0m\n\n'
+    printf 'Current path: %s\n' "$CURRENT_DIR"
+    printf 'Worktree actions require a git repo.\n\n'
+    printf 'Press any key to close...'
+    read -r -n 1 -s
     exit 1
 fi
 REPO_NAME=$(basename "$MAIN_REPO")
