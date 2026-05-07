@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # Tracks AI activity in worktrees by watching tool use events.
 # Detects PR creation and writes the completion marker so the
-# autopilot runner can transition state — works for /autopilot
+# conductor runner can transition state — works for /conductor
 # AND manual Claude sessions.
 #
 # Hook events: PostToolUse
 # Reads JSON from stdin with tool_name, tool_input, tool_output
 
-MARKERS_DIR="$HOME/.config/autopilot/markers"
+MARKERS_DIR="$HOME/.config/conductor/markers"
 WORKTREES_BASE="$HOME/worktrees"
-STATE_DIR="$HOME/.config/autopilot/projects"
+STATE_DIR="$HOME/.config/conductor/projects"
 
 # Read hook data
 INPUT=$(cat)

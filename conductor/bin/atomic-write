@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# atomic-write — write content to a file atomically via tmp + rename.
+#
+# Usage:
+#   atomic-write <target-path>              # reads content from stdin
+#   atomic-write <target-path> <content>    # content passed as arg
+#
+# Guarantees:
+#   - Target file never exists in a partially-written state.
+#   - Concurrent writers do not corrupt each other (last rename wins).
+#   - Parent directory is created if missing.
+#
+# Exit codes:
+#   0  success
+#   1  usage error
+#   2  write failure (permission, disk full, etc.)
+
+set -euo pipefail
+
+if [[ $# -lt 1 || $# -gt 2 ]]; then
+    echo "usage: atomic-write <target-path> [content]" >&2
+    echo "       (content from stdin if not provided as arg)" >&2
+    exit 1
+fi
+
+target="$1"
+target_dir=$(dirname "$target")
+
+# Ensure parent dir exists. mkdir -p is idempotent and concurrency-safe.
+mkdir -p "$target_dir" || {
+    echo "atomic-write: failed to create parent directory: $target_dir" >&2
+    exit 2
+}
+
+# Create a unique tmp file in the same directory as the target.
+# Same-directory is important: rename(2) is only atomic within a filesystem,
+# and mktemp in /tmp could cross mount points.
+tmp=$(mktemp "$target.tmp.XXXXXX") || {
+    echo "atomic-write: failed to create tmp file in $target_dir" >&2
+    exit 2
+}
+
+# Make sure the tmp file gets cleaned up if we fail before rename.
+trap 'rm -f "$tmp"' EXIT
+
+if [[ $# -eq 2 ]]; then
+    printf '%s' "$2" > "$tmp"
+else
+    cat > "$tmp"
+fi
+
+# Atomic rename. POSIX guarantees this is atomic on the same filesystem.
+mv -f "$tmp" "$target" || {
+    echo "atomic-write: rename failed: $tmp -> $target" >&2
+    exit 2
+}
+
+# Success — cancel the cleanup trap.
+trap - EXIT

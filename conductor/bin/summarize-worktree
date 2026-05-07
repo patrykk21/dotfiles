@@ -1,0 +1,257 @@
+#!/usr/bin/env bash
+# summarize-worktree — regenerate context.md + summary.json for a single worktree session
+# via Claude (Sonnet). Signal-hash gated: no-op if nothing changed unless --force or the
+# needs-summary-update-force flag is present.
+#
+# Usage:
+#   summarize-worktree --ticket <id> [--force]
+#   summarize-worktree --session-dir <path> [--force]
+#
+# Lifecycle:
+#   1. Resolve session dir.
+#   2. Build signal hash from HEAD, uncommitted diff, PR state, force flag.
+#   3. Exit 0 silently if hash matches prior run and no force.
+#   4. Gather context: meta.json, git log, git status, previous summary, user-notes section.
+#   5. Invoke Claude Sonnet with structured JSON prompt.
+#   6. Write context.md (atomic) + summary.json (atomic).
+#   7. Emit worktree-event summary-written to clear dirty flags.
+
+set -uo pipefail
+
+CONDUCTOR_DIR="${CONDUCTOR_DIR:-$HOME/.config/conductor}"
+BIN_DIR="$CONDUCTOR_DIR/bin"
+ATOMIC_WRITE="$BIN_DIR/atomic-write"
+WORKTREE_EVENT="$BIN_DIR/worktree-event"
+WORKTREES_ROOT="${WORKTREES_ROOT:-$HOME/worktrees}"
+CLAUDE_BIN="${CLAUDE_BIN:-claude}"
+MODEL="${SUMMARIZER_MODEL:-sonnet}"
+LOG_DIR="$CONDUCTOR_DIR/logs"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/summarizer.log"
+
+log() { echo "[$(date -u +%FT%TZ)] $*" >> "$LOG_FILE"; }
+die() { log "ERROR: $*"; echo "summarize-worktree: $*" >&2; exit 1; }
+
+ticket=""
+session_dir=""
+force=0
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --ticket)      ticket="$2"; shift 2 ;;
+        --session-dir) session_dir="$2"; shift 2 ;;
+        --force)       force=1; shift ;;
+        *) die "unknown arg: $1" ;;
+    esac
+done
+
+# Resolve session dir from ticket if not given directly.
+if [[ -z "$session_dir" ]]; then
+    [[ -n "$ticket" ]] || die "must pass --ticket or --session-dir"
+    for candidate in "$WORKTREES_ROOT"/*/.worktree-meta/sessions/"$ticket"; do
+        [[ -d "$candidate" ]] && { session_dir="$candidate"; break; }
+    done
+    [[ -n "$session_dir" ]] || die "session dir not found for ticket $ticket"
+fi
+
+[[ -d "$session_dir" ]] || die "session dir missing: $session_dir"
+
+meta_file="$session_dir/meta.json"
+summary_file="$session_dir/summary.json"
+conductor_file="$session_dir/conductor.json"
+context_file="$session_dir/context.md"
+flags_dir="$session_dir/flags"
+mkdir -p "$flags_dir"
+
+[[ -f "$meta_file" ]] || die "no meta.json in $session_dir"
+
+# Load basic meta fields.
+ticket=$(jq -r '.ticket // empty' "$meta_file")
+worktree_path=$(jq -r '.worktree_path // empty' "$meta_file")
+branch=$(jq -r '.branch // empty' "$meta_file")
+project=$(jq -r '.project // empty' "$meta_file")
+
+[[ -n "$ticket" ]]         || die "meta.json missing .ticket"
+[[ -n "$worktree_path" ]]  || die "meta.json missing .worktree_path"
+
+# Worktree might not exist anymore (abandoned). Bail gracefully.
+if [[ ! -d "$worktree_path" ]]; then
+    log "skip $ticket: worktree_path vanished ($worktree_path)"
+    rm -f "$flags_dir/needs-summary-update" "$flags_dir/needs-summary-update-force"
+    exit 0
+fi
+
+# ---- gather signals ----
+cd "$worktree_path" 2>/dev/null || die "cannot cd to $worktree_path"
+
+head_sha=$(git rev-parse HEAD 2>/dev/null || echo "")
+uncommitted=$(git status --porcelain 2>/dev/null || echo "")
+uncommitted_hash=$(printf '%s' "$uncommitted" | shasum -a 256 | cut -d' ' -f1)
+recent_log=$(git log -20 --oneline 2>/dev/null || echo "")
+recent_diffstat=$(git diff --stat HEAD 2>/dev/null | head -40 || echo "")
+remote_status=$(git status -sb 2>/dev/null | head -1 || echo "")
+
+# PR state: trust summary.json cache (pr-state-changed event updates it directly).
+prior_pr_state=""
+prior_signal_hash=""
+if [[ -f "$summary_file" ]]; then
+    prior_pr_state=$(jq -r '.pr_state // empty' "$summary_file" 2>/dev/null)
+    prior_signal_hash=$(jq -r '.signal_hash // empty' "$summary_file" 2>/dev/null)
+fi
+
+force_flag_present=0
+[[ -f "$flags_dir/needs-summary-update-force" ]] && force_flag_present=1
+
+# Signal hash: if this doesn't change, summary is stale-but-still-right.
+signal_material="head=$head_sha|un=$uncommitted_hash|pr=$prior_pr_state|ticket=$ticket"
+signal_hash=$(printf '%s' "$signal_material" | shasum -a 256 | cut -d' ' -f1)
+
+if [[ "$force" -eq 0 && "$force_flag_present" -eq 0 ]]; then
+    if [[ -n "$prior_signal_hash" && "$prior_signal_hash" == "sha256:$signal_hash" ]]; then
+        log "skip $ticket: signal hash unchanged ($prior_signal_hash)"
+        # Clear the regular dirty flag; the data-less tick doesn't need another round.
+        rm -f "$flags_dir/needs-summary-update"
+        exit 0
+    fi
+fi
+
+log "regenerate $ticket: prior=$prior_signal_hash new=sha256:$signal_hash force=$force force_flag=$force_flag_present"
+
+# Extract user notes from existing context.md for preservation.
+user_notes=""
+if [[ -f "$context_file" ]]; then
+    user_notes=$(awk '
+        /^## User notes/ { capture=1; print; next }
+        /^## / && capture { capture=0 }
+        capture { print }
+    ' "$context_file")
+fi
+
+prior_summary_json="{}"
+[[ -f "$summary_file" ]] && prior_summary_json=$(cat "$summary_file")
+prior_conductor_json="{}"
+[[ -f "$conductor_file" ]] && prior_conductor_json=$(cat "$conductor_file")
+prior_context="(none)"
+[[ -f "$context_file" ]] && prior_context=$(cat "$context_file")
+
+# ---- build prompt ----
+# Emphasize JSON-only output; we parse with jq.
+prompt_file=$(mktemp -t summarize-prompt.XXXXXX)
+trap 'rm -f "$prompt_file"' EXIT
+
+cat > "$prompt_file" <<PROMPT
+You are maintaining a worktree context document for a developer juggling 8+ parallel branches.
+Your job is to produce a short, high-signal summary so the developer can switch back into this
+branch and instantly know: what it's for, what's done, what's next, what's blocking.
+
+Return ONLY a JSON object (no markdown fences, no prose before or after). Schema:
+
+{
+  "status": "ACTIVE | BLOCKED | WAITING_REVIEW | STALE | DONE",
+  "headline": "<=80 chars, no ticket prefix, present tense",
+  "next_action": "<=100 chars describing the single next concrete step",
+  "markdown": "full context.md body, see rules below"
+}
+
+Rules for \`markdown\`:
+- Start with \`# \${ticket} · <short title>\` heading.
+- Sections: Objective, What's done, What's next / blocked on, Pointers.
+- Bullets, not paragraphs. Be terse. No fluff.
+- Do NOT include a "User notes" section — that is appended separately.
+- If signals are thin (no commits, no diff), say so plainly in "What's done".
+
+Ticket: $ticket
+Branch: $branch
+Project: $project
+Worktree: $worktree_path
+
+Recent git log (max 20 commits):
+$recent_log
+
+Uncommitted status (porcelain):
+$(printf '%s' "$uncommitted" | head -40)
+
+Diffstat (HEAD vs working tree):
+$recent_diffstat
+
+Remote tracking:
+$remote_status
+
+Previous summary.json:
+$prior_summary_json
+
+Previous conductor.json:
+$prior_conductor_json
+
+Previous context.md:
+$prior_context
+PROMPT
+
+# ---- invoke Claude ----
+log "invoking claude for $ticket (model=$MODEL, prompt=$(wc -c < "$prompt_file") bytes)"
+
+raw_output=$("$CLAUDE_BIN" --model "$MODEL" --print < "$prompt_file" 2>>"$LOG_FILE")
+cli_exit=$?
+
+if [[ $cli_exit -ne 0 ]]; then
+    log "claude cli exit=$cli_exit for $ticket"
+    touch "$flags_dir/summarizer-error"
+    exit 2
+fi
+
+# Trim code fences if model wrapped it despite instructions.
+cleaned=$(printf '%s' "$raw_output" | sed -E '1s/^```[a-z]*//; $s/```$//')
+
+# Validate JSON.
+if ! printf '%s' "$cleaned" | jq empty 2>>"$LOG_FILE"; then
+    log "model returned invalid JSON for $ticket: $(printf '%s' "$raw_output" | head -c 500)"
+    touch "$flags_dir/summarizer-error"
+    exit 3
+fi
+
+status=$(printf '%s' "$cleaned" | jq -r '.status // "ACTIVE"')
+headline=$(printf '%s' "$cleaned" | jq -r '.headline // "no headline"')
+next_action=$(printf '%s' "$cleaned" | jq -r '.next_action // ""')
+markdown=$(printf '%s' "$cleaned" | jq -r '.markdown // ""')
+
+[[ -n "$markdown" ]] || die "model returned empty markdown for $ticket"
+
+# Append preserved user notes, if any.
+final_markdown="$markdown"
+if [[ -n "$user_notes" ]]; then
+    final_markdown="$markdown"$'\n\n'"$user_notes"
+fi
+
+# ---- write context.md ----
+printf '%s\n' "$final_markdown" | "$ATOMIC_WRITE" "$context_file"
+
+# ---- write summary.json ----
+now_iso=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+new_summary=$(jq -n \
+    --arg status "$status" \
+    --arg headline "$headline" \
+    --arg next_action "$next_action" \
+    --arg updated "$now_iso" \
+    --arg signal_hash "sha256:$signal_hash" \
+    --arg pr_state "$prior_pr_state" \
+    --arg source "scheduler" \
+    '{
+        schema_version: 1,
+        status: $status,
+        headline: $headline,
+        next_action: $next_action,
+        updated: $updated,
+        signal_hash: $signal_hash,
+        pr_state: (if $pr_state == "" then null else $pr_state end),
+        last_activity_source: $source
+    }')
+
+printf '%s' "$new_summary" | "$ATOMIC_WRITE" "$summary_file"
+
+# ---- clear dirty flags via event ----
+rm -f "$flags_dir/summarizer-error"
+"$WORKTREE_EVENT" summary-written --ticket "$ticket" >>"$LOG_FILE" 2>&1 || \
+    log "worktree-event summary-written failed for $ticket (non-fatal)"
+
+log "regenerated $ticket: status=$status headline='$headline'"
+exit 0

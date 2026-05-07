@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # PostToolUse hook: when a PR is created in a worktree, write the .done marker
-# so the autopilot runner can transition state. Updates on every PR creation,
+# so the conductor runner can transition state. Updates on every PR creation,
 # not just the first — handles follow-up PRs from continued chat.
 
-MARKERS_DIR="$HOME/.config/autopilot/markers"
+MARKERS_DIR="$HOME/.config/conductor/markers"
 WORKTREES_BASE="$HOME/worktrees"
 
 INPUT=$(cat)

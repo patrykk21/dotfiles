@@ -5,7 +5,7 @@
 # Called as both a Stop hook (write marker) and PreToolUse hook (clear marker).
 # Reads JSON from stdin — uses hook_event_name to determine action.
 
-MARKERS_DIR="$HOME/.config/autopilot/markers"
+MARKERS_DIR="$HOME/.config/conductor/markers"
 WORKTREES_BASE="$HOME/worktrees"
 
 # Read hook data from stdin

@@ -66,19 +66,21 @@ zed/prompts/
 
 !starship.toml
 
-!autopilot/
-!autopilot/**
+!conductor/
+!conductor/**
 
-# Exclude machine-local autopilot files
-autopilot/projects/
-autopilot/state/
-autopilot/history/
-autopilot/logs/
-autopilot/markers/
-autopilot/prompts/
-autopilot/enabled
-autopilot/launchd-stdout.log
-autopilot/launchd-stderr.log
-autopilot/config.env
-autopilot/jira-credentials.env
-autopilot/*.credentials*
+# Exclude machine-local conductor files
+conductor/projects/
+conductor/state/
+conductor/history/
+conductor/logs/
+conductor/markers/
+conductor/prompts/
+conductor/seen/
+conductor/pids/
+conductor/enabled
+conductor/launchd-stdout.log
+conductor/launchd-stderr.log
+conductor/config.env
+conductor/jira-credentials.env
+conductor/*.credentials*

@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+# probe-pr-state — walk all session dirs, query `gh pr view` for each, and emit
+# `pr-state-changed` events so summary.json gets truthful PR state.
+#
+# Usage:
+#   probe-pr-state                         # all projects, all sessions (throttled)
+#   probe-pr-state --project echelon       # scope to one project
+#   probe-pr-state --force                 # bypass throttle AND re-probe terminal states
+#   probe-pr-state --ticket ECH-637-…      # single ticket
+#   probe-pr-state --throttle-seconds 300  # skip if last probe < 300s ago (default 300)
+#
+# Throttling:
+#   Each session tracks last probe time via `$session/.last_pr_probe` mtime.
+#   Terminal states (merged, closed) are never re-probed unless --force.
+#   Designed to be called from conductor-runner.sh Pass 3 every 60s.
+#
+# After this runs, the next summarize-dirty tick will regenerate summaries that
+# now include real pr_state (merged/closed/open/draft) in the prompt, producing
+# correct DONE vs WAITING_REVIEW classification.
+
+set -uo pipefail
+
+CONDUCTOR_DIR="${CONDUCTOR_DIR:-$HOME/.config/conductor}"
+WORKTREES_ROOT="${WORKTREES_ROOT:-$HOME/worktrees}"
+WORKTREE_EVENT="$CONDUCTOR_DIR/bin/worktree-event"
+
+project_filter=""
+ticket_filter=""
+force=0
+throttle_seconds="${PR_PROBE_THROTTLE_SECONDS:-300}"
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --project)          project_filter="$2"; shift 2 ;;
+        --ticket)           ticket_filter="$2"; shift 2 ;;
+        --force)            force=1; shift ;;
+        --throttle-seconds) throttle_seconds="$2"; shift 2 ;;
+        -h|--help)          sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        *)                  echo "unknown arg: $1" >&2; exit 1 ;;
+    esac
+done
+
+now_ts=$(date +%s)
+
+command -v gh >/dev/null 2>&1 || { echo "gh cli not found" >&2; exit 1; }
+command -v jq >/dev/null 2>&1 || { echo "jq not found" >&2; exit 1; }
+
+if [[ -n "$project_filter" ]]; then
+    project_dirs=("$WORKTREES_ROOT/$project_filter")
+else
+    shopt -s nullglob
+    project_dirs=("$WORKTREES_ROOT"/*/)
+    shopt -u nullglob
+fi
+
+emitted=0
+skipped=0
+throttled=0
+unchanged=0
+no_pr=0
+
+for project_dir in "${project_dirs[@]}"; do
+    project_dir="${project_dir%/}"
+    sessions_dir="$project_dir/.worktree-meta/sessions"
+    [[ -d "$sessions_dir" ]] || continue
+
+    shopt -s nullglob
+    for session in "$sessions_dir"/*/; do
+        session="${session%/}"
+        ticket=$(basename "$session")
+
+        [[ -n "$ticket_filter" && "$ticket" != "$ticket_filter" ]] && continue
+
+        meta="$session/meta.json"
+        [[ -f "$meta" ]] || continue
+        wt_path=$(jq -r '.worktree_path // empty' "$meta")
+        if [[ -z "$wt_path" || ! -d "$wt_path" ]]; then
+            echo "skip $ticket: worktree missing ($wt_path)"
+            skipped=$((skipped+1))
+            continue
+        fi
+
+        # Skip terminal states unless --force.
+        prior=$(jq -r '.pr_state // ""' "$session/summary.json" 2>/dev/null || echo "")
+        if [[ "$force" -eq 0 ]] && [[ "$prior" == "merged" || "$prior" == "closed" ]]; then
+            echo "skip $ticket: already $prior (use --force to recheck)"
+            skipped=$((skipped+1))
+            continue
+        fi
+
+        # Throttle: skip if last probe was within $throttle_seconds.
+        probe_marker="$session/.last_pr_probe"
+        if [[ "$force" -eq 0 && -f "$probe_marker" ]]; then
+            last_probe=$(stat -f %m "$probe_marker" 2>/dev/null || echo 0)
+            age=$(( now_ts - last_probe ))
+            if (( age < throttle_seconds )); then
+                throttled=$((throttled+1))
+                continue
+            fi
+        fi
+
+        pr_json=$(cd "$wt_path" && gh pr view --json state,mergedAt,number,url 2>/dev/null || echo "{}")
+        touch "$probe_marker"
+        gh_state=$(echo "$pr_json" | jq -r '.state // "none"')
+
+        case "$gh_state" in
+            MERGED) new_state="merged" ;;
+            CLOSED) new_state="closed" ;;
+            OPEN)   new_state="open"   ;;
+            DRAFT)  new_state="draft"  ;;
+            none|*) echo "no-pr $ticket"; no_pr=$((no_pr+1)); continue ;;
+        esac
+
+        if [[ "$prior" == "$new_state" && "$force" -eq 0 ]]; then
+            echo "unchanged $ticket: $new_state"
+            unchanged=$((unchanged+1))
+            continue
+        fi
+
+        echo "emit $ticket: '${prior:-<null>}' -> $new_state"
+        "$WORKTREE_EVENT" pr-state-changed --ticket "$ticket" --pr-state "$new_state"
+        emitted=$((emitted+1))
+    done
+    shopt -u nullglob
+done
+
+echo
+echo "summary: $emitted emitted, $unchanged unchanged, $throttled throttled, $skipped skipped (terminal), $no_pr no-pr"

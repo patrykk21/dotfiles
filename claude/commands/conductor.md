@@ -1,5 +1,5 @@
 ---
-name: autopilot
+name: conductor
 description: "Launch GSD project/milestone in fully autonomous mode, or implement a Jira ticket end-to-end. Pass a Jira URL or GSD args."
 argument-hint: "<jira-url | new-project | new-milestone | resume> [--from-phase N] [--no-team] [--no-judge] [@idea-doc.md]"
 allowed-tools:
@@ -86,7 +86,7 @@ After reading the ticket, decide which path to take:
 5. **Commit & push** — format: `[TICKET-KEY] Description`. Push to current branch.
 6. **Create PR** with:
    - Summary of changes
-   - **Screenshots** from `/browser-verify`
+   - **Screenshots** from `/browser-verify` (see "Embedding screenshots" below)
    - **Human testing steps** — numbered list a reviewer can follow to verify
    - Do NOT assign the PR
 7. **Comment on ticket** — add the PR link and brief summary
@@ -106,10 +106,24 @@ After reading the ticket, decide which path to take:
 5. **Commit & push** — ensure all phase commits are pushed. Format: `[TICKET-KEY] Description`.
 6. **Create PR** with:
    - Summary of changes (reference the GSD phases)
-   - **Screenshots** from `/browser-verify`
+   - **Screenshots** from `/browser-verify` (see "Embedding screenshots" below)
    - **Human testing steps** — numbered list a reviewer can follow
    - Do NOT assign the PR
 7. **Comment on ticket** — add the PR link and brief summary
+
+### Both paths: Embedding screenshots in PR markdown
+
+Screenshots are committed under `.github/pr-assets/{ticket-key}/` on the PR's branch and embedded in the PR body using:
+
+```
+![alt](https://github.com/{owner}/{repo}/raw/{branch}/.github/pr-assets/{ticket-key}/{file}.png)
+```
+
+**Critical:** Use the `github.com/{owner}/{repo}/raw/{branch}/...` URL pattern. **Do NOT use `https://raw.githubusercontent.com/...`** — that domain does not authenticate when GitHub renders PR markdown for **private repositories**, so the images appear broken to reviewers (and to you on the rendered PR page) even though the file exists in the branch.
+
+The `github.com/.../raw/...` URL is a redirect that respects the viewer's GitHub session, so it works for both public and private repos. When in doubt, open a previously-merged PR in the same repo and copy that exact URL shape.
+
+After creating/editing the PR body, **verify the rendered images load** (e.g. `gh pr view <N> --json body` then spot-check, or open the PR in the browser). If they're broken, fix the URL before considering the PR complete.
 
 ### Both paths: Self-review before EVERY push
 
@@ -152,39 +166,55 @@ If you find violations, **fix them before creating the PR**. Do not note them as
 
 ### Both paths: Post-PR steps
 
-Note: Jira transitions (In Progress, Code Review) are handled by the autopilot scheduler — do NOT transition tickets yourself.
+Note: Jira transitions (In Progress, Code Review) are handled by the conductor scheduler — do NOT transition tickets yourself.
 
 **On subsequent pushes** (e.g., after fixing review comments): re-run `/browser-verify` before pushing. Update PR description if screenshots change.
 
-### Step 3: Update state marker
-**ALWAYS maintain a state marker file**, even if this session wasn't launched by the autopilot scheduler.
+### Step 3: Report state via the `state` shell function
 
-First, ensure the marker path is set. If `$AUTOPILOT_STATE_MARKER` is not set, derive it from the current worktree:
+**ALWAYS report state changes via the `state` shell function.** The conductor launcher exports `state` into your shell — it patches the per-worktree `conductor.json` (`.state`, `.state_detail`, `.state_updated`) atomically via `worktree-event`. The picker, scheduler, and reconciler all read `conductor.json`.
+
+**🚨 NEVER write to `$CONDUCTOR_STATE_MARKER` or `~/.config/conductor/markers/*.state` directly.** Those legacy marker files are no longer the source of truth. Writing to them with `echo "STATE|PR_URL" > $MARKER` leaves `conductor.json` stale, which silently desyncs the scheduler — workers stick in `working`/`awaiting_ci` indefinitely while the marker says otherwise.
+
+**Usage:**
 ```bash
-if [ -z "$AUTOPILOT_STATE_MARKER" ]; then
-    WORKTREE_NAME=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)")
-    export AUTOPILOT_STATE_MARKER="$HOME/.config/autopilot/markers/${WORKTREE_NAME}.state"
-    mkdir -p "$(dirname "$AUTOPILOT_STATE_MARKER")"
-fi
+state STATE "details"
 ```
 
-Then update it throughout your work. Format: `STATE|details`
+**State vocabulary** (must be exact — the launcher and `worktree-event` reject anything else):
 
-| State | When to write |
-|-------|--------------|
-| `working\|description` | When actively coding, testing, committing |
-| `awaiting_ci\|PR_URL` | After creating or updating a PR, CI is running |
-| `awaiting_review\|PR_URL` | CI passed, waiting for human review (CodeRabbit done, needs assignee review) |
-| `approved\|PR_URL` | Reviewer approved, ready to merge (set by scheduler, not by you) |
-| `needs_input\|question` | When you need the user to answer something |
-| `failed\|reason` | When you cannot complete the task |
+| Call | When |
+|------|------|
+| `state working "description"` | Actively coding, testing, committing |
+| `state awaiting_ci "PR_URL"` | Created/updated a PR, CI is running |
+| `state awaiting_review "PR_URL"` | CI passed, waiting for human review |
+| `state approved "PR_URL"` | Reviewer approved (set by scheduler — usually not by you) |
+| `state needs_input "question"` | You need the user to answer something |
+| `state blocked "reason"` | Waiting on external dependency (other ticket, team, decision) |
+| `state closed "PR_URL or reason"` | PR closed without merging (terminal) |
+| `state failed "reason"` | Cannot complete the task |
 
-After the user responds to a question, transition back to `working|addressing feedback`.
+After the user responds to a question, call `state working "addressing feedback"`.
 
-**IMPORTANT:** Before writing to the marker, check if it currently says `merged` or `approved`. If so, do NOT overwrite it — those are terminal states set by the scheduler.
+**IMPORTANT:** Before transitioning state, if the current `conductor.json` says `merged`, `closed`, or `approved`, do NOT overwrite — those are terminal states set by the scheduler.
+
+**Fallback for sessions NOT launched by the scheduler:**
+If `state` is unavailable (you ran `/conductor` manually outside the conductor launcher), fall back to calling `worktree-event` directly:
+```bash
+if ! type state >/dev/null 2>&1; then
+    state() {
+        local s="$1"; local d="${2:-}"
+        local text="$s"; [ -n "$d" ] && text="$s|$d"
+        local ticket; ticket=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+        "$HOME/.config/conductor/bin/worktree-event" conductor-state-reported \
+            --ticket "$ticket" --text "$text" >/dev/null 2>&1 || true
+    }
+fi
+```
+Do NOT fall back to writing the legacy marker file.
 
 ### Step 4: Monitor CI and reviews after PR creation
-After setting `awaiting_ci`, **do not stop working**. Actively monitor the PR:
+After calling `state awaiting_ci "PR_URL"`, **do not stop working**. Actively monitor the PR:
 
 1. **Poll CI status** every 30 seconds using `gh pr checks <number>`. Watch for all checks to complete.
    ```bash
@@ -206,15 +236,19 @@ After setting `awaiting_ci`, **do not stop working**. Actively monitor the PR:
    gh pr view <PR_NUMBER> --json reviews,comments
    ```
 
-4. **If CodeRabbit or any reviewer requested changes**, update the marker to `working|addressing review comments` and fix the issues. Then push, and go back to step 1.
+4. **If CodeRabbit or any reviewer requested changes**, call `state working "addressing review comments"` and fix the issues. Then push, and go back to step 1.
 
-5. **If all reviews pass or only have minor comments**, update the marker:
+5. **If CI passed cleanly**, query `reviewDecision` BEFORE deciding the next state — a prior approval may already exist (e.g. after merging base or pushing a non-dismissing commit):
    ```bash
-   echo "awaiting_review|PR_URL" > "$AUTOPILOT_STATE_MARKER"
+   DECISION=$(gh pr view <PR_NUMBER> --json reviewDecision -q '.reviewDecision' 2>/dev/null)
+   case "$DECISION" in
+       APPROVED)            state approved "PR_URL" ;;
+       CHANGES_REQUESTED)   state working "fixing review comments" ;;  # then fix + push, go to step 1
+       *)                   state awaiting_review "PR_URL" ;;          # REVIEW_REQUIRED, null, or empty
+   esac
    ```
-   This means CI passed and you're waiting for the human assignee to review.
 
-This marker is how the tmux worktree picker and autopilot scheduler show your current status. **Always update it.**
+`conductor.json` is how the tmux worktree picker and conductor scheduler show your current status. **Always report transitions via `state` — never via `echo > marker`.**
 
 ### Rules for ticket mode
 - Work autonomously, but if genuinely uncertain, ask — the user may be watching
@@ -243,9 +277,9 @@ Parse `$ARGUMENTS` to determine mode:
 
 - **`new-project [@doc]`** — Full lifecycle: init project → plan all phases → execute all phases
 - **`new-milestone [@doc]`** — New milestone: init milestone → plan phases → execute phases
-- **`resume`** — Pick up where autopilot left off (reads STATE.md for position)
+- **`resume`** — Pick up where conductor left off (reads STATE.md for position)
 - **`--from-phase N`** — Start autonomous execution from phase N (planning already done)
-- **`--no-team`** — Disable agent teams and fall back to standard subagents. By default, autopilot uses the **team-with-judge** pattern: agent teams with a dedicated Judge teammate that critically evaluates all work, researches best practices online, and blocks subpar output. Pass `--no-team` to opt out (lower token cost but no quality gate).
+- **`--no-team`** — Disable agent teams and fall back to standard subagents. By default, conductor uses the **team-with-judge** pattern: agent teams with a dedicated Judge teammate that critically evaluates all work, researches best practices online, and blocks subpar output. Pass `--no-team` to opt out (lower token cost but no quality gate).
 - **`--no-judge`** — Use agent teams but without the Judge. Falls back to standard `--team` behavior (teammates coordinate but no critical evaluator).
 </modes>
 
@@ -263,15 +297,15 @@ if [ -f ".planning/config.json" ]; then
   node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" config-set gates.confirm_project false
   node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" config-set gates.confirm_phases false
   node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" config-set gates.confirm_roadmap false
-  echo "✅ Autopilot config applied"
+  echo "✅ Conductor config applied"
 else
   echo "⏳ Config will be set after project init"
 fi
 ```
 
-Store the fact that autopilot is active so nested workflows can detect it:
+Store the fact that conductor is active so nested workflows can detect it:
 ```bash
-export GSD_AUTOPILOT=true
+export GSD_CONDUCTOR=true
 ```
 
 ## Step 2: Initialize (if new-project or new-milestone)
@@ -279,7 +313,7 @@ export GSD_AUTOPILOT=true
 **For `new-project`:**
 Run `/gsd:new-project --auto` with any provided document reference. The `--auto` flag already skips questioning and auto-approves roadmap/requirements.
 
-After init completes, apply autopilot config (Step 1 commands) since config.json now exists.
+After init completes, apply conductor config (Step 1 commands) since config.json now exists.
 
 **For `new-milestone`:**
 Run `/gsd:new-milestone` — auto-approve all gates. When the workflow asks for confirmation, respond with approval.
@@ -303,7 +337,7 @@ For each phase from `START_PHASE` to `END_PHASE`:
 ### 4a. Plan Phase (if no PLAN.md files exist for this phase)
 Run `/gsd:plan-phase <N>` with research and plan-checking based on project config.
 
-The plan-phase workflow has its own verification loop (plan-checker agent). In autopilot:
+The plan-phase workflow has its own verification loop (plan-checker agent). In conductor:
 - If plan-checker passes → continue
 - If plan-checker fails → auto-retry (up to 3 attempts, which is the default GSD behavior)
 - If 3 failures → **INTERRUPT USER** with diagnosis
@@ -315,7 +349,7 @@ node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" config-set workflow._auto_c
 
 ### 4b. Execute Phase (with Judge-in-the-Loop)
 
-Autopilot uses the **team-with-judge** pattern by default. This means every phase execution includes a dedicated Judge teammate that critically reviews all work, researches best practices, and blocks subpar output.
+Conductor uses the **team-with-judge** pattern by default. This means every phase execution includes a dedicated Judge teammate that critically reviews all work, researches best practices, and blocks subpar output.
 
 **Determine team mode from flags:**
 - Default (no flags): `--team` + Judge
@@ -330,7 +364,7 @@ Autopilot uses the **team-with-judge** pattern by default. This means every phas
 
    Spawn an Agent (subagent_type: `general-purpose`, name: `phase-<N>-judge`) with this mandate:
 
-   > You are the Judge for autopilot phase <N>. Review ALL code changes produced by this phase's execution.
+   > You are the Judge for conductor phase <N>. Review ALL code changes produced by this phase's execution.
    >
    > **Your process:**
    > 1. Read every file modified or created in this phase (check git diff or SUMMARY.md files in `.planning/phases/<NN>-*/`)
@@ -384,7 +418,7 @@ After all phases complete:
 2. Present completion report:
 
 ```
-## Autopilot Complete
+## Conductor Complete
 
 **Phases executed:** 1 through N
 **Status:** [All passed | X issues noted]
@@ -409,7 +443,7 @@ After all phases complete:
 - [Any warnings, skipped verifications, or edge cases]
 ```
 
-3. Reset autopilot flags:
+3. Reset conductor flags:
 ```bash
 node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" config-set workflow._auto_chain_active false
 node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" config-set gates.confirm_project true
@@ -430,18 +464,18 @@ node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" config-set gates.confirm_ro
 
 ### Auth Gate (checkpoint:human-action)
 ```
-## 🔐 Autopilot Paused — Action Required
+## 🔐 Conductor Paused — Action Required
 
 **Phase:** 03-deployment
 **Plan:** 03-02 Configure Auth
 **Action needed:** [description from checkpoint]
 
-Reply when done, and autopilot will resume.
+Reply when done, and conductor will resume.
 ```
 
 ### Unrecoverable Error
 ```
-## ⚠️ Autopilot Paused — Error
+## ⚠️ Conductor Paused — Error
 
 **Phase:** 02-feature
 **Plan:** 02-01 API Routes
@@ -451,12 +485,12 @@ Reply when done, and autopilot will resume.
 Options:
 1. Fix and resume → reply "continue"
 2. Skip this plan → reply "skip"
-3. Stop autopilot → reply "stop"
+3. Stop conductor → reply "stop"
 ```
 
 ### Verification Failure (after 3 retries)
 ```
-## ⚠️ Autopilot Paused — Verification Failed
+## ⚠️ Conductor Paused — Verification Failed
 
 **Phase:** 04-integration
 **Issue:** [what failed verification]
@@ -475,5 +509,5 @@ After ANY interrupt, when the user responds, resume the loop from the current po
 - **Log all autonomous decisions** to STATE.md so the user can review what happened
 - **Atomic commits** — each plan still commits independently (GSD executor default)
 - **If a phase has 3+ plan failures in execution**, pause and report rather than continuing to dependent phases
-- **Destructive operations** (drop tables, delete branches, etc.) still require user confirmation regardless of autopilot mode — this overrides auto-advance for safety
+- **Destructive operations** (drop tables, delete branches, etc.) still require user confirmation regardless of conductor mode — this overrides auto-advance for safety
 </guardrails>

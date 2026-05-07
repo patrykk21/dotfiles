@@ -4,7 +4,7 @@ description: >
   Visually verify a page in the running dev server using Playwright MCP.
   Use after making UI changes, before pushing code, or when asked to
   "check the page", "verify it works", "take a screenshot", or
-  "make sure nothing is broken". Also triggered by /autopilot after
+  "make sure nothing is broken". Also triggered by /conductor after
   implementation and before PR creation. Catches full-page regressions,
   not just the changed component.
 argument-hint: "[url-path or description of what to verify]"
@@ -32,7 +32,7 @@ smoke check using the live dev server.
 
 ## When This Skill Runs
 
-- **Automatically** by `/autopilot` before creating a PR (step 5)
+- **Automatically** by `/conductor` before creating a PR (step 5)
 - **Automatically** by `/with-markers` after fixing review comments
 - **Manually** via `/browser-verify /dashboards/ai-analytics`
 - **By Claude's judgment** when it makes UI changes and wants to verify them
@@ -52,7 +52,7 @@ If `$SERVER_PORT` is empty, find it:
 cat .claude/launch.json 2>/dev/null | grep -o '"port": [0-9]*' | head -1 | grep -o '[0-9]*'
 ```
 
-If still empty, check the server log referenced in `$AUTOPILOT_DIR` or fall back to 3000.
+If still empty, check the server log referenced in `$CONDUCTOR_DIR` or fall back to 3000.
 
 Base URL: `http://localhost:${PORT}`
 

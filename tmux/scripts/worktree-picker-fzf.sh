@@ -40,21 +40,21 @@ write_switch_session() {
 # Get list of worktrees with metadata-enhanced info
 get_worktrees() {
     # Print header (without delimiter so it shows in fzf)
-    printf "%-4s %-50s %-10s %-18s %-6s %-18s %s\n" "" "NAME" "TYPE" "STATUS" "PORT" "LAST ACTIVITY" "BRANCH"
-    printf "%-4s %-50s %-10s %-18s %-6s %-18s %s\n" "" "─────" "────" "──────" "────" "─────────────" "──────"
+    printf "%-4s %-50s %-10s %-18s %-6s %-18s %-55s %s\n" "" "NAME" "TYPE" "STATUS" "PORT" "LAST ACTIVITY" "HEADLINE" "BRANCH"
+    printf "%-4s %-50s %-10s %-18s %-6s %-18s %-55s %s\n" "" "─────" "────" "──────" "────" "─────────────" "────────" "──────"
     
-    # Pre-compute autopilot state for all projects (avoids quoting hell in awk)
-    local autopilot_states=""
-    for sf in "$HOME/.config/autopilot/projects/"*.state.json; do
+    # Pre-compute conductor state for all projects (avoids quoting hell in awk)
+    local conductor_states=""
+    for sf in "$HOME/.config/conductor/projects/"*.state.json; do
         [ -f "$sf" ] || continue
         local ap_st ap_wt
         ap_st=$(jq -r '.status // ""' "$sf" 2>/dev/null)
         ap_wt=$(jq -r '.current.worktree_name // ""' "$sf" 2>/dev/null)
-        [ -n "$ap_wt" ] && autopilot_states="${autopilot_states}${ap_wt}=${ap_st};"
+        [ -n "$ap_wt" ] && conductor_states="${conductor_states}${ap_wt}=${ap_st};"
     done
 
     # Process each worktree
-    git worktree list --porcelain | awk -v current="$CURRENT_WORKTREE" -v repo_name="$REPO_NAME" -v safe_repo_name="$SAFE_REPO_NAME" -v worktrees_base="$WORKTREES_BASE" -v autopilot_states="$autopilot_states" '
+    git worktree list --porcelain | awk -v current="$CURRENT_WORKTREE" -v repo_name="$REPO_NAME" -v safe_repo_name="$SAFE_REPO_NAME" -v worktrees_base="$WORKTREES_BASE" -v conductor_states="$conductor_states" '
     BEGIN {
         # Function to check metadata file
         metadata_cmd = "source " ENVIRON["HOME"] "/.config/tmux/scripts/worktree-metadata.sh"
@@ -117,49 +117,85 @@ get_worktrees() {
         }
 
         # --- Determine STATUS (single source of truth) ---
-        # Priority: autopilot state > waiting marker > session status > metadata
-        autopilot_dir = ENVIRON["HOME"] "/.config/autopilot"
+        # Priority: conductor state > waiting marker > session status > metadata
+        conductor_dir = ENVIRON["HOME"] "/.config/conductor"
         status_text = ""
-        is_autopilot = 0
+        is_conductor = 0
         needs_input = 0
         port_text = "-"
 
-        # Read worktree metadata (port, autopilot flag)
-        metadata_file = worktrees_base "/" repo_name "/.worktree-meta/sessions/" ticket ".json"
+        # Read worktree metadata (port, conductor flag) from the nested layout
+        # under .worktree-meta/sessions/<ticket>/.
+        session_dir = worktrees_base "/" repo_name "/.worktree-meta/sessions/" ticket
+        metadata_file = session_dir "/meta.json"
+        summary_file  = session_dir "/summary.json"
+        conductor_file = session_dir "/conductor.json"
+
         if (system("test -f " metadata_file) == 0) {
             cmd = "jq -r \".port // \\\"-\\\"\" " metadata_file " 2>/dev/null || echo \"-\""
             cmd | getline port_text
             close(cmd)
-            cmd = "jq -r \".autopilot // false\" " metadata_file " 2>/dev/null || echo \"false\""
+            cmd = "jq -r \".conductor // false\" " metadata_file " 2>/dev/null || echo \"false\""
             cmd | getline ap_flag
             close(cmd)
-            if (ap_flag == "true") is_autopilot = 1
+            if (ap_flag == "true") is_conductor = 1
         }
 
-        if (is_autopilot) type_text = "[AUTO]"
+        # Read summary.json for LLM-generated status + headline
+        headline = ""
+        llm_status = ""
+        if (system("test -f " summary_file) == 0) {
+            cmd = "jq -r \".headline // \\\"\\\"\" " summary_file " 2>/dev/null"
+            cmd | getline headline
+            close(cmd)
+            cmd = "jq -r \".status // \\\"\\\"\" " summary_file " 2>/dev/null"
+            cmd | getline llm_status
+            close(cmd)
+        }
 
-        # Read Claude state marker (STATE then pipe then details)
-        state_marker = autopilot_dir "/markers/" ticket ".state"
-        cmd = "test -f " state_marker " && head -1 " state_marker " 2>/dev/null"
-        cmd | getline claude_state_line
-        close(cmd)
-        # Extract state (everything before first pipe)
-        claude_state = claude_state_line
-        sub(/\x7c.*/, "", claude_state)
+        if (is_conductor) type_text = "[AUTO]"
 
+        # Read conductor.json state — highest priority for runtime signals.
+        # `.state` carries the rich vocabulary (working|awaiting_ci|awaiting_review|
+        # approved|merged|closed|needs_input|blocked|failed). `.status` is the
+        # coarse runtime signal — currently only "running" is meaningful here.
+        claude_state = ""
+        if (system("test -f " conductor_file) == 0) {
+            cmd = "jq -r \".status // \\\"\\\"\" " conductor_file " 2>/dev/null"
+            cmd | getline ap_runtime_state
+            close(cmd)
+            cmd = "jq -r \".state // \\\"\\\"\" " conductor_file " 2>/dev/null"
+            cmd | getline rich_state
+            close(cmd)
+            if (ap_runtime_state == "running") claude_state = "working"
+            else if (rich_state != "") claude_state = rich_state
+        }
+
+        # Map claude_state / legacy state vocabulary to display label.
         if (claude_state == "merged") status_text = "[MERGED]"
+        else if (claude_state == "closed") status_text = "[CLOSED]"
         else if (claude_state == "awaiting_ci") status_text = "[AWAITING CI]"
         else if (claude_state == "awaiting_review") status_text = "[AWAITING REVIEW]"
         else if (claude_state == "approved") status_text = "[APPROVED]"
         else if (claude_state == "working") status_text = "[AI WORKING]"
         else if (claude_state == "needs_input") { status_text = "[NEEDS INPUT]"; needs_input = 1 }
+        else if (claude_state == "blocked") status_text = "[BLOCKED]"
         else if (claude_state == "failed") status_text = "[FAILED]"
 
-        # Fallback: check autopilot project state (pre-computed from state.json)
-        if (status_text == "" && is_autopilot && autopilot_states != "") {
+        # Fall back to LLM summary status (written by summarize-worktree).
+        if (status_text == "" && llm_status != "") {
+            if      (llm_status == "ACTIVE")          status_text = "[ACTIVE]"
+            else if (llm_status == "BLOCKED")         status_text = "[BLOCKED]"
+            else if (llm_status == "WAITING_REVIEW")  status_text = "[AWAITING REVIEW]"
+            else if (llm_status == "STALE")           status_text = "[STALE]"
+            else if (llm_status == "DONE")            status_text = "[DONE]"
+        }
+
+        # Fallback: check conductor project state (pre-computed from state.json)
+        if (status_text == "" && is_conductor && conductor_states != "") {
             pattern = ticket "="
-            if (index(autopilot_states, pattern) > 0) {
-                rest = substr(autopilot_states, index(autopilot_states, pattern) + length(pattern))
+            if (index(conductor_states, pattern) > 0) {
+                rest = substr(conductor_states, index(conductor_states, pattern) + length(pattern))
                 sub(/;.*/, "", rest)
                 if (rest == "pending_assignment") status_text = "[CI/REVIEW]"
                 else if (rest == "working") status_text = "[AI WORKING]"
@@ -177,17 +213,18 @@ get_worktrees() {
             }
         }
 
-        # Check if this worktree has unseen activity
-        seen_dir = ENVIRON["HOME"] "/.config/autopilot/seen"
+        # Check if this worktree has unseen activity — compare meta.last_accessed vs seen file.
+        seen_dir = ENVIRON["HOME"] "/.config/conductor/seen"
         seen_file = seen_dir "/" ticket ".seen"
         has_unseen = 0
-        if (claude_state != "" && claude_state != "merged") {
-            # Get marker mtime epoch
+        activity_source = ""
+        if (system("test -f " summary_file) == 0) activity_source = summary_file
+        else if (system("test -f " metadata_file) == 0) activity_source = metadata_file
+        if (activity_source != "" && claude_state != "merged" && claude_state != "closed") {
             marker_epoch = 0
-            cmd = "stat -f \"%m\" " state_marker " 2>/dev/null"
+            cmd = "stat -f \"%m\" " activity_source " 2>/dev/null"
             cmd | getline marker_epoch
             close(cmd)
-            # Get seen epoch
             seen_epoch = 0
             cmd = "cat " seen_file " 2>/dev/null"
             cmd | getline seen_epoch
@@ -209,23 +246,33 @@ get_worktrees() {
         # Truncate ticket name to 48 chars for alignment
         display_name = substr(ticket, 1, 48)
 
-        # Get last activity timestamp from .state file mtime
+        # Last activity = whichever of summary.json / meta.json exists and is newer.
         last_activity = "-"
         sort_epoch = "0"
-        if (claude_state != "") {
-            cmd = "date -r " state_marker " +\"%m/%d %H:%M\" 2>/dev/null"
+        if (activity_source != "") {
+            cmd = "date -r " activity_source " +\"%m/%d %H:%M\" 2>/dev/null"
             cmd | getline last_activity
             close(cmd)
             if (last_activity == "") last_activity = "-"
-            cmd = "date -r " state_marker " +\"%s\" 2>/dev/null"
+            cmd = "date -r " activity_source " +\"%s\" 2>/dev/null"
             cmd | getline sort_epoch
             close(cmd)
             if (sort_epoch == "") sort_epoch = "0"
         }
 
+        # Truncate headline to 53 chars for alignment (column width 55).
+        # NOTE: substr() in macOS awk operates on BYTES, not characters. Truncating
+        # mid-multi-byte (e.g. an em-dash, 3 bytes UTF-8) leaves an orphan continuation
+        # byte that breaks downstream `cut` with "Illegal byte sequence" and drops the
+        # entire row from the picker. The `iconv -c -f UTF-8 -t UTF-8` pipe at the end
+        # of this awk strips any invalid UTF-8 sequences, so half-truncated multi-byte
+        # chars are silently dropped instead of corrupting the line.
+        display_headline = headline
+        if (length(display_headline) > 53) display_headline = substr(display_headline, 1, 50) "..."
+
         # Output with hidden sort key (epoch, 0 = no date = highest prio)
-        printf "%s%-50s %-10s %-18s %-6s %-18s %s\t%s\n", status_icon, display_name, type_text, status_text, port_text, last_activity, branch, sort_epoch
-    }'
+        printf "%s%-50s %-10s %-18s %-6s %-18s %-55s %s\t%s\n", status_icon, display_name, type_text, status_text, port_text, last_activity, display_headline, branch, sort_epoch
+    }' | iconv -c -f UTF-8 -t UTF-8
 }
 
 
@@ -359,7 +406,7 @@ fi
 # Use fzf (tmux display-popup creates the popup window)
 selected=$(echo "$WORKTREE_DATA" | fzf \
     --prompt=" Select worktree: " \
-    --header=$'\n'"$SEPARATOR"$'\n    [AI WORKING] [NEEDS INPUT] [AWAITING CI] [AWAITING REVIEW] [APPROVED] [MERGED] [ACTIVE] [SAVED] [AUTO]   ● = unread\n'"$SEPARATOR"$'\n    enter switch   ctrl-x delete   ctrl-k kill session   ctrl-r reload' \
+    --header=$'\n'"$SEPARATOR"$'\n    [AI WORKING] [NEEDS INPUT] [BLOCKED] [AWAITING CI] [AWAITING REVIEW] [APPROVED] [MERGED] [CLOSED] [ACTIVE] [SAVED] [AUTO]   ● = unread\n'"$SEPARATOR"$'\n    enter switch   ctrl-x delete   ctrl-k kill session   ctrl-r reload' \
     --header-lines=2 \
     --ansi \
     --color="fg:250,bg:235,hl:114,fg+:235,bg+:114,hl+:235,prompt:114,pointer:114,header:243,border:114" \
@@ -443,8 +490,8 @@ if [ -n "$selected" ]; then
     echo "[PICKER DEBUG] Parsed - icon:'$icon' name:'$name' type:'$type' session:'$session' path:'$worktree_path'" >> /tmp/tmux-worktree-debug.log
     
     # Mark this worktree as seen
-    mkdir -p "$HOME/.config/autopilot/seen"
-    date +%s > "$HOME/.config/autopilot/seen/${name}.seen"
+    mkdir -p "$HOME/.config/conductor/seen"
+    date +%s > "$HOME/.config/conductor/seen/${name}.seen"
 
     # Check if we selected the current session (indicated by arrow)
     if [ "$has_arrow" = "1" ]; then

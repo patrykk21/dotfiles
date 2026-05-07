@@ -1,18 +1,18 @@
-# Autopilot - Autonomous Ticket-to-PR Pipeline
+# Conductor - Autonomous Ticket-to-PR Pipeline
 
 Pass a ticket URL from any platform, Claude Code implements it, creates a PR, and comments back. Fully autonomous, multi-project, cross-platform.
 
 ## Two Ways to Use
 
-### 1. Manual: `/autopilot` command (any platform)
+### 1. Manual: `/conductor` command (any platform)
 
 Inside any Claude Code session, run:
 
 ```
-/autopilot https://your-org.atlassian.net/browse/PROJ-123
-/autopilot https://app.clickup.com/t/abc123
-/autopilot https://linear.app/team/issue/TEAM-456
-/autopilot https://github.com/org/repo/issues/42
+/conductor https://your-org.atlassian.net/browse/PROJ-123
+/conductor https://app.clickup.com/t/abc123
+/conductor https://linear.app/team/issue/TEAM-456
+/conductor https://github.com/org/repo/issues/42
 ```
 
 Claude detects the platform, fetches the ticket, implements it, and creates a PR. Works with Jira, ClickUp, Linear, GitHub Issues, or any URL it can parse.
@@ -22,10 +22,10 @@ Claude detects the platform, fetches the ticket, implements it, and creates a PR
 ```
 Every 5 min (launchd / systemd):
   For each configured project:
-    1. Query Jira for tickets labeled "claude-autopilot" in "To Do"
+    1. Query Jira for tickets labeled "claude-conductor" in "To Do"
     2. Pick the oldest ticket, transition to "In Progress"
     3. Create git worktree + tmux session + dev server
-    4. Launch Claude Code with /autopilot <ticket-url>
+    4. Launch Claude Code with /conductor <ticket-url>
     5. Claude implements, tests, commits, pushes, creates PR
     6. Comments PR link on Jira
     7. On failure: comments on Jira, keeps ticket "In Progress"
@@ -50,18 +50,18 @@ source ~/.config/zsh/aliases.sh
 ### Step 2: Install the scheduler
 
 ```bash
-autopilot setup
+conductor setup
 ```
 
 This detects your OS and generates:
-- **macOS**: `~/Library/LaunchAgents/com.autopilot-jira.plist`
-- **Linux**: `~/.config/systemd/user/autopilot-jira.{service,timer}`
+- **macOS**: `~/Library/LaunchAgents/com.conductor-jira.plist`
+- **Linux**: `~/.config/systemd/user/conductor-jira.{service,timer}`
 
 ### Step 3: Add a project
 
 ```bash
-autopilot add my-project
-$EDITOR ~/.config/autopilot/projects/my-project.env
+conductor add my-project
+$EDITOR ~/.config/conductor/projects/my-project.env
 ```
 
 Required fields:
@@ -77,7 +77,7 @@ BASE_BRANCH="main"
 JIRA_PROJECT="PROJ"
 
 # Jira label that triggers pickup (create this label in Jira first)
-JIRA_LABEL="claude-autopilot"
+JIRA_LABEL="claude-conductor"
 
 # How to start the dev server ($SERVER_PORT is set by tmux session)
 DEV_SERVER_CMD="PORT=\$SERVER_PORT npm run dev"
@@ -96,11 +96,11 @@ TICKET_URL_PATTERN="https://your-org.atlassian.net/browse/{{KEY}}"
 
 # Jira credentials file (needs JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN)
 # Defaults to $PROJECT_DIR/.env.local
-JIRA_CREDENTIALS_FILE="$HOME/.config/autopilot/jira-credentials.env"
+JIRA_CREDENTIALS_FILE="$HOME/.config/conductor/jira-credentials.env"
 
 # Script to run after worktree creation (copy env files, generate configs, etc.)
 # Receives env vars: WORKTREE_PATH, PROJECT_DIR, WORKTREE_NAME
-WORKTREE_SETUP_HOOK="$PROJECT_DIR/.autopilot/setup-worktree.sh"
+WORKTREE_SETUP_HOOK="$PROJECT_DIR/.conductor/setup-worktree.sh"
 
 # Override Claude binary (auto-detected from PATH if not set)
 # CLAUDE_BIN="/path/to/claude"
@@ -117,7 +117,7 @@ WORKTREE_SETUP_HOOK="$PROJECT_DIR/.autopilot/setup-worktree.sh"
 Create a credentials file:
 
 ```bash
-cat > ~/.config/autopilot/jira-credentials.env << 'EOF'
+cat > ~/.config/conductor/jira-credentials.env << 'EOF'
 JIRA_BASE_URL=https://your-org.atlassian.net
 JIRA_EMAIL=you@company.com
 JIRA_API_TOKEN=your-api-token
@@ -130,44 +130,44 @@ If you already have Jira creds in another config (e.g., Tempo MCP in `~/.cursor/
 
 ### Step 5: Create the Jira label
 
-In your Jira project, create a label matching your `JIRA_LABEL` config (default: `claude-autopilot`).
+In your Jira project, create a label matching your `JIRA_LABEL` config (default: `claude-conductor`).
 
 ### Step 6: Enable and test
 
 ```bash
-autopilot on
-autopilot run my-project    # test one cycle
-autopilot logs my-project   # check output
-autopilot status            # see all projects
+conductor on
+conductor run my-project    # test one cycle
+conductor logs my-project   # check output
+conductor status            # see all projects
 ```
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `autopilot on` | Enable polling (all projects) |
-| `autopilot off` | Disable polling (active work continues) |
-| `autopilot status` | Show all projects and their state |
-| `autopilot setup` | Install OS scheduler (launchd/systemd) |
-| `autopilot add <name>` | Add a new project |
-| `autopilot remove <name>` | Remove a project config |
-| `autopilot list` | List configured projects |
-| `autopilot run [project]` | Manual run (one or all projects) |
-| `autopilot logs [project] [N]` | Show last N log lines |
-| `autopilot history [project]` | Show completed/failed tickets |
-| `autopilot reset <project>` | Reset stuck project to idle |
-| `autopilot reset --all` | Reset all projects |
+| `conductor on` | Enable polling (all projects) |
+| `conductor off` | Disable polling (active work continues) |
+| `conductor status` | Show all projects and their state |
+| `conductor setup` | Install OS scheduler (launchd/systemd) |
+| `conductor add <name>` | Add a new project |
+| `conductor remove <name>` | Remove a project config |
+| `conductor list` | List configured projects |
+| `conductor run [project]` | Manual run (one or all projects) |
+| `conductor logs [project] [N]` | Show last N log lines |
+| `conductor history [project]` | Show completed/failed tickets |
+| `conductor reset <project>` | Reset stuck project to idle |
+| `conductor reset --all` | Reset all projects |
 
 ## Multi-Project Support
 
 Each project runs independently with its own state, lock, logs, and history. The runner fires all projects in parallel every 5 minutes.
 
 ```bash
-autopilot add frontend
-autopilot add backend
-autopilot add mobile-app
+conductor add frontend
+conductor add backend
+conductor add mobile-app
 
-autopilot status
+conductor status
 # Shows:
 #   frontend  (FE)   — WORKING on FE-42
 #   backend   (BE)   — IDLE
@@ -176,7 +176,7 @@ autopilot status
 
 ## Project-Level Setup Hook
 
-For projects that need custom worktree setup (env files, config generation, etc.), create `.autopilot/setup-worktree.sh` in the project repo:
+For projects that need custom worktree setup (env files, config generation, etc.), create `.conductor/setup-worktree.sh` in the project repo:
 
 ```bash
 #!/usr/bin/env bash
@@ -193,15 +193,15 @@ cp "$PROJECT_DIR/.claude/settings.local.json" "$WORKTREE_PATH/.claude/settings.l
 Then reference it in your project config:
 
 ```bash
-WORKTREE_SETUP_HOOK="$PROJECT_DIR/.autopilot/setup-worktree.sh"
+WORKTREE_SETUP_HOOK="$PROJECT_DIR/.conductor/setup-worktree.sh"
 ```
 
-## Using `/autopilot` Manually
+## Using `/conductor` Manually
 
-You don't need the scheduler to use autopilot. In any Claude Code session:
+You don't need the scheduler to use conductor. In any Claude Code session:
 
 ```
-/autopilot https://groupondev.atlassian.net/browse/ECH-571
+/conductor https://groupondev.atlassian.net/browse/ECH-571
 ```
 
 Claude will:
@@ -218,10 +218,10 @@ This works with any ticket URL: Jira, ClickUp, Linear, GitHub Issues.
 ## File Structure
 
 ```
-~/.config/autopilot/
-├── autopilot.sh              # Core logic (one project per invocation)
-├── autopilot-runner.sh       # Loops all projects in parallel
-├── autopilot-ctl.sh          # CLI control
+~/.config/conductor/
+├── conductor.sh              # Core logic (one project per invocation)
+├── conductor-runner.sh       # Loops all projects in parallel
+├── conductor-ctl.sh          # CLI control
 ├── claude-prompt-template.md # Legacy prompt template (kept for reference)
 ├── config.env.example        # Template for project configs
 ├── setup.sh                  # OS scheduler installer
@@ -248,9 +248,9 @@ Only the scripts, template, example config, and this README are committed to dot
 - **Lock contention**: PID-based lock prevents concurrent runs per project
 - **Stale lock**: Automatically cleaned if PID is dead
 
-## Customizing the `/autopilot` Command
+## Customizing the `/conductor` Command
 
-The command lives at `~/.claude/commands/autopilot.md`. It handles both:
+The command lives at `~/.claude/commands/conductor.md`. It handles both:
 - **Ticket URLs** → autonomous implementation flow
 - **GSD args** (`new-project`, `resume`, etc.) → existing GSD workflow
 

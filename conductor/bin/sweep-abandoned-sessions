@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+# sweep-abandoned-sessions — find session dirs whose worktree_path has vanished,
+# mark them abandoned, and move them aside for a grace period.
+#
+# Usage:
+#   sweep-abandoned-sessions                   # dry-run (default)
+#   sweep-abandoned-sessions --execute         # actually move to _abandoned/
+#   sweep-abandoned-sessions --purge           # delete _abandoned/ dirs older than GRACE_DAYS
+#   sweep-abandoned-sessions --project <name>  # scope to ~/worktrees/<name> only
+#
+# Flow:
+#   For each session with missing worktree_path:
+#     1. Emit worktree-abandoned event (clears flags, stamps meta.last_accessed).
+#     2. Move session dir to <project>/.worktree-meta/_abandoned/<ticket>-<timestamp>/.
+#     3. --purge mode deletes anything in _abandoned/ older than GRACE_DAYS.
+#
+# Default scope (no --project) is ALL projects under WORKTREES_ROOT, but the
+# --project flag lets us pilot on echelon first before flipping it loose.
+
+set -uo pipefail
+
+CONDUCTOR_DIR="${CONDUCTOR_DIR:-$HOME/.config/conductor}"
+BIN_DIR="$CONDUCTOR_DIR/bin"
+WORKTREES_ROOT="${WORKTREES_ROOT:-$HOME/worktrees}"
+WORKTREE_EVENT="$BIN_DIR/worktree-event"
+GRACE_DAYS="${SWEEP_GRACE_DAYS:-14}"
+LOG_FILE="$CONDUCTOR_DIR/logs/sweeper.log"
+mkdir -p "$(dirname "$LOG_FILE")"
+
+log() { echo "[$(date -u +%FT%TZ)] $*" | tee -a "$LOG_FILE"; }
+
+mode="dry-run"
+project_filter=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --execute)  mode="execute"; shift ;;
+        --purge)    mode="purge"; shift ;;
+        --dry-run)  mode="dry-run"; shift ;;
+        --project)  project_filter="$2"; shift 2 ;;
+        -h|--help)
+            sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+            exit 0 ;;
+        *) echo "unknown arg: $1" >&2; exit 1 ;;
+    esac
+done
+
+# Resolve project scope.
+if [[ -n "$project_filter" ]]; then
+    project_dirs=("$WORKTREES_ROOT/$project_filter")
+    if [[ ! -d "${project_dirs[0]}/.worktree-meta" ]]; then
+        log "no .worktree-meta under $WORKTREES_ROOT/$project_filter"
+        exit 0
+    fi
+else
+    shopt -s nullglob
+    project_dirs=("$WORKTREES_ROOT"/*/)
+    shopt -u nullglob
+fi
+
+abandoned=0
+skipped_alive=0
+purged=0
+now_ts=$(date -u +%s)
+
+for project_dir in "${project_dirs[@]}"; do
+    project_dir="${project_dir%/}"
+    project_name=$(basename "$project_dir")
+    meta_root="$project_dir/.worktree-meta"
+    sessions_dir="$meta_root/sessions"
+    abandoned_dir="$meta_root/_abandoned"
+
+    [[ -d "$sessions_dir" ]] || continue
+
+    if [[ "$mode" == "purge" ]]; then
+        [[ -d "$abandoned_dir" ]] || continue
+        for victim in "$abandoned_dir"/*/; do
+            [[ -d "$victim" ]] || continue
+            victim="${victim%/}"
+            age_days=$(( (now_ts - $(stat -f %m "$victim")) / 86400 ))
+            if (( age_days >= GRACE_DAYS )); then
+                log "purge [$project_name]: $victim (age=${age_days}d, grace=${GRACE_DAYS}d)"
+                rm -rf "$victim"
+                purged=$((purged+1))
+            fi
+        done
+        continue
+    fi
+
+    shopt -s nullglob
+    for session_dir in "$sessions_dir"/*/; do
+        session_dir="${session_dir%/}"
+        meta_file="$session_dir/meta.json"
+        ticket=$(basename "$session_dir")
+
+        [[ -f "$meta_file" ]] || { log "no meta.json in $session_dir — skipping"; continue; }
+
+        wt_path=$(jq -r '.worktree_path // empty' "$meta_file" 2>/dev/null)
+        if [[ -z "$wt_path" || -d "$wt_path" ]]; then
+            skipped_alive=$((skipped_alive+1))
+            continue
+        fi
+
+        # Worktree path missing → abandon.
+        log "abandon [$project_name/$ticket]: worktree_path vanished ($wt_path)"
+        abandoned=$((abandoned+1))
+
+        if [[ "$mode" == "execute" ]]; then
+            # Emit event first (clears flags, stamps last_accessed). Non-fatal if it errors.
+            "$WORKTREE_EVENT" worktree-abandoned --ticket "$ticket" >>"$LOG_FILE" 2>&1 || \
+                log "  worktree-event worktree-abandoned failed for $ticket (non-fatal)"
+
+            mkdir -p "$abandoned_dir"
+            ts=$(date -u +%Y%m%dT%H%M%SZ)
+            mv -f "$session_dir" "$abandoned_dir/${ticket}-${ts}"
+            log "  moved -> $abandoned_dir/${ticket}-${ts}"
+        fi
+    done
+    shopt -u nullglob
+done
+
+echo
+case "$mode" in
+    dry-run)
+        log "summary [dry-run]: $abandoned abandoned-candidates, $skipped_alive alive"
+        log "run with --execute to move abandoned sessions to _abandoned/"
+        ;;
+    execute)
+        log "summary [execute]: $abandoned moved to _abandoned/, $skipped_alive alive"
+        log "_abandoned/ entries are purged after ${GRACE_DAYS} days via --purge"
+        ;;
+    purge)
+        log "summary [purge]: $purged deleted (grace=${GRACE_DAYS} days)"
+        ;;
+esac

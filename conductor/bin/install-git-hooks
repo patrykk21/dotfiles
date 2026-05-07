@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# install-git-hooks — install post-commit hook into every worktree that has
+# a session directory under ~/worktrees/*/.worktree-meta/sessions/<ticket>/.
+# Idempotent: skips if hook already has the marker line.
+
+set -uo pipefail
+
+CONDUCTOR_DIR="${CONDUCTOR_DIR:-$HOME/.config/conductor}"
+WORKTREES_ROOT="${WORKTREES_ROOT:-$HOME/worktrees}"
+TEMPLATE="$CONDUCTOR_DIR/templates/post-commit"
+MARKER="# conductor-post-commit-v1"
+
+[[ -f "$TEMPLATE" ]] || { echo "template missing: $TEMPLATE" >&2; exit 1; }
+
+mode="${1:-install}"
+
+shopt -s nullglob
+session_dirs=("$WORKTREES_ROOT"/*/.worktree-meta/sessions/*/)
+shopt -u nullglob
+
+installed=0
+skipped=0
+missing_worktree=0
+
+for sd in "${session_dirs[@]}"; do
+    sd="${sd%/}"
+    meta="$sd/meta.json"
+    [[ -f "$meta" ]] || continue
+    wt_path=$(jq -r '.worktree_path // empty' "$meta" 2>/dev/null)
+    [[ -n "$wt_path" && -d "$wt_path" ]] || { missing_worktree=$((missing_worktree+1)); continue; }
+
+    # Resolve actual .git hooks directory. For worktrees, .git is a file pointing
+    # to the main repo's worktrees/<name> gitdir.
+    hooks_dir=$(cd "$wt_path" && git rev-parse --git-path hooks 2>/dev/null)
+    [[ -n "$hooks_dir" && -d "$hooks_dir" ]] || { missing_worktree=$((missing_worktree+1)); continue; }
+
+    target="$hooks_dir/post-commit"
+
+    if [[ -f "$target" ]] && grep -q "$MARKER" "$target" 2>/dev/null; then
+        skipped=$((skipped+1))
+        continue
+    fi
+
+    case "$mode" in
+        install)
+            # Prepend our snippet (with marker) to any existing hook, preserving prior logic.
+            if [[ -f "$target" ]]; then
+                existing=$(cat "$target")
+                {
+                    echo "#!/usr/bin/env bash"
+                    echo "$MARKER"
+                    cat "$TEMPLATE" | tail -n +2  # drop shebang, we wrote our own
+                    echo ""
+                    echo "# ---- original post-commit below ----"
+                    printf '%s\n' "$existing" | tail -n +2  # drop original shebang
+                } > "$target.tmp"
+                mv -f "$target.tmp" "$target"
+            else
+                {
+                    echo "#!/usr/bin/env bash"
+                    echo "$MARKER"
+                    cat "$TEMPLATE" | tail -n +2
+                } > "$target"
+            fi
+            chmod +x "$target"
+            installed=$((installed+1))
+            echo "installed: $wt_path ($target)"
+            ;;
+        dry-run)
+            echo "would install: $wt_path ($target)"
+            installed=$((installed+1))
+            ;;
+        *) echo "unknown mode: $mode" >&2; exit 1 ;;
+    esac
+done
+
+echo
+echo "summary: $installed ${mode}ed, $skipped already present, $missing_worktree had no resolvable worktree"

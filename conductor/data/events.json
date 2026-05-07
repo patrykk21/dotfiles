@@ -1,0 +1,113 @@
+{
+  "_comment": "Event vocabulary for worktree-event. Each event declares flag operations and JSON patches. Unknown events are rejected. See docs/worktree-context-system.md.",
+  "_jq_bindings": "json_patches receive these bound vars: $now (ISO8601), $exit_code (int, or null), $error (str, or null), $pr_state (str, or null), $text (str, or null).",
+  "events": {
+    "worktree-created": {
+      "description": "Called after a new worktree dir is set up. Creates session dir if absent. --ticket required.",
+      "require_ticket": true,
+      "flags_touched": [],
+      "flags_cleared": [],
+      "json_patches": [],
+      "side_effect": "create-session-dir"
+    },
+    "worktree-abandoned": {
+      "description": "Worktree is being deleted. Clears all flags. --ticket required.",
+      "require_ticket": true,
+      "flags_touched": [],
+      "flags_cleared": ["__all__"],
+      "json_patches": []
+    },
+    "commit-made": {
+      "description": "A commit landed. Queues a summary refresh.",
+      "require_ticket": false,
+      "flags_touched": ["needs-summary-update"],
+      "flags_cleared": [],
+      "json_patches": []
+    },
+    "claude-turn-ended": {
+      "description": "Claude finished a response (Stop hook). Queues summary refresh.",
+      "require_ticket": false,
+      "flags_touched": ["needs-summary-update"],
+      "flags_cleared": [],
+      "json_patches": []
+    },
+    "claude-session-paused": {
+      "description": "User explicitly paused via /pause-worktree. Forces a refresh even if signal hash unchanged.",
+      "require_ticket": false,
+      "flags_touched": ["needs-summary-update", "needs-summary-update-force"],
+      "flags_cleared": [],
+      "json_patches": []
+    },
+    "conductor-queued": {
+      "description": "Ticket was labelled for conductor. --ticket required.",
+      "require_ticket": true,
+      "flags_touched": ["conductor-queued"],
+      "flags_cleared": ["conductor-error"],
+      "json_patches": []
+    },
+    "conductor-started": {
+      "description": "Conductor run began. --ticket required.",
+      "require_ticket": true,
+      "flags_touched": ["conductor-running", "conductor-lock"],
+      "flags_cleared": ["conductor-queued"],
+      "json_patches": [
+        {"file": "conductor.json", "jq": ".status = \"running\" | .last_run = $now"}
+      ]
+    },
+    "conductor-finished": {
+      "description": "Conductor run completed successfully. --ticket and --exit-code required. Queues summary refresh.",
+      "require_ticket": true,
+      "require_exit_code": true,
+      "flags_touched": ["needs-summary-update"],
+      "flags_cleared": ["conductor-running", "conductor-lock"],
+      "json_patches": [
+        {"file": "conductor.json", "jq": ".status = \"idle\" | .last_run_exit_code = $exit_code | .run_count = ((.run_count // 0) + 1)"}
+      ]
+    },
+    "conductor-failed": {
+      "description": "Conductor run failed. --ticket required, --error optional.",
+      "require_ticket": true,
+      "flags_touched": ["needs-summary-update", "conductor-error"],
+      "flags_cleared": ["conductor-running", "conductor-lock"],
+      "json_patches": [
+        {"file": "conductor.json", "jq": ".status = \"idle\" | .last_error = $error | .run_count = ((.run_count // 0) + 1)"}
+      ]
+    },
+    "pr-state-changed": {
+      "description": "PR state moved (open/closed/merged/draft). --pr-state required.",
+      "require_ticket": false,
+      "require_pr_state": true,
+      "flags_touched": ["needs-summary-update"],
+      "flags_cleared": [],
+      "json_patches": [
+        {"file": "summary.json", "jq": ".pr_state = $pr_state"}
+      ]
+    },
+    "note-added": {
+      "description": "User added a manual note via /pause-worktree or similar. --text required.",
+      "require_ticket": false,
+      "require_text": true,
+      "flags_touched": ["needs-summary-update", "needs-summary-update-force"],
+      "flags_cleared": [],
+      "json_patches": [],
+      "side_effect": "append-user-note"
+    },
+    "summary-written": {
+      "description": "Summarizer finished writing context.md + summary.json. Clears the dirty flags.",
+      "require_ticket": true,
+      "flags_touched": [],
+      "flags_cleared": ["needs-summary-update", "needs-summary-update-force"],
+      "json_patches": []
+    },
+    "conductor-state-reported": {
+      "description": "Reports a rich state (awaiting_ci, merged, needs_input, etc.) into conductor.json so the picker sees it and queues a summary refresh. --ticket and --text (state|detail) required.",
+      "require_ticket": true,
+      "require_text": true,
+      "flags_touched": ["needs-summary-update"],
+      "flags_cleared": [],
+      "json_patches": [
+        {"file": "conductor.json", "jq": ".state = ($text | split(\"|\")[0]) | .state_detail = ($text | split(\"|\")[1:] | join(\"|\")) | .state_updated = $now"}
+      ]
+    }
+  }
+}

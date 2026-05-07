@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# summarize-dirty — scan all worktree sessions, regenerate those with
+# needs-summary-update flag present. Called by conductor-runner.sh as Pass 2.
+#
+# Sequential (not parallel) to keep rate limits + logs sane. Each session's
+# summarize-worktree is bounded by its own signal-hash gate anyway, so the
+# scan is cheap.
+#
+# Usage:
+#   summarize-dirty            # normal run
+#   summarize-dirty --force    # regenerate every session regardless of flags
+
+set -uo pipefail
+
+CONDUCTOR_DIR="${CONDUCTOR_DIR:-$HOME/.config/conductor}"
+BIN_DIR="$CONDUCTOR_DIR/bin"
+WORKTREES_ROOT="${WORKTREES_ROOT:-$HOME/worktrees}"
+SUMMARIZER="$BIN_DIR/summarize-worktree"
+LOG_FILE="$CONDUCTOR_DIR/logs/summarizer.log"
+mkdir -p "$(dirname "$LOG_FILE")"
+
+log() { echo "[$(date -u +%FT%TZ)] [dirty-scan] $*" >> "$LOG_FILE"; }
+
+force_all=0
+case "${1:-}" in
+    --force) force_all=1 ;;
+    "") ;;
+    *) echo "summarize-dirty: unknown arg $1" >&2; exit 1 ;;
+esac
+
+shopt -s nullglob
+session_dirs=("$WORKTREES_ROOT"/*/.worktree-meta/sessions/*/)
+shopt -u nullglob
+
+if [[ ${#session_dirs[@]} -eq 0 ]]; then
+    log "no session dirs under $WORKTREES_ROOT"
+    exit 0
+fi
+
+total=${#session_dirs[@]}
+processed=0
+regenerated=0
+errors=0
+
+for session_dir in "${session_dirs[@]}"; do
+    session_dir="${session_dir%/}"
+    ticket=$(basename "$session_dir")
+
+    if [[ "$force_all" -eq 1 ]]; then
+        processed=$((processed+1))
+        if "$SUMMARIZER" --session-dir "$session_dir" --force; then
+            regenerated=$((regenerated+1))
+        else
+            errors=$((errors+1))
+        fi
+        continue
+    fi
+
+    # Skip if no dirty flag.
+    if [[ ! -f "$session_dir/flags/needs-summary-update" && \
+          ! -f "$session_dir/flags/needs-summary-update-force" ]]; then
+        continue
+    fi
+
+    processed=$((processed+1))
+    if "$SUMMARIZER" --session-dir "$session_dir"; then
+        regenerated=$((regenerated+1))
+    else
+        errors=$((errors+1))
+    fi
+done
+
+log "scan complete: $total total, $processed dirty, $regenerated regenerated, $errors errors"
+exit 0

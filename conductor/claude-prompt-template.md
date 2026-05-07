@@ -1,6 +1,6 @@
-# Autopilot Task: {{TICKET_KEY}}
+# Conductor Task: {{TICKET_KEY}}
 
-You are running in **autopilot mode**. You have been assigned Jira ticket **{{TICKET_KEY}}**: "{{TICKET_SUMMARY}}" (Type: {{TICKET_TYPE}}, Priority: {{TICKET_PRIORITY}}).
+You are running in **conductor mode**. You have been assigned Jira ticket **{{TICKET_KEY}}**: "{{TICKET_SUMMARY}}" (Type: {{TICKET_TYPE}}, Priority: {{TICKET_PRIORITY}}).
 
 ## Your Environment
 
@@ -108,31 +108,37 @@ Then go to step 10.
 
 ### 10. Signal Completion
 
-This is CRITICAL. You MUST do exactly one of these:
+This is CRITICAL. You MUST do exactly one of these by calling the `state` shell function (already in your environment):
 
-**On success (implementation)**, write the PR URL to the completion marker:
+**On success (implementation)** — when you've created/updated the PR, before CI completes:
 ```bash
-echo "PR_URL_HERE" > "{{COMPLETION_MARKER}}"
+state awaiting_ci "PR_URL_HERE"
 ```
 
-**On success (research)**, write "RESEARCH" to the completion marker:
+Then poll CI (`gh pr checks`), wait ~60s after green for CodeRabbit, address any review comments. Once CI is green and reviews are clean:
 ```bash
-echo "RESEARCH: Findings posted as Jira comment on {{TICKET_KEY}}" > "{{COMPLETION_MARKER}}"
+state awaiting_review "PR_URL_HERE"
 ```
 
-**On failure** (if you cannot complete the ticket), write the reason:
+**On success (research)** — no PR, just findings:
 ```bash
-echo "Brief reason for failure" > "{{FAILURE_MARKER}}"
+state awaiting_review "RESEARCH: Findings posted as Jira comment on {{TICKET_KEY}}"
 ```
 
-You MUST write one of these markers before exiting. This is how the autopilot system knows you're done.
+**On failure** — if you cannot complete the ticket:
+```bash
+state failed "Brief reason for failure"
+```
+
+You MUST call `state` with a terminal-or-pending state (`awaiting_review`, `failed`, `closed`, `blocked`) before exiting. This is how the conductor system knows you're done.
 
 ## Important Rules
 
 - You are running autonomously — there is no human to ask questions to
 - If the ticket is ambiguous, make the best reasonable interpretation and note your assumptions in the PR description
-- If you genuinely cannot complete the ticket (missing dependencies, unclear requirements, blocked by something), write the failure marker with a clear explanation
+- If you genuinely cannot complete the ticket (missing dependencies, unclear requirements, blocked by something), call `state failed "reason"` (or `state blocked "reason"` if it's an external dependency you expect to clear)
 - Do NOT modify files outside the scope of the ticket
 - Do NOT amend existing commits — always create new ones
 - Follow the commit message format: `[{{TICKET_KEY}}] description`
 - The server is already running on port {{SERVER_PORT}} — do not start another one
+- **Playwright cleanup:** If you used the Playwright MCP at any point during this ticket (any `mcp__playwright__*` tool), you MUST call `mcp__playwright__browser_close` for every browser/tab/context you opened before calling the final `state` transition. Leaked browser sessions accumulate across runs and exhaust system resources. If you opened multiple tabs, close all of them. Treat this as part of "done" — the ticket is not complete until all Playwright sessions are closed.

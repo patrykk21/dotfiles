@@ -3,16 +3,16 @@ set -euo pipefail
 shopt -s nullglob
 
 # =============================================================================
-# Autopilot Control Script (multi-project, cross-platform)
-# Usage: autopilot <command> [args]
+# Conductor Control Script (multi-project, cross-platform)
+# Usage: conductor <command> [args]
 #
 # State is stored in unified metadata files: projects/<project>.state.json
 # =============================================================================
 
-AUTOPILOT_DIR="$HOME/.config/autopilot"
-PROJECTS_DIR="$AUTOPILOT_DIR/projects"
-ENABLED_FILE="$AUTOPILOT_DIR/enabled"
-SERVICE_NAME="autopilot"
+CONDUCTOR_DIR="$HOME/.config/conductor"
+PROJECTS_DIR="$CONDUCTOR_DIR/projects"
+ENABLED_FILE="$CONDUCTOR_DIR/enabled"
+SERVICE_NAME="conductor"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -34,7 +34,7 @@ detect_os() {
 
 HAS_TMUX=false
 command -v tmux &>/dev/null && HAS_TMUX=true
-PIDS_DIR="$AUTOPILOT_DIR/pids"
+PIDS_DIR="$CONDUCTOR_DIR/pids"
 
 # --- Metadata helpers ---
 meta_file_for() {
@@ -98,11 +98,11 @@ scheduler_load() {
             ;;
         windows)
             # Windows Task Scheduler — use VBS wrapper for invisible polling
-            local task_name="Autopilot-${SERVICE_NAME}"
-            local vbs_path="$AUTOPILOT_DIR/autopilot-runner.vbs"
+            local task_name="Conductor-${SERVICE_NAME}"
+            local vbs_path="$CONDUCTOR_DIR/conductor-runner.vbs"
             if [ ! -f "$vbs_path" ]; then
                 local runner_win
-                runner_win=$(cygpath -w "$AUTOPILOT_DIR/autopilot-runner.sh" 2>/dev/null)
+                runner_win=$(cygpath -w "$CONDUCTOR_DIR/conductor-runner.sh" 2>/dev/null)
                 local bash_win
                 bash_win=$(cygpath -w "$(command -v bash)" 2>/dev/null || echo "C:\\Program Files\\Git\\usr\\bin\\bash.exe")
                 cat > "$vbs_path" << VBSEOF
@@ -128,7 +128,7 @@ scheduler_unload() {
             systemctl --user disable --now "${SERVICE_NAME}.timer" 2>/dev/null || true
             ;;
         windows)
-            local task_name="Autopilot-${SERVICE_NAME}"
+            local task_name="Conductor-${SERVICE_NAME}"
             schtasks.exe //Delete //TN "$task_name" //F 2>/dev/null || true
             ;;
     esac
@@ -147,7 +147,7 @@ scheduler_status_line() {
                     echo -e "  Schedule: ${GREEN}LOADED${NC} (launchd, every ${interval}s)"
                 fi
             else
-                echo -e "  Schedule: ${YELLOW}NOT LOADED${NC} (run 'autopilot setup')"
+                echo -e "  Schedule: ${YELLOW}NOT LOADED${NC} (run 'conductor setup')"
             fi
             ;;
         linux)
@@ -156,15 +156,15 @@ scheduler_status_line() {
                 interval=$(systemctl --user show "${SERVICE_NAME}.timer" -p TriggerLimitIntervalSec --value 2>/dev/null || echo "300s")
                 echo -e "  Schedule: ${GREEN}ACTIVE${NC} (systemd, every ${interval})"
             else
-                echo -e "  Schedule: ${YELLOW}INACTIVE${NC} (run 'autopilot setup')"
+                echo -e "  Schedule: ${YELLOW}INACTIVE${NC} (run 'conductor setup')"
             fi
             ;;
         windows)
-            local task_name="Autopilot-${SERVICE_NAME}"
+            local task_name="Conductor-${SERVICE_NAME}"
             if schtasks.exe //Query //TN "$task_name" &>/dev/null; then
                 echo -e "  Schedule: ${GREEN}ACTIVE${NC} (Task Scheduler, every 1m)"
             else
-                echo -e "  Schedule: ${YELLOW}NOT CONFIGURED${NC} (run 'autopilot setup')"
+                echo -e "  Schedule: ${YELLOW}NOT CONFIGURED${NC} (run 'conductor setup')"
             fi
             ;;
         *)  echo -e "  Schedule: ${YELLOW}UNKNOWN OS${NC}" ;;
@@ -206,7 +206,7 @@ case "${1:-help}" in
         scheduler_load
         projects=$(list_projects)
         count=$(echo "$projects" | grep -c . || true)
-        echo -e "${GREEN}Autopilot enabled.${NC} Polling every 1 minute."
+        echo -e "${GREEN}Conductor enabled.${NC} Polling every 1 minute."
         echo -e "  Projects: ${BLUE}${count}${NC} configured"
         if [ -n "$projects" ]; then
             echo "$projects" | while read -r p; do
@@ -218,7 +218,7 @@ case "${1:-help}" in
     off)
         rm -f "$ENABLED_FILE"
         scheduler_unload
-        echo -e "${YELLOW}Autopilot disabled.${NC}"
+        echo -e "${YELLOW}Conductor disabled.${NC}"
         # Show any active work
         for meta_file in "$PROJECTS_DIR/"*.state.json; do
             [ -f "$meta_file" ] || continue
@@ -232,7 +232,7 @@ case "${1:-help}" in
         ;;
 
     status)
-        echo -e "${BLUE}=== Autopilot Status ===${NC}"
+        echo -e "${BLUE}=== Conductor Status ===${NC}"
         echo ""
 
         if [ -f "$ENABLED_FILE" ]; then
@@ -245,7 +245,7 @@ case "${1:-help}" in
 
         projects=$(list_projects)
         if [ -z "$projects" ]; then
-            echo -e "  ${YELLOW}No projects configured.${NC} Run 'autopilot add <name>' to add one."
+            echo -e "  ${YELLOW}No projects configured.${NC} Run 'conductor add <name>' to add one."
         else
             echo -e "  ${BLUE}Projects:${NC}"
             echo ""
@@ -283,7 +283,7 @@ case "${1:-help}" in
                 elif [ "$pstatus" = "failed" ]; then
                     last_ticket=$(echo "$state" | jq -r '.history[-1].ticket // "unknown"')
                     echo -e "  ${CYAN}$project${NC} ${DIM}($jira_proj)${NC} — ${RED}FAILED${NC} ($last_ticket)"
-                    echo -e "      Run: ${DIM}autopilot reset $project${NC} to retry"
+                    echo -e "      Run: ${DIM}conductor reset $project${NC} to retry"
                 else
                     echo -e "  ${CYAN}$project${NC} ${DIM}($jira_proj)${NC} — ${YELLOW}IDLE${NC}"
                 fi
@@ -300,10 +300,10 @@ case "${1:-help}" in
     add)
         project_name="${2:-}"
         if [ -z "$project_name" ]; then
-            echo "Usage: autopilot add <project-name>"
+            echo "Usage: conductor add <project-name>"
             echo ""
             echo "Creates a new project config from the template."
-            echo "Example: autopilot add my-project"
+            echo "Example: conductor add my-project"
             exit 1
         fi
 
@@ -315,7 +315,7 @@ case "${1:-help}" in
             exit 1
         fi
 
-        cp "$AUTOPILOT_DIR/config.env.example" "$target"
+        cp "$CONDUCTOR_DIR/config.env.example" "$target"
         echo -e "${GREEN}Created project config:${NC} $target"
         echo ""
         echo "Edit it now:"
@@ -327,7 +327,7 @@ case "${1:-help}" in
     remove)
         project_name="${2:-}"
         if [ -z "$project_name" ]; then
-            echo "Usage: autopilot remove <project-name>"
+            echo "Usage: conductor remove <project-name>"
             exit 1
         fi
 
@@ -342,7 +342,7 @@ case "${1:-help}" in
         s=$(echo "$meta" | jq -r '.status')
         if [ "$s" = "working" ]; then
             echo -e "${RED}Project '$project_name' is currently working on a ticket.${NC}"
-            echo "Run 'autopilot reset $project_name' first, or wait for it to finish."
+            echo "Run 'conductor reset $project_name' first, or wait for it to finish."
             exit 1
         fi
 
@@ -354,7 +354,7 @@ case "${1:-help}" in
     list)
         projects=$(list_projects)
         if [ -z "$projects" ]; then
-            echo "No projects configured. Run 'autopilot add <name>' to add one."
+            echo "No projects configured. Run 'conductor add <name>' to add one."
         else
             echo -e "${BLUE}Configured projects:${NC}"
             echo "$projects" | while read -r p; do
@@ -391,15 +391,15 @@ case "${1:-help}" in
                 exit 1
             fi
             if [ -n "$ticket_url" ]; then
-                echo -e "${BLUE}Running autopilot for $project_name with ticket: $ticket_url${NC}"
-                AUTOPILOT_CONF="$config" "$AUTOPILOT_DIR/autopilot.sh" $force_flag --ticket "$ticket_url"
+                echo -e "${BLUE}Running conductor for $project_name with ticket: $ticket_url${NC}"
+                CONDUCTOR_CONF="$config" "$CONDUCTOR_DIR/conductor.sh" $force_flag --ticket "$ticket_url"
             else
-                echo -e "${BLUE}Running autopilot cycle for $project_name...${NC}"
-                AUTOPILOT_CONF="$config" "$AUTOPILOT_DIR/autopilot.sh" $force_flag
+                echo -e "${BLUE}Running conductor cycle for $project_name...${NC}"
+                CONDUCTOR_CONF="$config" "$CONDUCTOR_DIR/conductor.sh" $force_flag
             fi
         else
-            echo -e "${BLUE}Running autopilot cycle for all projects...${NC}"
-            "$AUTOPILOT_DIR/autopilot-runner.sh"
+            echo -e "${BLUE}Running conductor cycle for all projects...${NC}"
+            "$CONDUCTOR_DIR/conductor-runner.sh"
         fi
         ;;
 
@@ -407,10 +407,10 @@ case "${1:-help}" in
         project_name="${2:-}"
         lines="${3:-50}"
         if [ -n "$project_name" ]; then
-            log_file="$AUTOPILOT_DIR/logs/${project_name}.log"
+            log_file="$CONDUCTOR_DIR/logs/${project_name}.log"
         else
             # Show most recent log across all projects
-            log_file=$(ls -t "$AUTOPILOT_DIR/logs/"*.log 2>/dev/null | head -1 || true)
+            log_file=$(ls -t "$CONDUCTOR_DIR/logs/"*.log 2>/dev/null | head -1 || true)
         fi
         if [ -n "$log_file" ] && [ -f "$log_file" ]; then
             echo -e "${DIM}$(basename "$log_file" .log)${NC}"
@@ -456,7 +456,7 @@ case "${1:-help}" in
     stop)
         project_name="${2:-}"
         if [ -z "$project_name" ]; then
-            echo "Usage: autopilot stop <project-name>"
+            echo "Usage: conductor stop <project-name>"
             echo ""
             echo "Stops the active ticket: kills Claude session, removes worktree + branch, resets state."
             exit 1
@@ -509,7 +509,7 @@ case "${1:-help}" in
         fi
 
         # Clean up any leftover prompt files
-        rm -f "$AUTOPILOT_DIR/prompts/${worktree}".{sh,md} 2>/dev/null
+        rm -f "$CONDUCTOR_DIR/prompts/${worktree}".{sh,md} 2>/dev/null
 
         # Update metadata: add to history as stopped, set idle
         meta_write_project "$project_name" "$(echo "$meta" | jq \
@@ -522,8 +522,8 @@ case "${1:-help}" in
     reset)
         project_name="${2:-}"
         if [ -z "$project_name" ]; then
-            echo "Usage: autopilot reset <project-name>"
-            echo "  Or:  autopilot reset --all"
+            echo "Usage: conductor reset <project-name>"
+            echo "  Or:  conductor reset --all"
             exit 1
         fi
 
@@ -544,16 +544,232 @@ case "${1:-help}" in
         echo -e "${GREEN}Done.${NC}"
         ;;
 
+    prune)
+        # Bulk-clean finished worktrees + orphan session dirs.
+        #   conductor prune                  — all projects, interactive
+        #   conductor prune <project>        — single project, interactive
+        #   conductor prune [--yes|-y]       — skip confirmation
+        #   conductor prune [--dry-run|-n]   — preview only
+        #   conductor prune [--include-failed] — also prune state=failed (default: skip)
+        project_filter=""
+        auto_yes=false
+        dry_run=false
+        include_failed=false
+        shift
+        while [ $# -gt 0 ]; do
+            case "$1" in
+                --yes|-y)        auto_yes=true ;;
+                --dry-run|-n)    dry_run=true ;;
+                --include-failed) include_failed=true ;;
+                --*)             echo "Unknown flag: $1" >&2; exit 1 ;;
+                *)               project_filter="$1" ;;
+            esac
+            shift
+        done
+
+        # Build list of projects to scan
+        projects_to_scan=()
+        if [ -n "$project_filter" ]; then
+            if [ ! -f "$PROJECTS_DIR/${project_filter}.env" ]; then
+                echo -e "${RED}Unknown project: $project_filter${NC}" >&2
+                exit 1
+            fi
+            projects_to_scan+=("$project_filter")
+        else
+            for envf in "$PROJECTS_DIR/"*.env; do
+                [ -f "$envf" ] || continue
+                projects_to_scan+=("$(basename "$envf" .env)")
+            done
+        fi
+
+        # Collect prune candidates: lines of "project|ticket|state|reason|worktree_path|sessions_dir"
+        candidates=()
+        kept_count=0
+        active_ticket_for=""  # "<project>:<ticket>" pairs we must skip
+
+        for project in "${projects_to_scan[@]}"; do
+            # shellcheck source=/dev/null
+            ( : ); unset PROJECT_DIR WORKTREES_BASE BASE_BRANCH
+            # shellcheck source=/dev/null
+            source "$PROJECTS_DIR/${project}.env" 2>/dev/null || continue
+            [ -n "${WORKTREES_BASE:-}" ] || continue
+
+            # Determine the currently-active ticket (if any) so we never prune it
+            meta=$(meta_read_project "$project")
+            pstatus=$(echo "$meta" | jq -r '.status')
+            active_ticket=""
+            if [ "$pstatus" = "working" ]; then
+                active_ticket=$(echo "$meta" | jq -r '.current.worktree_name // empty')
+            fi
+
+            sessions_root="$WORKTREES_BASE/.worktree-meta/sessions"
+            [ -d "$sessions_root" ] || continue
+
+            for sd in "$sessions_root"/*; do
+                [ -d "$sd" ] || continue
+                ticket=$(basename "$sd")
+
+                # Never touch the live ticket
+                if [ -n "$active_ticket" ] && [ "$ticket" = "$active_ticket" ]; then
+                    kept_count=$((kept_count + 1))
+                    continue
+                fi
+
+                # Skip base session dirs — they track the main repo, not a worktree.
+                # Detected by meta.json:.worktree_path being outside $WORKTREES_BASE.
+                if [ -f "$sd/meta.json" ]; then
+                    meta_wt_path=$(jq -r '.worktree_path // empty' "$sd/meta.json" 2>/dev/null)
+                    if [ -n "$meta_wt_path" ]; then
+                        case "$meta_wt_path" in
+                            "$WORKTREES_BASE"/*) ;;  # under WORKTREES_BASE → real worktree
+                            *)
+                                kept_count=$((kept_count + 1))
+                                continue
+                                ;;
+                        esac
+                    fi
+                fi
+
+                wt_path="$WORKTREES_BASE/$ticket"
+                state=""
+                if [ -f "$sd/conductor.json" ]; then
+                    state=$(jq -r '.state // empty' "$sd/conductor.json" 2>/dev/null || echo "")
+                fi
+
+                reason=""
+                if [ ! -d "$wt_path" ]; then
+                    reason="orphan (no worktree dir)"
+                else
+                    case "$state" in
+                        merged|closed)
+                            reason="state=$state"
+                            ;;
+                        failed)
+                            if [ "$include_failed" = true ]; then
+                                reason="state=failed"
+                            else
+                                kept_count=$((kept_count + 1))
+                                continue
+                            fi
+                            ;;
+                        ""|null)
+                            # No state recorded — orphan-ish if no live tmux session and no working flag
+                            if [ "$HAS_TMUX" = true ] && tmux has-session -t "$ticket" 2>/dev/null; then
+                                kept_count=$((kept_count + 1))
+                                continue
+                            fi
+                            reason="no state recorded"
+                            ;;
+                        *)
+                            kept_count=$((kept_count + 1))
+                            continue
+                            ;;
+                    esac
+                fi
+
+                candidates+=("$project|$ticket|${state:-none}|$reason|$wt_path|$sd")
+            done
+        done
+
+        if [ ${#candidates[@]} -eq 0 ]; then
+            echo -e "${GREEN}Nothing to prune.${NC} ($kept_count kept)"
+            exit 0
+        fi
+
+        # Show what we'd prune
+        echo -e "${CYAN}Prune candidates:${NC}"
+        printf "  %-12s %-50s %-10s %s\n" "PROJECT" "TICKET" "STATE" "REASON"
+        for line in "${candidates[@]}"; do
+            IFS='|' read -r p t s r _ _ <<< "$line"
+            printf "  %-12s %-50s %-10s %s\n" "$p" "$t" "$s" "$r"
+        done
+        echo ""
+        echo -e "${DIM}($kept_count kept · ${#candidates[@]} to prune)${NC}"
+
+        if [ "$dry_run" = true ]; then
+            echo -e "${YELLOW}--dry-run: not deleting anything.${NC}"
+            exit 0
+        fi
+
+        if [ "$auto_yes" != true ]; then
+            echo ""
+            read -r -p "Proceed with deletion? [y/N] " confirm
+            case "$confirm" in
+                y|Y|yes|YES) ;;
+                *) echo "Aborted."; exit 0 ;;
+            esac
+        fi
+
+        # Execute prune
+        pruned=0
+        failed=0
+        for line in "${candidates[@]}"; do
+            IFS='|' read -r project ticket state reason wt_path sd <<< "$line"
+            echo -e "${YELLOW}→ $project/$ticket${NC} ($reason)"
+
+            # Re-source env to get PROJECT_DIR for this project
+            unset PROJECT_DIR WORKTREES_BASE
+            # shellcheck source=/dev/null
+            source "$PROJECTS_DIR/${project}.env" 2>/dev/null || true
+
+            # 1. Kill tmux session if any
+            if [ "$HAS_TMUX" = true ] && tmux has-session -t "$ticket" 2>/dev/null; then
+                tmux kill-session -t "$ticket" 2>/dev/null && echo "    killed tmux session"
+            fi
+
+            # 2. Kill PID files
+            for pidfile in "$PIDS_DIR/${ticket}"-*.pid; do
+                [ -f "$pidfile" ] || continue
+                pid=$(cat "$pidfile" 2>/dev/null || echo "")
+                if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+                    kill "$pid" 2>/dev/null && echo "    killed pid $pid"
+                fi
+                rm -f "$pidfile"
+            done
+
+            # 3. Remove worktree (if exists)
+            if [ -d "$wt_path" ]; then
+                if [ -n "${PROJECT_DIR:-}" ] && [ -d "$PROJECT_DIR" ]; then
+                    git -C "$PROJECT_DIR" worktree remove "$wt_path" --force 2>/dev/null \
+                        && echo "    removed worktree" \
+                        || { rm -rf "$wt_path" 2>/dev/null && echo "    rm -rf'd worktree (worktree remove failed)"; }
+                else
+                    rm -rf "$wt_path" 2>/dev/null && echo "    rm -rf'd worktree"
+                fi
+            fi
+
+            # 4. Delete branch
+            if [ -n "${PROJECT_DIR:-}" ] && [ -d "$PROJECT_DIR" ]; then
+                git -C "$PROJECT_DIR" branch -D "$ticket" 2>/dev/null && echo "    deleted branch" || true
+                git -C "$PROJECT_DIR" worktree prune 2>/dev/null
+            fi
+
+            # 5. Remove session dir
+            if [ -d "$sd" ]; then
+                rm -rf "$sd" && echo "    removed session dir"
+            fi
+
+            # 6. Clean prompt files
+            rm -f "$CONDUCTOR_DIR/prompts/${ticket}".{sh,md} 2>/dev/null
+
+            pruned=$((pruned + 1))
+        done
+
+        echo ""
+        echo -e "${GREEN}Pruned $pruned · kept $kept_count${NC}"
+        [ $failed -gt 0 ] && echo -e "${RED}$failed failed${NC}"
+        ;;
+
     setup)
-        "$AUTOPILOT_DIR/setup.sh"
+        "$CONDUCTOR_DIR/setup.sh"
         ;;
 
     help|*)
-        echo "Usage: autopilot <command> [args]"
+        echo "Usage: conductor <command> [args]"
         echo ""
         echo "Global:"
-        echo "  on                 Enable autopilot (starts polling all projects)"
-        echo "  off                Disable autopilot"
+        echo "  on                 Enable conductor (starts polling all projects)"
+        echo "  off                Disable conductor"
         echo "  status             Show status of all projects"
         echo "  setup              Install scheduler for this OS"
         echo ""
@@ -569,5 +785,7 @@ case "${1:-help}" in
         echo "  history [project]  Show completed/failed tickets"
         echo "  reset <project>    Reset state to idle (without cleanup)"
         echo "  reset --all        Reset all projects"
+        echo "  prune [project]    Bulk-clean finished worktrees + orphan session dirs"
+        echo "                     Flags: --yes, --dry-run, --include-failed"
         ;;
 esac

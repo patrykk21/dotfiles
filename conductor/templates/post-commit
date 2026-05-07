@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# post-commit hook — emits worktree-event commit-made.
+# Installed by install-git-hooks into every worktree managed by conductor.
+# Best-effort, never fails the commit.
+nohup "$HOME/.config/conductor/bin/worktree-event" commit-made >/dev/null 2>&1 &
+exit 0

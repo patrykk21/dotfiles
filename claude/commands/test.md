@@ -87,9 +87,9 @@ After all teammates complete, synthesize:
 [If FAIL: list specific failures and whether they're bugs or test issues]
 ```
 
-## Step 4 — Fix (if running inside autopilot)
+## Step 4 — Fix (if running inside conductor)
 
-If this is called from `/with-markers` or autopilot context:
+If this is called from `/with-markers` or conductor context:
 1. If browser tests found bugs, fix them
 2. If unit tests fail, fix the code (not the tests, unless the test is wrong)
 3. Stage new test files and fixes

@@ -66,7 +66,7 @@ After all teammates report, synthesize findings into a single report:
 
 Deduplicate findings reported by multiple teammates. If teammates disagree on severity, use the higher one.
 
-## Step 4 — Fix (if --fix flag or called from autopilot)
+## Step 4 — Fix (if --fix flag or called from conductor)
 
 If `--fix` is present or this is running inside `/with-markers`:
 1. Apply fixes for all CRITICAL and IMPORTANT findings

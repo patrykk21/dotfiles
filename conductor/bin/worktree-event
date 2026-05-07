@@ -1,0 +1,241 @@
+#!/usr/bin/env bash
+# worktree-event — emit a worktree lifecycle event.
+#
+# Usage:
+#   worktree-event <event-name> [--ticket <id>] [--exit-code <n>]
+#                  [--error <msg>] [--pr-state <s>] [--text <str>]
+#
+# Looks up the event in ~/.config/conductor/data/events.json and:
+#   - touches/clears the declared flag files
+#   - applies JSON patches to conductor.json / summary.json
+#   - stamps meta.json:.last_accessed on every event
+#   - handles special side effects (create-session-dir, append-user-note, __all__ flag clear)
+#
+# Ticket resolution (when --ticket not given):
+#   1. Current branch name matching /^ECH-[0-9]+/
+#   2. $PWD under ~/worktrees/*/ — use the directory basename
+#   3. Error if unresolved
+#
+# Session directory:
+#   ~/worktrees/<project>/.worktree-meta/sessions/<ticket>/
+#   Resolved by globbing since project is inferred from worktree layout.
+
+set -euo pipefail
+
+CONDUCTOR_DIR="${CONDUCTOR_DIR:-$HOME/.config/conductor}"
+BIN_DIR="$CONDUCTOR_DIR/bin"
+EVENTS_FILE="$CONDUCTOR_DIR/data/events.json"
+WORKTREES_ROOT="${WORKTREES_ROOT:-$HOME/worktrees}"
+ATOMIC_WRITE="$BIN_DIR/atomic-write"
+
+die() { echo "worktree-event: $*" >&2; exit 1; }
+
+[[ -f "$EVENTS_FILE" ]] || die "events file missing: $EVENTS_FILE"
+[[ -x "$ATOMIC_WRITE" ]] || die "atomic-write not executable: $ATOMIC_WRITE"
+command -v jq >/dev/null 2>&1 || die "jq not found"
+
+# ---- parse args ----
+[[ $# -ge 1 ]] || die "usage: worktree-event <event> [flags]"
+event="$1"; shift
+
+ticket=""
+exit_code=""
+error=""
+pr_state=""
+text=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --ticket)    ticket="$2"; shift 2 ;;
+        --exit-code) exit_code="$2"; shift 2 ;;
+        --error)     error="$2"; shift 2 ;;
+        --pr-state)  pr_state="$2"; shift 2 ;;
+        --text)      text="$2"; shift 2 ;;
+        *) die "unknown argument: $1" ;;
+    esac
+done
+
+# ---- validate event ----
+event_spec=$(jq -c --arg e "$event" '.events[$e]' "$EVENTS_FILE")
+if [[ "$event_spec" == "null" || -z "$event_spec" ]]; then
+    die "unknown event: $event (see $EVENTS_FILE)"
+fi
+
+# ---- resolve ticket ----
+require_ticket=$(jq -r '.require_ticket // false' <<<"$event_spec")
+
+if [[ -z "$ticket" ]]; then
+    # Try current branch
+    if git rev-parse --abbrev-ref HEAD >/dev/null 2>&1; then
+        branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+        if [[ "$branch" =~ ^ECH-[0-9]+.* ]]; then
+            ticket="$branch"
+        fi
+    fi
+fi
+
+if [[ -z "$ticket" ]]; then
+    # Try $PWD against ~/worktrees/<project>/<ticket>/...
+    case "$PWD" in
+        "$WORKTREES_ROOT"/*/*)
+            rel="${PWD#$WORKTREES_ROOT/}"
+            project="${rel%%/*}"
+            rest="${rel#$project/}"
+            ticket="${rest%%/*}"
+            ;;
+    esac
+fi
+
+if [[ -z "$ticket" ]]; then
+    if [[ "$require_ticket" == "true" ]]; then
+        die "--ticket required (could not infer from branch or \$PWD)"
+    else
+        # Event doesn't require ticket AND we can't resolve — exit silently.
+        # Stop hook and post-commit may fire outside a worktree; that's fine.
+        exit 0
+    fi
+fi
+
+# ---- validate required extra args ----
+req_exit=$(jq -r '.require_exit_code // false' <<<"$event_spec")
+req_pr=$(jq -r '.require_pr_state // false' <<<"$event_spec")
+req_text=$(jq -r '.require_text // false' <<<"$event_spec")
+[[ "$req_exit" == "true" && -z "$exit_code" ]] && die "$event requires --exit-code"
+[[ "$req_pr" == "true"   && -z "$pr_state"  ]] && die "$event requires --pr-state"
+[[ "$req_text" == "true" && -z "$text"      ]] && die "$event requires --text"
+
+# ---- validate state vocabulary for conductor-state-reported ----
+# Claude (or any caller) must use the exact state vocabulary expected by the
+# launcher case + reconciler. An invalid value (e.g. literal "STATE" copied
+# from the system-prompt example) silently broke the picker for days because
+# downstream code skips unknown states. Reject early here; the `state` shell
+# function in conductor.sh swallows the failure via `|| true`, so a bad call
+# becomes a no-op rather than corrupting conductor.json.
+if [[ "$event" == "conductor-state-reported" ]]; then
+    state_value="${text%%|*}"
+    case "$state_value" in
+        working|awaiting_ci|awaiting_review|approved|merged|closed|blocked|needs_input|failed) ;;
+        *) die "invalid state '$state_value' for conductor-state-reported (allowed: working|awaiting_ci|awaiting_review|approved|merged|closed|blocked|needs_input|failed)" ;;
+    esac
+fi
+
+# ---- locate session dir ----
+# Prefer the candidate whose $WORKTREES_ROOT/<project>/<ticket>/ is an actual
+# worktree directory — otherwise an orphan session dir under the wrong project
+# can capture writes that belong to the live worktree's project. Fall back to
+# the first existing session dir if no project hosts a live worktree (this
+# happens before a worktree is created, e.g. during create-session-dir).
+session_dir=""
+session_dir_fallback=""
+for candidate in "$WORKTREES_ROOT"/*/.worktree-meta/sessions/"$ticket"; do
+    [[ -d "$candidate" ]] || continue
+    [[ -z "$session_dir_fallback" ]] && session_dir_fallback="$candidate"
+    # Derive <project> from the candidate path:
+    # $WORKTREES_ROOT/<project>/.worktree-meta/sessions/<ticket>
+    proj_dir="${candidate%/.worktree-meta/sessions/$ticket}"
+    wt_dir="$proj_dir/$ticket"
+    if [[ -e "$wt_dir/.git" ]]; then
+        session_dir="$candidate"
+        break
+    fi
+done
+[[ -z "$session_dir" ]] && session_dir="$session_dir_fallback"
+
+# Handle create-session-dir side effect before requiring the dir to exist.
+side_effect=$(jq -r '.side_effect // ""' <<<"$event_spec")
+if [[ "$side_effect" == "create-session-dir" && -z "$session_dir" ]]; then
+    # Fall back to a default project layout: first existing project dir under worktrees.
+    # For a truly new worktree, the worktree-create.sh script must have already set up
+    # the project directory. If it hasn't, error.
+    for project_dir in "$WORKTREES_ROOT"/*/; do
+        if [[ -d "$project_dir/.worktree-meta" ]]; then
+            session_dir="$project_dir/.worktree-meta/sessions/$ticket"
+            mkdir -p "$session_dir/flags"
+            break
+        fi
+    done
+fi
+
+if [[ -z "$session_dir" || ! -d "$session_dir" ]]; then
+    die "session dir not found for ticket '$ticket' under $WORKTREES_ROOT/*/.worktree-meta/sessions/"
+fi
+
+mkdir -p "$session_dir/flags"
+
+# ---- apply flag operations ----
+# flags_touched
+while IFS= read -r flag; do
+    [[ -n "$flag" ]] || continue
+    touch "$session_dir/flags/$flag"
+done < <(jq -r '.flags_touched[]? // empty' <<<"$event_spec")
+
+# flags_cleared (handle __all__ specially)
+cleared=$(jq -r '.flags_cleared[]? // empty' <<<"$event_spec")
+if [[ "$cleared" == *"__all__"* ]]; then
+    rm -f "$session_dir"/flags/*
+else
+    while IFS= read -r flag; do
+        [[ -n "$flag" ]] || continue
+        rm -f "$session_dir/flags/$flag"
+    done <<<"$cleared"
+fi
+
+# ---- apply JSON patches ----
+now_iso=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+apply_patch() {
+    local file="$1" jq_expr="$2"
+    local target="$session_dir/$file"
+    local current="{}"
+    [[ -f "$target" ]] && current=$(cat "$target")
+
+    # Bind vars for jq. Use --argjson for numeric exit_code, --arg for strings.
+    local jq_args=(--arg now "$now_iso")
+    if [[ -n "$exit_code" ]]; then
+        jq_args+=(--argjson exit_code "$exit_code")
+    else
+        jq_args+=(--argjson exit_code "null")
+    fi
+    jq_args+=(--arg error "${error:-}")
+    jq_args+=(--arg pr_state "${pr_state:-}")
+    jq_args+=(--arg text "${text:-}")
+
+    local patched
+    patched=$(jq "${jq_args[@]}" "$jq_expr" <<<"$current") || die "jq patch failed for $file: $jq_expr"
+
+    # Add schema_version if missing
+    patched=$(jq '.schema_version = (.schema_version // 1)' <<<"$patched")
+
+    "$ATOMIC_WRITE" "$target" <<<"$patched"
+}
+
+while IFS= read -r patch; do
+    [[ -n "$patch" ]] || continue
+    file=$(jq -r '.file' <<<"$patch")
+    expr=$(jq -r '.jq' <<<"$patch")
+    apply_patch "$file" "$expr"
+done < <(jq -c '.json_patches[]? // empty' <<<"$event_spec")
+
+# ---- universal: stamp meta.last_accessed ----
+# Only if meta.json exists (we don't want to conjure one for random events).
+if [[ -f "$session_dir/meta.json" ]]; then
+    meta_patched=$(jq --arg now "$now_iso" '.last_accessed = $now' "$session_dir/meta.json")
+    "$ATOMIC_WRITE" "$session_dir/meta.json" <<<"$meta_patched"
+fi
+
+# ---- special side effects ----
+case "$side_effect" in
+    append-user-note)
+        context="$session_dir/context.md"
+        {
+            [[ -f "$context" ]] && cat "$context"
+            echo ""
+            echo "## User notes"
+            echo ""
+            echo "- $now_iso: $text"
+        } > "$context.tmp.$$"
+        mv -f "$context.tmp.$$" "$context"
+        ;;
+esac
+
+exit 0

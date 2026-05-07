@@ -1,6 +1,6 @@
 ---
 name: merge-base
-description: "Merge the base branch into the current branch and resolve any conflicts. Used by the autopilot scheduler when a PR has conflicts."
+description: "Merge the base branch into the current branch and resolve any conflicts. Used by the conductor scheduler when a PR has conflicts."
 ---
 
 # Merge Base Branch

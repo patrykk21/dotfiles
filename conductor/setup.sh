@@ -2,13 +2,13 @@
 set -euo pipefail
 
 # =============================================================================
-# Autopilot Setup - Cross-platform scheduler installation
+# Conductor Setup - Cross-platform scheduler installation
 # Supports: macOS (launchd), Linux (systemd user timers)
 # =============================================================================
 
-AUTOPILOT_DIR="$HOME/.config/autopilot"
-SCRIPT_PATH="$AUTOPILOT_DIR/autopilot-runner.sh"
-SERVICE_NAME="autopilot"
+CONDUCTOR_DIR="$HOME/.config/conductor"
+SCRIPT_PATH="$CONDUCTOR_DIR/conductor-runner.sh"
+SERVICE_NAME="conductor"
 
 detect_os() {
     case "$(uname -s)" in
@@ -49,10 +49,10 @@ install_launchd() {
     <false/>
 
     <key>StandardOutPath</key>
-    <string>${AUTOPILOT_DIR}/launchd-stdout.log</string>
+    <string>${CONDUCTOR_DIR}/launchd-stdout.log</string>
 
     <key>StandardErrorPath</key>
-    <string>${AUTOPILOT_DIR}/launchd-stderr.log</string>
+    <string>${CONDUCTOR_DIR}/launchd-stderr.log</string>
 
     <key>EnvironmentVariables</key>
     <dict>
@@ -70,7 +70,7 @@ EOF
     echo "Installed launchd plist: $plist_path"
     echo "  To load:   launchctl load $plist_path"
     echo "  To unload: launchctl unload $plist_path"
-    echo "  Or just use: autopilot on / autopilot off"
+    echo "  Or just use: conductor on / conductor off"
 }
 
 # --- Linux: systemd user timer ---
@@ -80,7 +80,7 @@ install_systemd() {
 
     cat > "$systemd_dir/${SERVICE_NAME}.service" << EOF
 [Unit]
-Description=Autopilot - Autonomous Jira-to-PR Pipeline
+Description=Conductor - Autonomous Jira-to-PR Pipeline
 
 [Service]
 Type=oneshot
@@ -92,7 +92,7 @@ EOF
 
     cat > "$systemd_dir/${SERVICE_NAME}.timer" << EOF
 [Unit]
-Description=Autopilot Timer (every 5 min)
+Description=Conductor Timer (every 5 min)
 
 [Timer]
 OnBootSec=60
@@ -110,15 +110,15 @@ EOF
     echo "  Timer:   $systemd_dir/${SERVICE_NAME}.timer"
     echo "  To enable: systemctl --user enable --now ${SERVICE_NAME}.timer"
     echo "  To disable: systemctl --user disable --now ${SERVICE_NAME}.timer"
-    echo "  Or just use: autopilot on / autopilot off"
+    echo "  Or just use: conductor on / conductor off"
 }
 
 # --- Windows: Task Scheduler ---
 install_task_scheduler() {
-    local task_name="Autopilot-${SERVICE_NAME}"
+    local task_name="Conductor-${SERVICE_NAME}"
 
     # Create a VBS wrapper so the poll runs invisibly (no flashing terminal)
-    local vbs_path="$AUTOPILOT_DIR/autopilot-runner.vbs"
+    local vbs_path="$CONDUCTOR_DIR/conductor-runner.vbs"
     local runner_win
     runner_win=$(cygpath -w "$SCRIPT_PATH" 2>/dev/null || echo "$SCRIPT_PATH")
     local bash_win
@@ -137,37 +137,37 @@ VBSEOF
     if [ $? -eq 0 ]; then
         echo "Installed Windows Task Scheduler task: $task_name"
         echo "  Runs every 1 minute (invisible polling)"
-        echo "  To manage: autopilot on / autopilot off"
+        echo "  To manage: conductor on / conductor off"
     else
         echo "WARNING: Failed to create scheduled task."
         echo "You may need to run this as Administrator, or create it manually."
-        echo "You can still run autopilot manually: autopilot run"
+        echo "You can still run conductor manually: conductor run"
     fi
 }
 
 setup_config() {
-    if [ -f "$AUTOPILOT_DIR/config.env" ]; then
-        echo "Config file already exists: $AUTOPILOT_DIR/config.env"
+    if [ -f "$CONDUCTOR_DIR/config.env" ]; then
+        echo "Config file already exists: $CONDUCTOR_DIR/config.env"
         return 0
     fi
 
-    if [ -f "$AUTOPILOT_DIR/config.env.example" ]; then
-        cp "$AUTOPILOT_DIR/config.env.example" "$AUTOPILOT_DIR/config.env"
+    if [ -f "$CONDUCTOR_DIR/config.env.example" ]; then
+        cp "$CONDUCTOR_DIR/config.env.example" "$CONDUCTOR_DIR/config.env"
         echo "Created config.env from example. Edit it with your project paths:"
-        echo "  $AUTOPILOT_DIR/config.env"
+        echo "  $CONDUCTOR_DIR/config.env"
     else
-        echo "WARNING: No config.env.example found. Create $AUTOPILOT_DIR/config.env manually."
+        echo "WARNING: No config.env.example found. Create $CONDUCTOR_DIR/config.env manually."
     fi
 }
 
 setup_dirs() {
-    mkdir -p "$AUTOPILOT_DIR/history" "$AUTOPILOT_DIR/logs" "$AUTOPILOT_DIR/markers" "$AUTOPILOT_DIR/prompts"
-    chmod +x "$AUTOPILOT_DIR/autopilot.sh" 2>/dev/null || true
-    chmod +x "$AUTOPILOT_DIR/autopilot-ctl.sh" 2>/dev/null || true
+    mkdir -p "$CONDUCTOR_DIR/history" "$CONDUCTOR_DIR/logs" "$CONDUCTOR_DIR/markers" "$CONDUCTOR_DIR/prompts"
+    chmod +x "$CONDUCTOR_DIR/conductor.sh" 2>/dev/null || true
+    chmod +x "$CONDUCTOR_DIR/conductor-ctl.sh" 2>/dev/null || true
 }
 
 main() {
-    echo "=== Autopilot Setup ==="
+    echo "=== Conductor Setup ==="
     echo ""
 
     local os
@@ -188,7 +188,7 @@ main() {
         windows) install_task_scheduler ;;
         *)
             echo "WARNING: Unsupported OS '$os'. No scheduler installed."
-            echo "You can still run autopilot manually: autopilot run"
+            echo "You can still run conductor manually: conductor run"
             ;;
     esac
 
@@ -196,10 +196,10 @@ main() {
     echo "=== Setup complete ==="
     echo ""
     echo "Next steps:"
-    echo "  1. Edit config:  \$EDITOR $AUTOPILOT_DIR/config.env"
-    echo "  2. Enable:       autopilot on"
-    echo "  3. Test:         autopilot run"
-    echo "  4. Monitor:      autopilot status"
+    echo "  1. Edit config:  \$EDITOR $CONDUCTOR_DIR/config.env"
+    echo "  2. Enable:       conductor on"
+    echo "  3. Test:         conductor run"
+    echo "  4. Monitor:      conductor status"
 }
 
 main "$@"

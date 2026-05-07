@@ -20,6 +20,6 @@ alias claude='claude-patched'
 # Tmux with automatic session restoration (like Zellij)
 # alias tmux='tmux-auto'  # Disabled - using direct tmux for now
 
-# Autopilot - autonomous Jira-to-PR pipeline
-alias autopilot='~/.config/autopilot/autopilot-ctl.sh'
+# Conductor - autonomous Jira-to-PR pipeline
+alias conductor='~/.config/conductor/conductor-ctl.sh'
 
