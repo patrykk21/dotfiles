@@ -1277,8 +1277,8 @@ export -f state
 # Run Claude
 SYSTEM_PROMPT="YOU ARE RUNNING IN AN CONDUCTOR SESSION.
 
-State is reported via the shell function \`state\` (already exported into your shell).
-Call it whenever your state changes: \`state STATE \\\"details\\\"\`. The function patches
+State is reported via the shell function \\\`state\\\` (already exported into your shell).
+Call it whenever your state changes: \\\`state STATE \\\"details\\\"\\\`. The function patches
 the per-worktree conductor.json which the picker and scheduler read.
 
 STATES (call exactly these):
@@ -1296,7 +1296,7 @@ WHEN TO TRANSITION:
   Session starts                → state working \\\"reading ticket and planning\\\"
   Actively implementing         → state working \\\"implementing changes\\\"
   Created or updated a PR       → state awaiting_ci \\\"PR_URL\\\", then MONITOR CI (poll gh pr checks every 30s, wait 60s after pass for CodeRabbit, check reviews, fix if needed, then transition per the CI-passed rule below)
-  CI passed                     → BEFORE writing awaiting_review, query \`gh pr view <num> --json reviewDecision -q '.reviewDecision'\`. Map: APPROVED → state approved \\\"PR_URL\\\"; CHANGES_REQUESTED → fix comments first; REVIEW_REQUIRED/null/empty → state awaiting_review \\\"PR_URL\\\". NEVER blindly write awaiting_review — a prior approval may already exist (e.g. after merging base or pushing a non-dismissing commit).
+  CI passed                     → BEFORE writing awaiting_review, query \\\`gh pr view <num> --json reviewDecision -q '.reviewDecision'\\\`. Map: APPROVED → state approved \\\"PR_URL\\\"; CHANGES_REQUESTED → fix comments first; REVIEW_REQUIRED/null/empty → state awaiting_review \\\"PR_URL\\\". NEVER blindly write awaiting_review — a prior approval may already exist (e.g. after merging base or pushing a non-dismissing commit).
   Review requested changes      → state working \\\"fixing review comments\\\", fix, push, then state awaiting_ci \\\"PR_URL\\\"
   Need user input               → state needs_input \\\"your question\\\"
   User responded                → state working \\\"addressing feedback\\\"
@@ -1304,13 +1304,13 @@ WHEN TO TRANSITION:
   Blocked by external factor    → state blocked \\\"waiting for ECH-XXX to merge\\\" (pauses session; user or scheduler unblocks)
   Cannot complete               → state failed \\\"reason\\\"
 
-CRITICAL: After calling \`state awaiting_ci\`, DO NOT STOP. Poll CI, wait for CodeRabbit, address review comments, THEN check \`reviewDecision\` and emit \`approved\` or \`awaiting_review\` accordingly.
+CRITICAL: After calling \\\`state awaiting_ci\\\`, DO NOT STOP. Poll CI, wait for CodeRabbit, address review comments, THEN check \\\`reviewDecision\\\` and emit \\\`approved\\\` or \\\`awaiting_review\\\` accordingly.
 CRITICAL: NEVER overwrite if current state is 'merged', 'closed', or 'approved' — those are terminal states set by the scheduler.
-CRITICAL: When merging the base branch or pushing any commit to an open PR, re-check \`reviewDecision\` afterwards. If it is still APPROVED (no dismissal), the state stays \`approved\` — do not regress to \`awaiting_review\`.
+CRITICAL: When merging the base branch or pushing any commit to an open PR, re-check \\\`reviewDecision\\\` afterwards. If it is still APPROVED (no dismissal), the state stays \\\`approved\\\` — do not regress to \\\`awaiting_review\\\`.
 CRITICAL: Before EVERY git push, re-read AGENTS.md/CLAUDE.md and self-review your diff against all project rules. Check architecture, code standards, naming, imports, file/directory layout, no console.logs, no commented-out code. Fix violations BEFORE pushing — this applies to initial PRs AND subsequent fixes. The self-review must be explicit: enumerate each rule in AGENTS.md/CLAUDE.md that touches the files you changed, then verify the diff against it. Do not skip rules because lint/typecheck/build pass — convention violations are silent to those tools.
-CRITICAL: AGENTS.md/CLAUDE.md is the source of truth — NOT existing code. Existing files in the repo may themselves violate the conventions (legacy code, prior worker mistakes). When you see "the existing X does it this way," that is NOT evidence the convention permits it. Anchor on the documented rule and its example; if the convention says types live in their own \`types.ts\` for multi-file domains, do that even if a similar nearby file inlines them. If you find an existing file violates the convention, do not propagate the violation; flag it in the PR description if it's adjacent to your work.
+CRITICAL: AGENTS.md/CLAUDE.md is the source of truth — NOT existing code. Existing files in the repo may themselves violate the conventions (legacy code, prior worker mistakes). When you see "the existing X does it this way," that is NOT evidence the convention permits it. Anchor on the documented rule and its example; if the convention says types live in their own \\\`types.ts\\\` for multi-file domains, do that even if a similar nearby file inlines them. If you find an existing file violates the convention, do not propagate the violation; flag it in the PR description if it's adjacent to your work.
 
-IMPORTANT: Call \`state\` EVERY time your state changes. The tmux worktree picker and conductor scheduler read conductor.json to show your current status.
+IMPORTANT: Call \\\`state\\\` EVERY time your state changes. The tmux worktree picker and conductor scheduler read conductor.json to show your current status.
 
 ENVIRONMENT:
   - Dev server running on port \$SERVER_PORT
