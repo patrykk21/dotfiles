@@ -1,7 +1,7 @@
 ---
 name: conductor
-description: "Launch GSD project/milestone in fully autonomous mode, or implement a Jira ticket end-to-end. Pass a Jira URL or GSD args."
-argument-hint: "<jira-url | new-project | new-milestone | resume> [--from-phase N] [--no-team] [--no-judge] [@idea-doc.md]"
+description: "Ticket-to-PR pipeline for Jira/ClickUp/Linear/GitHub tickets. Delegates plan/implement/verify to pilot-shell /spec (or /fix for bugs). With no ticket, prompts for a description, routes through /prd, then /spec. Owns echelon bookends: ticket fetch, conductor state FSM, PR creation, CI watch, CodeRabbit handling, AGENTS.md self-review."
+argument-hint: "<jira-url | clickup-url | linear-url | github-issue-url> | (empty for no-ticket mode)"
 allowed-tools:
   - Read
   - Write
@@ -9,197 +9,359 @@ allowed-tools:
   - Bash
   - Glob
   - Grep
-  - Task
-  - TodoWrite
   - AskUserQuestion
-  - SlashCommand
-  - Agent
-  - TeamCreate
-  - TeamDelete
-  - TaskCreate
-  - TaskUpdate
-  - TaskGet
-  - TaskList
-  - SendMessage
-  - WebSearch
+  - Skill
   - WebFetch
+  - WebSearch
   - mcp__claude_ai_Atlassian__*
   - mcp__github-work__*
   - mcp__github-personal__*
+  - mcp__convoy-clickup__*
+  - mcp__auto-dj-clickup__*
 ---
 
-<ticket-mode>
-## Ticket URL Detection
+# /conductor — Ticket-to-PR pipeline (pilot-shell native)
 
-**BEFORE anything else**, check if `$ARGUMENTS` contains a URL (starts with `http://` or `https://`).
+Slim wrapper over pilot-shell's `/spec`, `/fix`, and `/prd`. Owns the echelon-specific bookends: ticket fetch, `state` FSM updates, PR creation with private-repo-safe screenshot URLs, CI watch with CodeRabbit handling, and AGENTS.md self-review before every push.
 
-If it does, this is a **ticket implementation task**. Detect the platform from the URL:
+**What this command does NOT reimplement:**
 
-| URL pattern | Platform |
-|-------------|----------|
-| `*.atlassian.net/browse/*` | Jira |
-| `app.clickup.com/t/*` | ClickUp |
-| `linear.app/*/issue/*` | Linear |
-| `github.com/*/issues/*` | GitHub Issue |
-| Other URL | Try to fetch and parse as a ticket |
+| Removed | Replaced by |
+|---|---|
+| Direct implementation in Path A | `/spec` (planning + TDD + verification) |
+| GSD chain (Path B / new-project / new-milestone / resume) | `/spec` for features; `/fix` for bugs |
+| Custom plan/review/test phases | `/spec` Plan → Implement → Verify; `/fix` RED → fix → verify |
+| Custom worktree handling | `/spec` Branch Strategy (`PILOT_BRANCH_ISOLATION_ENABLED`) |
+| Plan registration | `pilot register-plan` (auto-invoked inside `/spec`) |
+| Custom auto-route when AC weak | Built-in `/prd` (auto-invoked in Phase 1.1, hands off to `/spec`) |
 
-### Step 1: Fetch the ticket
-Use the appropriate MCP tools or `WebFetch` to get:
-- Title/summary and full description
+If you want GSD's project/milestone orchestration, invoke `/gsd:new-project` directly. `/conductor` no longer wraps GSD.
+
+---
+
+## Phase 0 — Detect mode
+
+Inspect `$ARGUMENTS`:
+
+| Argument shape | Mode |
+|---|---|
+| Starts with `http://` / `https://` and matches a ticket platform | **Ticket mode** (continue Phase 1) |
+| Empty, or free-text without a URL | **No-ticket mode** (jump to Phase 1-NT) |
+
+Ticket platforms detected from URL:
+
+| URL pattern | Platform | Fetch tool |
+|---|---|---|
+| `*.atlassian.net/browse/*` | Jira | `mcp__claude_ai_Atlassian__*` |
+| `app.clickup.com/t/*` | ClickUp | `mcp__convoy-clickup__*` or `mcp__auto-dj-clickup__*` |
+| `linear.app/*/issue/*` | Linear | `WebFetch` (best-effort) |
+| `github.com/*/issues/*` | GitHub Issue | `mcp__github-work__issue_read` |
+| Anything else | Unknown | `WebFetch` (best-effort) |
+
+For Jira, the ticket key is the last path segment (e.g. `ECH-571` from `.../browse/ECH-571`). For echelon, expect `ECH-XXX` keys.
+
+---
+
+## Phase 1-NT — No-ticket mode (free-text → /prd → /spec)
+
+There is no ticket. The goal is to capture a clear product requirement, then run the full spec workflow.
+
+### 1-NT.1 — Capture the requirement
+
+If `$ARGUMENTS` is empty, ask the user once:
+
+> What do you want to build? Give me one or two sentences — I'll route it through `/prd` to flesh out scope, flows, and acceptance criteria before planning.
+
+If `$ARGUMENTS` already contains a free-text description, use that verbatim — do not re-prompt.
+
+### 1-NT.2 — Hand off to `/prd`
+
+Invoke pilot-shell's PRD skill with the description as the argument. `/prd` will:
+
+1. Walk the user through scope, flows, and acceptance criteria (Q&A gated by `PILOT_PLAN_QUESTIONS_ENABLED`)
+2. Write `docs/prd/YYYY-MM-DD-<slug>.md`
+3. Hand off automatically to `/spec` via `Skill('spec', args='<summary> — PRD: docs/prd/...md — see PRD')`
+
+```
+Skill(skill='prd', args='<the captured description>')
+```
+
+After `/prd` completes, `/spec` takes over (plan → approve → implement → verify). Conductor's role in no-ticket mode is finished — there is no Jira to transition, no `state` FSM, no PR babysit phase (no ticket = no scheduler). The user drives the PR themselves once `/spec` finishes verification.
+
+**STOP after `/prd` hands off.** Do not proceed to Phase 2 or below.
+
+---
+
+## Phase 1 — Ticket mode: validate & route
+
+### 1.1 — Fetch ticket
+
+Use the platform-appropriate MCP / fetch tool from the table in Phase 0 to retrieve:
+
+- Title / summary
+- Description (full body)
 - Acceptance criteria (if any)
-- Comments (for additional context)
-- Priority and type
-- Estimated complexity (LOC, number of files, dependencies)
+- Issue type (Story / Bug / Task / Spike / Epic)
+- Status
+- Priority
+- Affected components / labels (if known)
+- Comments (for additional context the description doesn't carry)
 
-For **Jira**: use Atlassian MCP tools (extract ticket key from URL, e.g. `ECH-571` from `.../browse/ECH-571`)
-For **ClickUp**: use WebFetch to read the ticket
-For **GitHub Issues**: use GitHub MCP tools
-For **other platforms**: use WebFetch, parse what you can
+Store the ticket key in a shell variable so later steps can reuse it:
 
-### Step 2: Evaluate complexity and choose implementation path
+```bash
+TICKET_KEY="ECH-XXX"  # parsed from URL
+TICKET_URL="$ARGUMENTS"
+```
 
-After reading the ticket, decide which path to take:
+### 1.2 — Workability check
 
-**Simple ticket** (direct implementation) — use when ALL of these are true:
-- Touches 1-3 files
-- Single clear change (bug fix, rename, config change, add a field, small UI tweak)
-- No new architecture or patterns needed
-- Estimated under ~100 LOC
-- No database migrations
-- No new API endpoints or services
+Reject before any planning if:
 
-**Complex ticket** (GSD flow) — use when ANY of these are true:
-- Touches 4+ files across multiple layers (schema, queries, connectors, services, UI)
-- Requires new architecture decisions (new parallel route, new data pipeline, new integration)
-- Has multiple acceptance criteria or phases
-- Estimated over ~100 LOC
-- Requires database schema changes with migrations
-- Involves new API endpoints, services, or connectors
-- Description explicitly mentions phases, multiple steps, or "spike"
+- Status is in a non-workable column (`Done`, `Closed`, `Won't Do`, `Cancelled`)
+- Summary is empty / trivial (under ~10 chars of substantive content)
+- Title contains explicit blocker language ("Blocked on …" / "Waiting on …" with no resolution)
 
-### Path A: Simple ticket (direct implementation)
+If rejected, report `state blocked "<reason>"` (see Phase 5 — State FSM), comment on the ticket explaining why, and STOP.
 
-1. **Read project conventions** — AGENTS.md / CLAUDE.md in the project root
-2. **Implement** — write code following project conventions
-3. **Verify** — run the project's test, lint, typecheck commands. Fix any errors.
-4. **Browser verify** — run `/browser-verify` to visually verify the affected pages. Fix regressions before pushing.
-5. **Commit & push** — format: `[TICKET-KEY] Description`. Push to current branch.
-6. **Create PR** with:
-   - Summary of changes
-   - **Screenshots** from `/browser-verify` (see "Embedding screenshots" below)
-   - **Human testing steps** — numbered list a reviewer can follow to verify
-   - Do NOT assign the PR
-7. **Comment on ticket** — add the PR link and brief summary
+### 1.3 — Auto-route to `/prd` when AC is weak
 
-### Path B: Complex ticket (GSD flow)
+Trigger `/prd` first when ANY of:
 
-1. **Read project conventions** — AGENTS.md / CLAUDE.md in the project root
-2. **Initialize GSD project** — create a `.planning/` directory and run `/gsd:new-project` with the ticket description as the input document. This will:
-   - Analyze requirements
-   - Create a roadmap with phases
-   - Plan each phase with verification criteria
-3. **Execute phases** — run `/gsd:execute-phase` for each phase, or `/gsd:run-all` to execute all phases autonomously. Each phase:
-   - Plans the implementation
-   - Executes with atomic commits
-   - Verifies against acceptance criteria
-4. **Browser verify** — run `/browser-verify` after the final phase. Fix regressions.
-5. **Commit & push** — ensure all phase commits are pushed. Format: `[TICKET-KEY] Description`.
-6. **Create PR** with:
-   - Summary of changes (reference the GSD phases)
-   - **Screenshots** from `/browser-verify` (see "Embedding screenshots" below)
-   - **Human testing steps** — numbered list a reviewer can follow
-   - Do NOT assign the PR
-7. **Comment on ticket** — add the PR link and brief summary
+- No Acceptance Criteria section in the description
+- AC is a single-line statement under ~50 chars of substantive content
+- Issue type is `Spike` or `Epic` (multi-AC, needs scope-pruning)
+- Description is mostly screenshots / links with no written intent
 
-### Both paths: Embedding screenshots in PR markdown
+```
+Skill(skill='prd', args='<TICKET-KEY> <summary> — current AC: <quoted verbatim or "(none)"> — URL: <TICKET_URL>')
+```
 
-Screenshots are committed under `.github/pr-assets/{ticket-key}/` on the PR's branch and embedded in the PR body using:
+`/prd` writes `docs/prd/YYYY-MM-DD-<TICKET-KEY>-<slug>.md` and hands off to `/spec`. After `/prd` returns and `/spec` plan is approved, continue to Phase 4 (PR + babysit). The plan and implementation are already done inside `/spec`.
+
+If the user abandons the `/prd` conversation, call `state failed "PRD abandoned"` and STOP.
+
+### 1.4 — Skill routing (echelon)
+
+Before invoking `/spec` (or `/fix`), scan the ticket for keywords / paths that imply specialised echelon skills the agent should pull in. The universal pilot-shell rules + this repo's `AGENTS.md` are always implied; this table is the conditional layer.
+
+| Ticket signal | Action |
+|---|---|
+| Issue type is **Bug** with a reproducer (steps + expected vs actual) | Use `/fix` instead of `/spec` — pilot-shell's RED-test-first bugfix lane is the right fit |
+| Description mentions schema / migration / `drizzle` / new column | Plan must respect the Drizzle journal `when`-monotonicity rule (see `AGENTS.md` and memory `feedback_drizzle_journal_when.md`); never run SQL manually |
+| Description mentions new Server Action / data fetching | Reaffirm in plan: Server Actions over API routes; `createRequestCache` / `createDbCache`, never raw `cache()`; GET for fetching, POST for mutations |
+| Description mentions analytics / feature flag | Use `posthog` MCP and enum-typed flag names per `AGENTS.md § Feature Flags` |
+| Description mentions UI changes / new component | Include Storybook stories with `play` function test (`AGENTS.md § Storybook Stories`) |
+| Description touches `/lib/api/services/**` | Plan must thread requests through Services → Connectors → Queries (never service-to-query) |
+| Issue type is **Spike** with deliverable = research | Treat as research-only — local HTML artifact, no PR (memory `feedback_no_pr_for_research.md`); confirm with user before planning |
+
+If multiple rows match, apply all. Document the choices in the plan's reasoning so the verifier can audit them.
+
+---
+
+## Phase 2 — Plan + implement + verify (via `/spec` or `/fix`)
+
+Compose a seeded prompt and hand off. `/spec` (or `/fix`) owns plan → approve → implement → verify.
+
+**For features (Story / Task / non-trivial Spike):**
+
+```
+Skill(skill='spec', args='<TICKET-KEY> <one-line summary> — Ticket: <TICKET-KEY> — URL: <TICKET_URL> — Type: <issue type> — AC: <copied verbatim from ticket>')
+```
+
+**For bugs (Issue type = Bug) with a reproducer:**
+
+```
+Skill(skill='fix', args='<TICKET-KEY> <one-line summary> — Ticket: <TICKET-KEY> — URL: <TICKET_URL> — Reproducer: <steps> — Expected: <expected> — Actual: <actual>')
+```
+
+`/fix` may itself bail out and tell you to switch to `/spec` if the change exceeds ~150 LOC or turns architectural. Follow its escalation — re-invoke as `/spec` with the same ticket context.
+
+While `/spec` / `/fix` is running, conductor's state is `working`. The skill writes plan files at `docs/plans/YYYY-MM-DD-<slug>.md`, registers them with `pilot register-plan`, and flips `Status:` from `PENDING` → `COMPLETE` → `VERIFIED` as it progresses.
+
+When the skill returns:
+
+- Plan `Status: VERIFIED` → continue to Phase 3
+- Plan `Status: COMPLETE` (Verify failed) → call `state failed "spec verify exhausted"`, comment on ticket, STOP
+- User rejected the plan in the approval gate → call `state failed "plan rejected"`, comment on ticket, STOP
+
+**Do not duplicate `/spec`'s verification.** It already runs lint, typecheck, tests, browser verify, and the reviewer sub-agent. Conductor's job after this phase is PR mechanics, not re-running checks.
+
+---
+
+## Phase 3 — Pre-push self-review against AGENTS.md
+
+**Before EVERY `git push`** — initial PR creation, fix-after-review commits, base-merge commits, all of them — re-read `/Users/vigenerr/Work/Groupon/echelon/AGENTS.md` (or whichever worktree's AGENTS.md is active) and check the diff against every applicable rule.
+
+```bash
+git diff --stat
+git diff
+```
+
+Then walk the checklist:
+
+### 3.1 — Layered architecture (CRITICAL)
+- Services in `/lib/api/services/**` import from `connectors/**` only; **never** from `queries/**`
+- Connectors wrap results in `ServerActionResult<T>`
+- Queries call Drizzle and may use `createDbCache` / `createRequestCache` — never raw React `cache()`
+
+### 3.2 — Code standards
+- No `any` types
+- No JSDoc comments (TypeScript types are sufficient)
+- No `@deprecated` markers — dead code is deleted, not annotated
+- No `AbortSignal` / `signal` parameters
+- No dynamic imports (`await import()`) inside Server Actions
+- Naming: PascalCase components, camelCase functions, kebab-case filenames
+
+### 3.3 — Data fetching
+- Server Actions for fetching, not API routes — unless external access is required
+- REST verbs respected (GET fetches, POST creates, PUT updates, DELETE removes, PATCH partial-updates)
+- No "POST for fetching" anti-pattern
+
+### 3.4 — Database migrations
+- Schema changes → `bun run db:generate` then `bun run db:migrate`; never manual SQL
+- Data-only migrations get a journal entry with a `when` strictly greater than the previous entry's `when` (memory `feedback_drizzle_journal_when.md` — silent skip otherwise)
+
+### 3.5 — Hygiene
+- No accidental `console.log` / debug code
+- No commented-out code blocks
+- No files modified outside the ticket's scope
+- No `.planning/` files committed to feature branches (those are local-only)
+- Changelog `/CHANGELOG.md` updated if the change is user-facing (see `AGENTS.md § Changelog Guidelines` — frontend `apps/frontend/package.json` bumped, not the monorepo root)
+
+If any rule fails, **fix it before pushing**. Do not file the violation as "known limitation" in the PR body.
+
+---
+
+## Phase 4 — PR creation & babysit
+
+### 4.1 — Create the PR
+
+Branch convention is the worktree's existing branch (the launcher created it from `main-do` with the `ECH-{ticket}-{slug}` naming convention — see memory `feedback_worktree_rename.md`). The base branch is always `main-do`.
+
+```bash
+gh pr create --base main-do --draft --fill
+PR_URL=$(gh pr view --json url --jq .url)
+PR_NUM=$(gh pr view --json number --jq .number)
+```
+
+For **cross-repo PRs** (when the worktree's git remote points to a repo distinct from where the ticket lives), record the URL-derived host alongside the worktree-derived one — the scheduler needs `gh_pr_url` to reconcile (memory `feedback_conductor_cross_repo_pr.md`).
+
+### 4.2 — Embed screenshots (if `/spec` produced any)
+
+`/spec`'s browser-verify step may emit screenshots. Commit them under `.github/pr-assets/<TICKET-KEY>/` on the PR branch and embed in the PR body using:
 
 ```
 ![alt](https://github.com/{owner}/{repo}/raw/{branch}/.github/pr-assets/{ticket-key}/{file}.png)
 ```
 
-**Critical:** Use the `github.com/{owner}/{repo}/raw/{branch}/...` URL pattern. **Do NOT use `https://raw.githubusercontent.com/...`** — that domain does not authenticate when GitHub renders PR markdown for **private repositories**, so the images appear broken to reviewers (and to you on the rendered PR page) even though the file exists in the branch.
+**Critical:** Use `github.com/.../raw/...`, **NOT** `https://raw.githubusercontent.com/...`. Echelon is a private repo; `raw.githubusercontent.com` does not authenticate when GitHub renders PR markdown for private repos, so images appear broken to reviewers even though the asset exists. The `github.com/.../raw/...` URL is a redirect that respects the viewer's GitHub session and works for both public and private repos. Memory: `feedback_screenshot_upload.md`.
 
-The `github.com/.../raw/...` URL is a redirect that respects the viewer's GitHub session, so it works for both public and private repos. When in doubt, open a previously-merged PR in the same repo and copy that exact URL shape.
+After editing the PR body, verify the rendered images load:
 
-After creating/editing the PR body, **verify the rendered images load** (e.g. `gh pr view <N> --json body` then spot-check, or open the PR in the browser). If they're broken, fix the URL before considering the PR complete.
-
-### Both paths: Self-review before EVERY push
-
-Before EVERY `git push` — whether it's the initial PR creation or a subsequent fix — do a self-review against the project's AGENTS.md / CLAUDE.md rules. This is NOT optional — it catches issues before reviewers see them. This applies to `/fix-pr-comments`, `/merge-base`, and any other command that results in a push.
-
-**Re-read AGENTS.md/CLAUDE.md** and check your changes against every applicable rule:
-
-1. **Architecture compliance**
-   - Services only call connectors, never queries directly
-   - Connectors wrap results in `ServerActionResult<T>`
-   - No `import from "../../queries/*"` in service files
-   - Caching uses `createRequestCache` / `createDbCache`, never raw `cache()`
-
-2. **Code standards**
-   - No `any` types
-   - No JSDoc comments (TypeScript types are sufficient)
-   - No `@deprecated` markers
-   - No `AbortSignal` / signal parameters
-   - No dynamic imports in Server Actions
-   - Naming: PascalCase components, camelCase functions, kebab-case files
-
-3. **Data fetching**
-   - Server Actions for data fetching (not API routes) unless external access needed
-   - GET for fetching, POST for mutations (REST principles)
-   - No backwards-compatibility shims or unused re-exports
-
-4. **Files & structure**
-   - No unnecessary new files (prefer editing existing)
-   - No documentation files unless explicitly requested
-   - No files outside ticket scope modified
-   - Changelog updated if user-facing changes
-
-5. **Review your diff** — run `git diff --stat` and `git diff` to see exactly what you're submitting. Look for:
-   - Accidental debug logs (`console.log`) left in
-   - Commented-out code
-   - Files that shouldn't have been modified
-   - Missing imports or unused imports
-
-If you find violations, **fix them before creating the PR**. Do not note them as "known issues" — fix them.
-
-### Both paths: Post-PR steps
-
-Note: Jira transitions (In Progress, Code Review) are handled by the conductor scheduler — do NOT transition tickets yourself.
-
-**On subsequent pushes** (e.g., after fixing review comments): re-run `/browser-verify` before pushing. Update PR description if screenshots change.
-
-### Step 3: Report state via the `state` shell function
-
-**ALWAYS report state changes via the `state` shell function.** The conductor launcher exports `state` into your shell — it patches the per-worktree `conductor.json` (`.state`, `.state_detail`, `.state_updated`) atomically via `worktree-event`. The picker, scheduler, and reconciler all read `conductor.json`.
-
-**🚨 NEVER write to `$CONDUCTOR_STATE_MARKER` or `~/.config/conductor/markers/*.state` directly.** Those legacy marker files are no longer the source of truth. Writing to them with `echo "STATE|PR_URL" > $MARKER` leaves `conductor.json` stale, which silently desyncs the scheduler — workers stick in `working`/`awaiting_ci` indefinitely while the marker says otherwise.
-
-**Usage:**
 ```bash
-state STATE "details"
+gh pr view "$PR_NUM" --json body --jq .body
 ```
 
-**State vocabulary** (must be exact — the launcher and `worktree-event` reject anything else):
+Open the PR in the browser if any image looks suspicious.
+
+### 4.3 — Report state: awaiting CI
+
+```bash
+state awaiting_ci "$PR_URL"
+```
+
+### 4.4 — Watch CI
+
+Poll every 30s, cap at ~30 minutes total. Loop until all checks finish:
+
+```bash
+DEADLINE=$(( $(date +%s) + 1800 ))
+while :; do
+  STATES=$(gh pr checks "$PR_NUM" --json state -q '.[].state' 2>/dev/null | sort -u)
+  if echo "$STATES" | grep -q "PENDING\|QUEUED\|IN_PROGRESS"; then
+    [ "$(date +%s)" -ge "$DEADLINE" ] && { state failed "CI watch timed out after 30 min on $PR_URL"; break; }
+    sleep 30
+    continue
+  fi
+  break
+done
+```
+
+If any check finished `FAILURE` / `ERROR` / `CANCELLED`, treat it as red:
+
+```bash
+FAILURES=$(gh pr checks "$PR_NUM" --json name,state -q '[.[] | select(.state == "FAILURE" or .state == "ERROR" or .state == "CANCELLED")] | .[].name')
+if [ -n "$FAILURES" ]; then
+  state working "fixing CI: $FAILURES"
+  # fix, push, go back to 4.3
+fi
+```
+
+### 4.5 — CodeRabbit grace period
+
+**Wait 60 seconds after CI passes** before reading reviews. CodeRabbit marks its CI check as passed before it finishes posting review comments — read too early and you'll miss them. (Origin: existing conductor behavior; preserved here.)
+
+```bash
+sleep 60
+gh pr view "$PR_NUM" --json reviews,comments
+```
+
+If CodeRabbit (or any reviewer) requested changes, address them:
+
+```bash
+state working "addressing review comments"
+# fix → push → back to 4.3 (CI watch + 60s + re-read reviews)
+```
+
+### 4.6 — reviewDecision branching
+
+If CI is green and no review changes are requested, query `reviewDecision` **before** deciding the next state — a prior approval may already exist (memory `feedback_check_review_decision.md`):
+
+```bash
+DECISION=$(gh pr view "$PR_NUM" --json reviewDecision -q '.reviewDecision' 2>/dev/null)
+case "$DECISION" in
+  APPROVED)            state approved "$PR_URL" ;;
+  CHANGES_REQUESTED)   state working "fixing review comments" ;;  # then fix + push, go to 4.3
+  *)                   state awaiting_review "$PR_URL" ;;          # REVIEW_REQUIRED, null, or empty
+esac
+```
+
+### 4.7 — Comment on the ticket
+
+Add the PR link and a brief summary to the Jira/ClickUp/Linear/GitHub ticket. Use the same MCP that fetched the ticket in Phase 1.1.
+
+Do **not** transition the Jira status yourself — the conductor scheduler handles `In Progress` / `Code Review` transitions based on `conductor.json`. Manual transitions desync the scheduler.
+
+---
+
+## Phase 5 — State FSM
+
+Conductor's launcher exports a `state` shell function that atomically patches the per-worktree `conductor.json` via `worktree-event`. The picker, scheduler, and reconciler all read `conductor.json`.
+
+### 5.1 — Vocabulary (must be exact)
 
 | Call | When |
-|------|------|
-| `state working "description"` | Actively coding, testing, committing |
-| `state awaiting_ci "PR_URL"` | Created/updated a PR, CI is running |
-| `state awaiting_review "PR_URL"` | CI passed, waiting for human review |
-| `state approved "PR_URL"` | Reviewer approved (set by scheduler — usually not by you) |
-| `state needs_input "question"` | You need the user to answer something |
+|---|---|
+| `state working "description"` | Actively coding, testing, committing, addressing comments |
+| `state awaiting_ci "$PR_URL"` | Created or updated a PR, CI is running |
+| `state awaiting_review "$PR_URL"` | CI passed, no prior approval, waiting for human review |
+| `state approved "$PR_URL"` | A reviewer approved (set after `reviewDecision == APPROVED`) |
+| `state needs_input "question"` | Blocked on a user answer |
 | `state blocked "reason"` | Waiting on external dependency (other ticket, team, decision) |
-| `state closed "PR_URL or reason"` | PR closed without merging (terminal) |
-| `state failed "reason"` | Cannot complete the task |
+| `state closed "$PR_URL or reason"` | PR closed without merging (terminal) |
+| `state failed "reason"` | Cannot complete (terminal) |
 
-After the user responds to a question, call `state working "addressing feedback"`.
+Anything outside this vocabulary is rejected by the launcher and silently desyncs the FSM. Memory: `feedback_conductor_state_vocab.md`, `feedback_conductor_state_validation.md`.
 
-**IMPORTANT:** Before transitioning state, if the current `conductor.json` says `merged`, `closed`, or `approved`, do NOT overwrite — those are terminal states set by the scheduler.
+### 5.2 — NEVER write to the marker file directly
 
-**Fallback for sessions NOT launched by the scheduler:**
-If `state` is unavailable (you ran `/conductor` manually outside the conductor launcher), fall back to calling `worktree-event` directly:
+**🚨 Do NOT do `echo "STATE|PR_URL" > $CONDUCTOR_STATE_MARKER`** or write to `~/.config/conductor/markers/*.state` by hand. Those legacy files are no longer the source of truth — only `state` (or the `worktree-event` fallback below) keeps `conductor.json` and the marker in sync. Memory: `feedback_conductor_slash_state_function.md`.
+
+### 5.3 — Fallback when `state` is not exported
+
+If you invoked `/conductor` outside the conductor launcher (e.g. manually in a regular terminal), `state` may not exist. Shim it:
+
 ```bash
 if ! type state >/dev/null 2>&1; then
     state() {
@@ -211,303 +373,45 @@ if ! type state >/dev/null 2>&1; then
     }
 fi
 ```
-Do NOT fall back to writing the legacy marker file.
 
-### Step 4: Monitor CI and reviews after PR creation
-After calling `state awaiting_ci "PR_URL"`, **do not stop working**. Actively monitor the PR:
+Never fall back to writing the legacy marker.
 
-1. **Poll CI status** every 30 seconds using `gh pr checks <number>`. Watch for all checks to complete.
-   ```bash
-   # Loop until CI finishes
-   while true; do
-       STATES=$(gh pr checks <PR_NUMBER> --json state -q '.[].state' 2>/dev/null | sort -u)
-       if echo "$STATES" | grep -q "PENDING\|QUEUED"; then
-           sleep 30
-           continue
-       fi
-       break
-   done
-   ```
+### 5.4 — Terminal states are write-once
 
-2. **Wait 60 seconds after CI passes** — CodeRabbit marks its check as passed before it finishes posting review comments. Give it time.
+Before transitioning, check whether `conductor.json` already says `merged`, `closed`, `approved`, or `failed`. Those are terminal and set by the scheduler — do NOT overwrite. Re-reporting `working` after `approved` confuses the scheduler.
 
-3. **Check for review comments** — read the PR reviews and comments:
-   ```bash
-   gh pr view <PR_NUMBER> --json reviews,comments
-   ```
+---
 
-4. **If CodeRabbit or any reviewer requested changes**, call `state working "addressing review comments"` and fix the issues. Then push, and go back to step 1.
+## Phase 6 — Echelon-specific guardrails
 
-5. **If CI passed cleanly**, query `reviewDecision` BEFORE deciding the next state — a prior approval may already exist (e.g. after merging base or pushing a non-dismissing commit):
-   ```bash
-   DECISION=$(gh pr view <PR_NUMBER> --json reviewDecision -q '.reviewDecision' 2>/dev/null)
-   case "$DECISION" in
-       APPROVED)            state approved "PR_URL" ;;
-       CHANGES_REQUESTED)   state working "fixing review comments" ;;  # then fix + push, go to step 1
-       *)                   state awaiting_review "PR_URL" ;;          # REVIEW_REQUIRED, null, or empty
-   esac
-   ```
+| Rule | Why |
+|---|---|
+| Base branch is `main-do`, not `main` | Echelon's main branch is `main-do` (see `CLAUDE.local.md`) |
+| Worktrees: `ECH-{ticket}-{short-description}`, never random names | Memory `feedback_worktree_rename.md` |
+| Do NOT start `bun run dev` | The server is always running on port 3000 (per `CLAUDE.local.md`) |
+| Use `bun run <script>` from `apps/frontend/package.json`, not raw `bunx` | Per `CLAUDE.local.md` |
+| Tempo time logging only for `ECH-` / `MTG-` / `MBNXT-` tickets — never for conductor worktree codes (`869d27pz*` etc.) | Memory `feedback_tempo_ech_only.md` |
+| Don't commit `.planning/` to feature branches | Local working files only — `AGENTS.md § Protected Paths` |
+| Don't modify files outside the ticket's scope | Echelon convention; reviewer rejects on sight |
 
-`conductor.json` is how the tmux worktree picker and conductor scheduler show your current status. **Always report transitions via `state` — never via `echo > marker`.**
+---
 
-### Rules for ticket mode
-- Work autonomously, but if genuinely uncertain, ask — the user may be watching
-- Do NOT modify files outside ticket scope
-- Do NOT amend existing commits
-- If the dev server is already running, do not start another one
-- Follow ALL project conventions from AGENTS.md / CLAUDE.md
+## Phase 7 — Final report
 
-**If `$ARGUMENTS` is a URL, execute the ticket flow above and STOP. Do NOT continue to the GSD flow below.**
-</ticket-mode>
-
-<objective>
-Run an entire GSD project or milestone autonomously from start to finish. The AI chains through all phases (plan → execute → verify → next phase) without stopping for confirmations. It only interrupts the user when:
-
-1. A `checkpoint:human-action` is encountered (auth gates, physical actions)
-2. An unrecoverable error occurs after self-diagnosis attempt
-3. A verification loop fails 3 times on the same issue
-
-Everything else — roadmap approval, phase planning approval, checkpoint:human-verify, checkpoint:decision — is auto-approved with best-judgment defaults.
-</objective>
-
-<modes>
-## Mode Detection
-
-Parse `$ARGUMENTS` to determine mode:
-
-- **`new-project [@doc]`** — Full lifecycle: init project → plan all phases → execute all phases
-- **`new-milestone [@doc]`** — New milestone: init milestone → plan phases → execute phases
-- **`resume`** — Pick up where conductor left off (reads STATE.md for position)
-- **`--from-phase N`** — Start autonomous execution from phase N (planning already done)
-- **`--no-team`** — Disable agent teams and fall back to standard subagents. By default, conductor uses the **team-with-judge** pattern: agent teams with a dedicated Judge teammate that critically evaluates all work, researches best practices online, and blocks subpar output. Pass `--no-team` to opt out (lower token cost but no quality gate).
-- **`--no-judge`** — Use agent teams but without the Judge. Falls back to standard `--team` behavior (teammates coordinate but no critical evaluator).
-</modes>
-
-<process>
-
-## Step 1: Configure for Autonomous Execution
-
-Set GSD config to full auto mode. If `.planning/config.json` exists, merge; otherwise these become defaults for project init.
-
-```bash
-# Ensure config exists
-if [ -f ".planning/config.json" ]; then
-  node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" config-set workflow.auto_advance true
-  node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" config-set workflow._auto_chain_active true
-  node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" config-set gates.confirm_project false
-  node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" config-set gates.confirm_phases false
-  node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" config-set gates.confirm_roadmap false
-  echo "✅ Conductor config applied"
-else
-  echo "⏳ Config will be set after project init"
-fi
-```
-
-Store the fact that conductor is active so nested workflows can detect it:
-```bash
-export GSD_CONDUCTOR=true
-```
-
-## Step 2: Initialize (if new-project or new-milestone)
-
-**For `new-project`:**
-Run `/gsd:new-project --auto` with any provided document reference. The `--auto` flag already skips questioning and auto-approves roadmap/requirements.
-
-After init completes, apply conductor config (Step 1 commands) since config.json now exists.
-
-**For `new-milestone`:**
-Run `/gsd:new-milestone` — auto-approve all gates. When the workflow asks for confirmation, respond with approval.
-
-**For `resume`:**
-Read `.planning/STATE.md` to determine current position. Extract last completed phase/plan.
-
-**For `--from-phase N`:**
-Skip to Step 4 with starting phase = N.
-
-## Step 3: Determine Phase Range
-
-Read `.planning/ROADMAP.md` to get all phases. Set:
-- `START_PHASE` = 1 (or N if `--from-phase N`, or next unfinished if `resume`)
-- `END_PHASE` = last phase number in roadmap
-
-## Step 4: Autonomous Phase Loop
-
-For each phase from `START_PHASE` to `END_PHASE`:
-
-### 4a. Plan Phase (if no PLAN.md files exist for this phase)
-Run `/gsd:plan-phase <N>` with research and plan-checking based on project config.
-
-The plan-phase workflow has its own verification loop (plan-checker agent). In conductor:
-- If plan-checker passes → continue
-- If plan-checker fails → auto-retry (up to 3 attempts, which is the default GSD behavior)
-- If 3 failures → **INTERRUPT USER** with diagnosis
-
-After planning completes, re-apply auto_chain flag:
-```bash
-node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" config-set workflow._auto_chain_active true
-```
-
-### 4b. Execute Phase (with Judge-in-the-Loop)
-
-Conductor uses the **team-with-judge** pattern by default. This means every phase execution includes a dedicated Judge teammate that critically reviews all work, researches best practices, and blocks subpar output.
-
-**Determine team mode from flags:**
-- Default (no flags): `--team` + Judge
-- `--no-judge`: `--team` without Judge
-- `--no-team`: standard subagents, no team, no Judge
-
-**Execution:**
-
-1. Run `/gsd:execute-phase <N> --team` (unless `--no-team`)
-
-2. **If Judge is enabled (default):** After `/gsd:execute-phase` completes each wave, spawn a Judge agent to review the wave's output before proceeding:
-
-   Spawn an Agent (subagent_type: `general-purpose`, name: `phase-<N>-judge`) with this mandate:
-
-   > You are the Judge for conductor phase <N>. Review ALL code changes produced by this phase's execution.
-   >
-   > **Your process:**
-   > 1. Read every file modified or created in this phase (check git diff or SUMMARY.md files in `.planning/phases/<NN>-*/`)
-   > 2. Evaluate against: correctness, best practices, security (OWASP), performance, maintainability, consistency with codebase, completeness
-   > 3. **Research online** (WebSearch) when uncertain — search for how established projects/frameworks handle similar problems. This is MANDATORY at least once per review.
-   > 4. For each issue found, provide: file path, line numbers, what's wrong, suggested fix, and severity (critical/major/minor)
-   > 5. Produce a verdict:
-   >    - **APPROVED** — phase output meets quality standards (list what you verified)
-   >    - **REJECTED** — list all issues with severity, grouped by file. Include research findings that informed your judgment.
-   > 6. Rate overall quality: 1-10 with brief justification
-   >
-   > Be highly critical. Assume problems exist until you verify otherwise. No rubber-stamping.
-
-3. **If Judge REJECTS:** Attempt to fix the issues:
-   - For code-related fixes within scope → apply fixes directly or run `/gsd:execute-phase <N> --gaps-only`
-   - Re-submit to Judge (up to **2 revision rounds** per phase)
-   - If still rejected after 2 rounds → **INTERRUPT USER** with the Judge's report
-
-4. **If Judge APPROVES:** Log the Judge's quality rating and key findings to STATE.md, then proceed.
-
-The execute-phase workflow also handles:
-- Wave-based parallel execution
-- Checkpoint auto-approval (via `auto_advance=true` + `_auto_chain_active=true`)
-- `human-action` checkpoints → **INTERRUPT USER**, then resume after response
-
-### 4c. Self-Verification
-After phase execution AND Judge approval, verify results:
-
-1. Check all SUMMARY.md files for the phase — look for `Self-Check: FAILED`
-2. If any failures exist, read the failure details
-3. Attempt self-diagnosis:
-   - If the fix is code-related and within scope → run `/gsd:execute-phase <N> --gaps-only`
-   - If it requires user input → **INTERRUPT USER**
-4. If all pass → continue to next phase
-
-### 4d. Update State
-```bash
-node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" state-set last_completed_phase <N>
-```
-
-Re-apply chain flag for next phase:
-```bash
-node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" config-set workflow._auto_chain_active true
-```
-
-## Step 5: Completion
-
-After all phases complete:
-
-1. Run a final self-check across all phase summaries
-2. Present completion report:
+After a clean run, print:
 
 ```
-## Conductor Complete
+## Conductor complete
 
-**Phases executed:** 1 through N
-**Status:** [All passed | X issues noted]
+Ticket: <TICKET-KEY>
+PR:     <PR_URL>
+State:  <approved | awaiting_review>
 
-### Phase Summary
-| Phase | Plans | Status | Judge Rating | Notes |
-|-------|-------|--------|-------------|-------|
-| 01-setup | 2 | ✅ | 8/10 | — |
-| 02-feature | 3 | ✅ | 9/10 | — |
-| ... | ... | ... | .../10 | ... |
-
-### Judge Summary
-- **Phases approved first pass:** X / N
-- **Phases requiring revisions:** X (list which and why)
-- **Total issues found:** X (Y critical, Z major, W minor)
-- **Key research findings:** [best practices the Judge surfaced that influenced the output]
-
-### Decisions Made Autonomously
-- [List key auto-decisions: technology choices, checkpoint approvals, etc.]
-
-### Items for Review
-- [Any warnings, skipped verifications, or edge cases]
+Plan:        <path/to/plan.md>
+PRD (if any): <path/to/prd.md>
+Verify:      ✓ (handled inside /spec or /fix)
+CI:          ✓
+Reviewers:   <reviewDecision value>
 ```
 
-3. Reset conductor flags:
-```bash
-node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" config-set workflow._auto_chain_active false
-node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" config-set gates.confirm_project true
-node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" config-set gates.confirm_phases true
-node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" config-set gates.confirm_roadmap true
-```
-</process>
-
-<interrupt_protocol>
-## When to Interrupt the User
-
-**ONLY interrupt when ALL of these are true:**
-1. The issue blocks forward progress (can't skip or work around it)
-2. Self-diagnosis was attempted and couldn't resolve it
-3. The issue is NOT a checkpoint:human-verify or checkpoint:decision (those are auto-approved)
-
-**Types of interrupts:**
-
-### Auth Gate (checkpoint:human-action)
-```
-## 🔐 Conductor Paused — Action Required
-
-**Phase:** 03-deployment
-**Plan:** 03-02 Configure Auth
-**Action needed:** [description from checkpoint]
-
-Reply when done, and conductor will resume.
-```
-
-### Unrecoverable Error
-```
-## ⚠️ Conductor Paused — Error
-
-**Phase:** 02-feature
-**Plan:** 02-01 API Routes
-**Error:** [description]
-**Self-diagnosis:** [what was attempted]
-
-Options:
-1. Fix and resume → reply "continue"
-2. Skip this plan → reply "skip"
-3. Stop conductor → reply "stop"
-```
-
-### Verification Failure (after 3 retries)
-```
-## ⚠️ Conductor Paused — Verification Failed
-
-**Phase:** 04-integration
-**Issue:** [what failed verification]
-**Attempts:** 3/3 exhausted
-
-Please review and advise.
-```
-
-After ANY interrupt, when the user responds, resume the loop from the current position.
-</interrupt_protocol>
-
-<guardrails>
-## Safety
-
-- **Never skip `human-action` checkpoints** — these are auth gates that physically require a human
-- **Log all autonomous decisions** to STATE.md so the user can review what happened
-- **Atomic commits** — each plan still commits independently (GSD executor default)
-- **If a phase has 3+ plan failures in execution**, pause and report rather than continuing to dependent phases
-- **Destructive operations** (drop tables, delete branches, etc.) still require user confirmation regardless of conductor mode — this overrides auto-advance for safety
-</guardrails>
+If the run failed at any phase, the matching `state failed "reason"` or `state blocked "reason"` call is already in place — just print the diagnostic and STOP.
