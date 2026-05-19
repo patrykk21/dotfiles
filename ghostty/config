@@ -1,4 +1,4 @@
-???????????????????????M M>>>M background-opacity = 0.85
+background-opacity = 0.85
 background-blur-radius = 20
 theme = tokyonight
 
@@ -18,3 +18,21 @@ keybind = cmd+k=text:clear
 
 # custom-shader = shaders/matrix-hallway.glsl
 keybind = shift+enter=text:\n
+
+# Translate ctrl+shift+<letter> to ESC+<UPPER> (tmux M-<UPPER>).
+# Workaround for tmux 3.5a stripping Shift on Ctrl+letter in CSI-u mode.
+# Tmux bindings are now M-H, M-L, etc. — physical keypress unchanged.
+keybind = ctrl+shift+f=text:\x1bF
+keybind = ctrl+shift+g=text:\x1bG
+keybind = ctrl+shift+h=text:\x1bH
+keybind = ctrl+shift+j=text:\x1bJ
+keybind = ctrl+shift+k=text:\x1bK
+keybind = ctrl+shift+l=text:\x1bL
+keybind = ctrl+shift+m=text:\x1bM
+keybind = ctrl+shift+o=text:\x1bO
+keybind = ctrl+shift+p=text:\x1bP
+keybind = ctrl+shift+q=text:\x1bQ
+keybind = ctrl+shift+r=text:\x1bR
+keybind = ctrl+shift+t=text:\x1bT
+keybind = ctrl+shift+w=text:\x1bW
+keybind = ctrl+shift+x=text:\x1bX

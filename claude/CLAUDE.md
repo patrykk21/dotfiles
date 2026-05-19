@@ -171,3 +171,5 @@ See full guidance: `~/.claude/skills/agent-teams.md`
 - Follow existing code conventions
 - Check README/package.json for test commands
 - Run lint/typecheck after changes
+
+@RTK.md

@@ -43,11 +43,24 @@ while true; do
                 # Remove metadata if it exists
                 remove_session_metadata "$REPO_NAME" "$TICKET"
                 
-                # Remove the git worktree
-                git worktree remove "$WORKTREE_PATH" --force 2>/dev/null || git worktree prune
-                
-                # Display success message
-                tmux display-message -d 2000 "✓ Deleted worktree: $TICKET"
+                # Remove the git worktree — capture stderr so real failures
+                # don't get swallowed into a bogus success toast.
+                REMOVE_ERR=$(git worktree remove "$WORKTREE_PATH" --force 2>&1 >/dev/null)
+                REMOVE_RC=$?
+                if [ $REMOVE_RC -ne 0 ]; then
+                    # Try prune-then-retry for stale worktree refs
+                    git worktree prune
+                    REMOVE_ERR=$(git worktree remove "$WORKTREE_PATH" --force 2>&1 >/dev/null)
+                    REMOVE_RC=$?
+                fi
+
+                if [ $REMOVE_RC -eq 0 ]; then
+                    tmux display-message -d 2000 "✓ Deleted worktree: $TICKET"
+                else
+                    # Surface the real git error so the user can act on it
+                    SHORT_ERR=$(echo "$REMOVE_ERR" | head -1)
+                    tmux display-message -d 4000 "✗ Failed to delete $TICKET: $SHORT_ERR"
+                fi
                 
                 # Show the picker again to see updated list
                 continue

@@ -84,3 +84,4 @@ conductor/launchd-stderr.log
 conductor/config.env
 conductor/jira-credentials.env
 conductor/*.credentials*
+claude/plugins/cache/

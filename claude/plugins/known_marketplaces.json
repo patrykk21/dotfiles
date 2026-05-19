@@ -5,7 +5,7 @@
       "repo": "anthropics/claude-plugins-official"
     },
     "installLocation": "/Users/vigenerr/.claude/plugins/marketplaces/claude-plugins-official",
-    "lastUpdated": "2026-04-02T07:29:28.744Z"
+    "lastUpdated": "2026-05-19T14:31:59.919Z"
   },
   "wakatime": {
     "source": {
@@ -14,5 +14,37 @@
     },
     "installLocation": "/Users/vigenerr/.claude/plugins/marketplaces/wakatime",
     "lastUpdated": "2026-03-19T09:46:26.269Z"
+  },
+  "context-mode": {
+    "source": {
+      "source": "github",
+      "repo": "mksglu/context-mode"
+    },
+    "installLocation": "/Users/vigenerr/.claude/plugins/marketplaces/context-mode",
+    "lastUpdated": "2026-05-14T13:27:39.038Z"
+  },
+  "openai-codex": {
+    "source": {
+      "source": "github",
+      "repo": "openai/codex-plugin-cc"
+    },
+    "installLocation": "/Users/vigenerr/.claude/plugins/marketplaces/openai-codex",
+    "lastUpdated": "2026-05-14T13:27:39.246Z"
+  },
+  "chrome-devtools-plugins": {
+    "source": {
+      "source": "github",
+      "repo": "ChromeDevTools/chrome-devtools-mcp"
+    },
+    "installLocation": "/Users/vigenerr/.claude/plugins/marketplaces/chrome-devtools-plugins",
+    "lastUpdated": "2026-05-14T13:27:40.822Z"
+  },
+  "claude-code-lsps": {
+    "source": {
+      "source": "github",
+      "repo": "Piebald-AI/claude-code-lsps"
+    },
+    "installLocation": "/Users/vigenerr/.claude/plugins/marketplaces/claude-code-lsps",
+    "lastUpdated": "2026-05-14T13:27:41.436Z"
   }
 }

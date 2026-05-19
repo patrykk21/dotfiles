@@ -21,18 +21,13 @@ fi
 MAIN_REPO=$(cd "$WORKTREE_PATH" 2>/dev/null && git worktree list | head -1 | awk '{print $1}')
 REPO_NAME=$(basename "$MAIN_REPO")
 
-# Get port from metadata if this is a worktree (not base)
+# Resolve port via the canonical helper. ensure_and_get_server_port reuses an
+# existing port from meta.json or generates+persists one (via save_session_metadata)
+# so this script and worktree-create.sh's later save_session_metadata agree on
+# a single value. Skips port assignment for *-base sessions.
 SERVER_PORT=""
-PORT_GENERATED=false
 if [[ ! "$TICKET" =~ -base$ ]]; then
-    # Try to get existing port from metadata
-    SERVER_PORT=$(get_session_metadata "$REPO_NAME" "$TICKET" "port")
-    
-    # If no port exists, generate one and update metadata
-    if [ -z "$SERVER_PORT" ]; then
-        SERVER_PORT=$(generate_worktree_port)
-        PORT_GENERATED=true
-    fi
+    SERVER_PORT=$(ensure_and_get_server_port "$REPO_NAME" "$TICKET")
 fi
 
 # Create new session with explicit size (90 lines to accommodate 89+1 split)
@@ -82,7 +77,7 @@ for window in 1 2 3; do
     elif [ "$STATUS_COUNT" -gt 1 ]; then
         # Multiple status panes exist, keep only the last one and kill others
         KEEP_PANE=$(echo "$STATUS_PANES" | tail -1)
-        echo "$STATUS_PANES" | head -n -1 | while read PANE; do
+        echo "$STATUS_PANES" | sed '$d' | while read PANE; do
             tmux kill-pane -t "$PANE" 2>/dev/null || true
         done
         # Resize the kept pane
@@ -99,13 +94,5 @@ done
 # Return to first window
 tmux select-window -t "$TICKET:1"
 
-# If we generated a new port, update the metadata
-if [ "$PORT_GENERATED" = "true" ] && [ -n "$SERVER_PORT" ]; then
-    # Check if metadata file exists
-    METADATA_FILE="$WORKTREES_BASE/$REPO_NAME/.worktree-meta/sessions/${TICKET}.json"
-    if [ -f "$METADATA_FILE" ]; then
-        # Update existing metadata with port
-        TEMP_FILE=$(mktemp)
-        jq --arg port "$SERVER_PORT" '.port = ($port | tonumber)' "$METADATA_FILE" > "$TEMP_FILE" && mv "$TEMP_FILE" "$METADATA_FILE"
-    fi
-fi
+# Port persistence is handled by ensure_and_get_server_port at the top of
+# this script — no extra write needed here.
