@@ -36,6 +36,16 @@ Everything else — ticket fetch, state FSM, AGENTS.md self-review, PR creation,
 
 If you want GSD's project/milestone orchestration, invoke `/gsd:new-project` directly. `/conductor` no longer wraps GSD.
 
+## Asking questions
+
+Sessions started by `conductor run` or the scheduler launch with `AskUserQuestion` denied, so a choice panel can never stall them. Wherever this command or a skill it calls (`/prd`, `/spec`, `/fix`) would use `AskUserQuestion`, and the tool is unavailable or denied:
+
+1. Run `state needs_input "<the question>"`.
+2. Write the question as plain text, with the options numbered and your recommendation first.
+3. End your turn. The answer arrives as your next message; run `state working "addressing feedback"` and continue.
+
+In a normal interactive session, `AskUserQuestion` works as usual.
+
 ---
 
 ## Phase 0 — Detect mode + path
