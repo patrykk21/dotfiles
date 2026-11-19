@@ -69,7 +69,7 @@ Ticket platforms detected from URL:
 | `github.com/*/issues/*` | GitHub Issue | `mcp__github-work__issue_read` |
 | Anything else | Unknown | `WebFetch` (best-effort) |
 
-For Jira, the ticket key is the last path segment (e.g. `ECH-571` from `.../browse/ECH-571`). For echelon, expect `ECH-XXX` keys.
+For Jira, the ticket key is the last path segment (e.g. `PROJ-571` from `.../browse/PROJ-571`).
 
 ### 0.2 — Detect pilot availability
 
@@ -97,6 +97,21 @@ Surface the choice to the user once, briefly:
 > "Pilot unavailable (`<reason>`) — running standalone workflow."
 
 Do **not** prompt the user to choose. Detection is deterministic and the standalone path is feature-equivalent for conductor's purposes.
+
+### 0.3 — Load the project guide
+
+A project can keep conductor rules of its own (extra skill-routing rows, a pre-push checklist, its PR base, guardrails) in a guide in the private employer layer. Find the project name, then look for the guide:
+
+```bash
+PROJECT_NAME=""
+case "$PWD" in
+  "$HOME/worktrees/"*) PROJECT_NAME=$(echo "${PWD#$HOME/worktrees/}" | cut -d/ -f1) ;;
+esac
+[ -z "$PROJECT_NAME" ] && PROJECT_NAME=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)")
+ls "$HOME"/.claude/company/*/conductor/projects/"$PROJECT_NAME".md 2>/dev/null | head -1
+```
+
+If a path prints, read that file now and follow it for the whole run. Each of its sections names the phase it extends (1.4, 3, 4.1, 6); where it disagrees with this command, the guide wins. If nothing prints, the project has no guide and this command applies as written.
 
 ---
 
@@ -148,7 +163,7 @@ Use the platform-appropriate MCP / fetch tool from Phase 0.1 to retrieve:
 Store the ticket key in a shell variable so later steps can reuse it:
 
 ```bash
-TICKET_KEY="ECH-XXX"   # parsed from URL
+TICKET_KEY="PROJ-123"   # parsed from URL
 TICKET_URL="$ARGUMENTS"
 ```
 
@@ -183,18 +198,13 @@ Skill(skill='prd', args='<TICKET-KEY> <summary> — current AC: <quoted verbatim
 
 If the user abandons the PRD conversation, call `state failed "PRD abandoned"` and STOP.
 
-### 1.4 — Skill routing (echelon — applies to both paths)
+### 1.4 — Skill routing (applies to both paths)
 
-Scan the ticket for keywords / paths that imply specialised echelon conventions. Both `/spec` and the standalone plan flow read this table; the only difference is who consumes it.
+Scan the ticket for keywords / paths that call for a particular flow or convention. Both `/spec` and the standalone plan flow read this table; the only difference is who consumes it. The project guide (Phase 0.3) may add rows of its own; apply those too.
 
 | Ticket signal | Action |
 |---|---|
 | Issue type is **Bug** with a reproducer (steps + expected vs actual) | Pilot: use `/fix`. Standalone: use Section S-FIX (RED test first, ≤150 LOC budget) |
-| Description mentions schema / migration / `drizzle` / new column | Plan must respect the Drizzle journal `when`-monotonicity rule (see `AGENTS.md` and memory `feedback_drizzle_journal_when.md`); never run SQL manually |
-| Description mentions new Server Action / data fetching | Reaffirm in plan: Server Actions over API routes; `createRequestCache` / `createDbCache`, never raw `cache()`; GET for fetching, POST for mutations |
-| Description mentions analytics / feature flag | Use `posthog` MCP and enum-typed flag names per `AGENTS.md § Feature Flags` |
-| Description mentions UI changes / new component | Include Storybook stories with `play` function test (`AGENTS.md § Storybook Stories`) |
-| Description touches `/lib/api/services/**` | Plan must thread requests through Services → Connectors → Queries (never service-to-query) |
 | Issue type is **Spike** with deliverable = research | Treat as research-only — local HTML artifact, no PR (memory `feedback_no_pr_for_research.md`); confirm with user before planning |
 
 If multiple rows match, apply all. Document the choices in the plan so the verifier can audit them.
@@ -252,7 +262,7 @@ When the standalone flow returns:
 
 ## Phase 3 — Pre-push self-review against AGENTS.md
 
-**Before EVERY `git push`** — initial PR creation, fix-after-review commits, base-merge commits — re-read `/Users/vigenerr/Work/Groupon/echelon/AGENTS.md` (or whichever worktree's AGENTS.md is active) and check the diff against every applicable rule. Runs the same way in both paths.
+**Before EVERY `git push`** — initial PR creation, fix-after-review commits, base-merge commits — re-read the active worktree's `AGENTS.md` and check the diff against every applicable rule. If the project guide (Phase 0.3) has a pre-push checklist, walk that too. Runs the same way in both paths.
 
 ```bash
 git diff --stat
@@ -261,34 +271,11 @@ git diff
 
 Walk the checklist:
 
-### 3.1 — Layered architecture (CRITICAL)
-- Services in `/lib/api/services/**` import from `connectors/**` only; **never** from `queries/**`
-- Connectors wrap results in `ServerActionResult<T>`
-- Queries call Drizzle and may use `createDbCache` / `createRequestCache` — never raw React `cache()`
-
-### 3.2 — Code standards
-- No `any` types
-- No JSDoc comments (TypeScript types are sufficient)
-- No `@deprecated` markers — dead code is deleted, not annotated
-- No `AbortSignal` / `signal` parameters
-- No dynamic imports (`await import()`) inside Server Actions
-- Naming: PascalCase components, camelCase functions, kebab-case filenames
-
-### 3.3 — Data fetching
-- Server Actions for fetching, not API routes — unless external access is required
-- REST verbs respected (GET fetches, POST creates, PUT updates, DELETE removes, PATCH partial-updates)
-- No "POST for fetching" anti-pattern
-
-### 3.4 — Database migrations
-- Schema changes → `bun run db:generate` then `bun run db:migrate`; never manual SQL
-- Data-only migrations get a journal entry with a `when` strictly greater than the previous entry's `when` (memory `feedback_drizzle_journal_when.md` — silent skip otherwise)
-
-### 3.5 — Hygiene
+### 3.1 — Hygiene
 - No accidental `console.log` / debug code
 - No commented-out code blocks
 - No files modified outside the ticket's scope
 - No `.planning/` files committed to feature branches (those are local-only)
-- Changelog `/CHANGELOG.md` updated if the change is user-facing (`AGENTS.md § Changelog Guidelines` — frontend `apps/frontend/package.json` bumped, not the monorepo root)
 
 If any rule fails, **fix it before pushing**. Do not file the violation as "known limitation" in the PR body.
 
@@ -300,13 +287,30 @@ Identical in both paths.
 
 ### 4.1 — Create the PR
 
-Branch convention is the worktree's existing branch (the launcher created it from `main-do` with `ECH-{ticket}-{slug}` naming — see memory `feedback_worktree_rename.md`). Base branch is always `main-do`.
+Branch convention is the worktree's existing branch, as the launcher created it (memory `feedback_worktree_rename.md`). The PR base is the project's `BASE_BRANCH` from `~/.config/conductor/projects/<project>.env`, unless the project guide names another.
+
+**Draft vs. ready-for-review is per-project** (`PR_DRAFT` in the same file; default `false`). The launcher exports it as `CONDUCTOR_PR_DRAFT`; manual runs read it from the project config. Resolve both, then create the PR with the matching flags:
 
 ```bash
-gh pr create --base main-do --draft --fill
+PROJECT_NAME=""
+case "$PWD" in
+  "$HOME/worktrees/"*) PROJECT_NAME=$(echo "${PWD#$HOME/worktrees/}" | cut -d/ -f1) ;;
+esac
+[ -z "$PROJECT_NAME" ] && PROJECT_NAME=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)")
+PROJ_ENV="$HOME/.config/conductor/projects/${PROJECT_NAME}.env"
+proj_setting() { [ -f "$PROJ_ENV" ] && grep -E "^$1=" "$PROJ_ENV" | tail -1 | sed -E "s/^$1=//; s/^\"(.*)\"\$/\1/"; }
+
+# Draft preference: scheduler env var → project .env → default false.
+PR_DRAFT="${CONDUCTOR_PR_DRAFT:-$(proj_setting PR_DRAFT)}"
+[ "$PR_DRAFT" = "true" ] && DRAFT_FLAG="--draft" || DRAFT_FLAG=""
+BASE_BRANCH=$(proj_setting BASE_BRANCH)
+
+gh pr create --base "${BASE_BRANCH:-main}" --fill $DRAFT_FLAG
 PR_URL=$(gh pr view --json url --jq .url)
 PR_NUM=$(gh pr view --json number --jq .number)
 ```
+
+When `PR_DRAFT=false` the PR opens **ready-for-review**. When `PR_DRAFT=true` it opens as a **draft** and stays draft (see Phase 4.6).
 
 For **cross-repo PRs** (worktree's git remote points to a repo distinct from where the ticket lives), record the URL-derived host alongside the worktree-derived one — the scheduler needs `gh_pr_url` to reconcile (memory `feedback_conductor_cross_repo_pr.md`).
 
@@ -318,7 +322,7 @@ Browser-verify (in `/spec` or in Section S-SPEC's verify step) may emit screensh
 ![alt](https://github.com/{owner}/{repo}/raw/{branch}/.github/pr-assets/{ticket-key}/{file}.png)
 ```
 
-**Critical:** Use `github.com/.../raw/...`, **NOT** `https://raw.githubusercontent.com/...`. Echelon is a private repo; `raw.githubusercontent.com` does not authenticate when GitHub renders PR markdown for private repos, so images appear broken to reviewers even though the asset exists. The `github.com/.../raw/...` URL is a redirect that respects the viewer's GitHub session and works for both public and private repos. Memory: `feedback_screenshot_upload.md`.
+**Critical:** Use `github.com/.../raw/...`, **NOT** `https://raw.githubusercontent.com/...`. `raw.githubusercontent.com` does not authenticate when GitHub renders PR markdown for private repos, so images appear broken to reviewers even though the asset exists. The `github.com/.../raw/...` URL is a redirect that respects the viewer's GitHub session and works for both public and private repos. Memory: `feedback_screenshot_upload.md`.
 
 After editing the PR body, verify the rendered images load:
 
@@ -377,7 +381,20 @@ state working "addressing review comments"
 # fix → Phase 3 self-review → push → back to 4.3 (CI watch + 60s + re-read reviews)
 ```
 
-### 4.6 — reviewDecision branching
+### 4.6 — Mark PR ready for review
+
+Respect the project's `PR_DRAFT` setting (resolved in Phase 4.1):
+
+- **`PR_DRAFT=true`**: leave the PR as a **draft**. Do **not** run `gh pr ready` — the project intentionally opens PRs as drafts.
+- **`PR_DRAFT=false`**: the PR was already opened ready-for-review, so this is a no-op. Only if a PR was created as a draft for some other reason, mark it ready:
+
+```bash
+if [ "$PR_DRAFT" != "true" ]; then
+  gh pr ready "$PR_NUM"   # only if the PR is a draft; no-op otherwise
+fi
+```
+
+### 4.7 — reviewDecision branching
 
 If CI is green and no review changes are requested, query `reviewDecision` **before** deciding the next state — a prior approval may already exist (memory `feedback_check_review_decision.md`):
 
@@ -390,7 +407,7 @@ case "$DECISION" in
 esac
 ```
 
-### 4.7 — Comment on the ticket
+### 4.8 — Comment on the ticket
 
 Add the PR link and a brief summary to the Jira/ClickUp/Linear/GitHub ticket. Use the same MCP that fetched the ticket in Phase 1.1.
 
@@ -445,17 +462,9 @@ Before transitioning, check whether `conductor.json` already says `merged`, `clo
 
 ---
 
-## Phase 6 — Echelon-specific guardrails (both paths)
+## Phase 6 — Project guardrails (both paths)
 
-| Rule | Why |
-|---|---|
-| Base branch is `main-do`, not `main` | Echelon's main branch is `main-do` (see `CLAUDE.local.md`) |
-| Worktrees: `ECH-{ticket}-{short-description}`, never random names | Memory `feedback_worktree_rename.md` |
-| Do NOT start `bun run dev` | The server is always running on port 3000 (per `CLAUDE.local.md`) |
-| Use `bun run <script>` from `apps/frontend/package.json`, not raw `bunx` | Per `CLAUDE.local.md` |
-| Tempo time logging only for `ECH-` / `MTG-` / `MBNXT-` tickets — never for conductor worktree codes (`869d27pz*` etc.) | Memory `feedback_tempo_ech_only.md` |
-| Don't commit `.planning/` to feature branches | Local working files only — `AGENTS.md § Protected Paths` |
-| Don't modify files outside the ticket's scope | Echelon convention; reviewer rejects on sight |
+If the project guide (Phase 0.3) has a guardrails section, follow every rule in it for the whole run.
 
 ---
 

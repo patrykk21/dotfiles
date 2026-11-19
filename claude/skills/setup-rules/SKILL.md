@@ -2,21 +2,32 @@
 name: setup-rules
 description: Set up and audit project rules — reads codebase, generates modular rules, documents MCP servers
 user-invocable: true
-model: opus[1m]
 ---
 # /setup-rules - Set Up Project Rules
 
 **Set up and audit project rules.** Reads your codebase, generates modular rules, and documents MCP servers.
 
-**Flow:** Read existing → Migrate → Quality audit → Explore → Compare → Sync rules → Sync MCP → Discover rules → Cross-check → Sync AGENTS.md (if present) → Summary
+**Flow:** Read existing → Migrate → Quality audit → Explore → Compare → Sync rules → Sync MCP → Discover rules → Cross-check → Sync AGENTS.md → Summary
 
 **Skill creation:** Use `/create-skill` to create workflow skills — `/setup-rules` focuses exclusively on rules and MCP documentation.
+
+<!-- CC-ONLY -->
+**Use the `AskUserQuestion` tool for user questions** — it renders a structured form; don't fall back to plain-text numbered questions.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+**Use plain-text numbered options for user questions** — the `AskUserQuestion` tool isn't callable in Codex. Present options with trade-offs and wait for the user's response.
+CODEX-END -->
 
 ## Step 1: Reference
 
 ### Guidelines
 
-- **Always use AskUserQuestion** when asking the user anything
+<!-- CC-ONLY -->
+- **Use AskUserQuestion** when asking the user anything (it renders a structured form)
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+- **Use plain-text numbered options** when asking the user anything — the `AskUserQuestion` tool isn't callable in Codex
+CODEX-END -->
 - **Explainer-first prompts** — when prompting the user to choose between options, lead with one short paragraph that names what the term means, why these skills need it, and what changes if they pick differently. Then show the choices and the recommended default. Assume the user does not know the term — never present `paths` frontmatter, MCP scoping, or rule-vs-skill distinctions as a multiple-choice without context. Walk them through one section at a time, not all sections at once.
 - **Read before writing** — check existing rules before creating
 - **Write concise rules** — every word costs tokens in context
@@ -39,6 +50,10 @@ Use `{slug}-` prefix on everything: `{slug}-project.md`, `{slug}-mcp-servers.md`
 **Custom rules** in `.claude/rules/`: `{slug}-project.md` (tech stack, structure), `{slug}-mcp-servers.md` (custom MCP servers), `{slug}-{pattern-name}.md` (tribal knowledge).
 
 Use unique names (not `plan`, `implement`, `verify`, `standards-*`) for custom rules.
+
+<!-- CODEX-START
+**Codex output:** Codex reads project instructions from repo-root `AGENTS.md`, not `.claude/rules/`. When running `$setup-rules` in Codex, `.claude/rules/` may be used as a compatible modular source, but the workflow is incomplete until root `AGENTS.md` is created or synced from those rules.
+CODEX-END -->
 
 ### Recommended Directory Structure
 
@@ -71,7 +86,7 @@ Use unique names (not `plan`, `implement`, `verify`, `standards-*`) for custom r
 | Product (`{product}/*.md`) | Recommended | Files matching product paths |
 | Team (`{product}/{team}/*.md`) | **MANDATORY** | Files matching team paths only |
 
-**⛔ Team-level rules without `paths` frontmatter load every session for every file** — defeating the purpose of scoping. Always add `paths` to team-level rules.
+**Team-level rules without `paths` frontmatter load every session for every file** — defeating the purpose of scoping. Always add `paths` to team-level rules.
 
 **Example `paths` frontmatter:**
 
@@ -152,12 +167,18 @@ From the official Claude Code documentation — use these as the quality baselin
 
 ## Step 2: Read Existing Rules & Skills
 
-**MANDATORY FIRST STEP.**
+**Do this first.**
 
 1. Derive the project slug (see Step 1 → Project Slug)
 2. `find .claude/rules/ -name '*.md' -not -name 'README.md' 2>/dev/null | sort` — read each rule file (including subdirectories)
 3. Check for legacy CLAUDE.md: `ls CLAUDE.md claude.md .claude.md 2>/dev/null` — read if found
-4. Check for AGENTS.md: `ls AGENTS.md agents.md 2>/dev/null` — read if found. This is the cross-framework agent context file (Codex, Cursor, etc.). Treat it as a migration source like CLAUDE.md, and remember it exists so Step 11 can offer to sync rules back into it. **Never create AGENTS.md if it doesn't exist.**
+4. Check for AGENTS.md: `ls AGENTS.md agents.md 2>/dev/null` — read if found. This is the cross-framework agent context file (Codex, Cursor, etc.). Treat it as a migration source like CLAUDE.md.
+<!-- CC-ONLY -->
+   Remember whether it exists so Step 11 can offer to sync rules back into it. **Never create AGENTS.md if it doesn't exist.**
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+   When running in Codex, absence of root `AGENTS.md` is a setup gap, not a skip condition. Record it so Step 11 creates the file from the synced rules.
+CODEX-END -->
 5. **Detect unscoped legacy files** — look for `project.md`, `mcp-servers.md`, or any rule without the `{slug}-` prefix. Flag for migration in Step 3.
 6. **Detect nested rule directories** — check for subdirectories within `.claude/rules/` (product/team structure per Step 1 → Recommended Directory Structure). Map each subdirectory, its depth level (product vs team), and contents. Also check for sub-projects with their own `.claude/rules/` or `CLAUDE.md`.
 7. **Validate path-scoping** — for rules in nested subdirectories, check that they have `paths` frontmatter. Flag any team-level rules (depth 2+) missing `paths` as errors for Step 4.
@@ -312,7 +333,12 @@ For extracting an enclosing function/class at a known line, use `Read` with `off
 2. **Glob** for file structure — `**/*.test.*`, `**/routes/**`, `**/config/**`, `**/middleware/**`
 3. **Read** 5-10 representative files in key directories
 4. For each gap from Step 2: run a targeted search (Semble if available, otherwise Grep) to find current patterns
+<!-- CC-ONLY -->
 5. **Use CodeGraph** (`codegraph_context` to orient, `codegraph_search` → `codegraph_explore` for deep understanding, `codegraph_callers`/`codegraph_files` for structure) — CodeGraph is the primary exploration tool, not a fallback
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+5. **Use CodeGraph selectively** only for runtime-code structure gaps that remain after the Semble/direct-read pass. For docs, rules, markdown, config inventory, and named paths, keep using targeted reads or Semble; do not add graph calls just to satisfy a checklist.
+CODEX-END -->
 
 **Monorepo:** Repeat Steps 5.1-5.3 for each sub-project identified in Step 2. Each sub-project gets its own exploration context.
 
@@ -325,6 +351,10 @@ For extracting an enclosing function/class at a known line, use `Read` with `off
 ## Step 7: Sync Project Rule
 
 **Update `.claude/rules/{slug}-project.md` with current project state.**
+
+<!-- CODEX-START
+**Codex note:** Updating `.claude/rules/{slug}-project.md` alone does not update Codex instructions. Treat this rule as the modular source, then Step 11 must create or sync root `AGENTS.md`.
+CODEX-END -->
 
 Also look for a legacy unscoped `project.md` — if found, migrate its content into `{slug}-project.md` and delete the old file.
 
@@ -433,7 +463,12 @@ Parse `.mcp.json`, exclude framework-provided servers (Pilot core servers if pre
 
 For each user server:
 
+<!-- CC-ONLY -->
 1. `ToolSearch(query="+server-name keyword")` to discover tools
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+1. MCP tools from configured servers are available directly — use the tool name pattern `mcp__<server-name>__<tool-name>` to discover and invoke tools from each server.
+CODEX-END -->
 2. Call 1-2 read-only tools per server as a connectivity check (**safety: only read-only tools**) — no need to test every tool, just confirm the server responds
 3. Record per-server: ✅ connected | ⚠️ partial (note issues) | ❌ unreachable
 4. Report health check:
@@ -469,7 +504,12 @@ Create/update `.claude/rules/{slug}-mcp-servers.md`:
 - [Decision point where the server provides relevant context]
 - [Workflow step where consulting this server prevents mistakes]
 
+<!-- CC-ONLY -->
 **Usage:** `ToolSearch(query="+server-name keyword")` then call the discovered tools directly.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+**Usage:** MCP tools are available directly via `mcp__<server-name>__<tool-name>` naming convention.
+CODEX-END -->
 ```
 
 **Do NOT include:**
@@ -521,22 +561,43 @@ Create/update `.claude/rules/{slug}-mcp-servers.md`:
 5. **Reference validity** — cross-references between files point to files that actually exist
 6. **README currency** — if `.claude/rules/README.md` exists, verify it lists all current rule files and directories. Update if stale.
 7. **Path-scoping enforcement** — re-verify all team-level rules have `paths` frontmatter (final check)
+<!-- CODEX-START
+8. **Codex instruction currency** — verify root `AGENTS.md` exists and contains the current project, MCP, and repo-behavior guidance from the synced rules.
+CODEX-END -->
 
 Auto-fix any issues found. Report fixes in summary.
 
 ## Step 11: Sync Rules Back to AGENTS.md — CONDITIONAL
 
+<!-- CC-ONLY -->
 **Only if Step 2 detected an existing AGENTS.md.** Skip entirely otherwise — never create AGENTS.md.
 
 AGENTS.md is the cross-framework agent context file (Codex, Cursor, etc.). When a repo uses both Pilot rules and AGENTS.md, the two should not drift. After rules have been synced (Steps 7–10), offer to re-export the relevant content back into AGENTS.md so other agents see the same context.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+**When running as Codex: always run this step.** Codex reads project instructions from repo-root `AGENTS.md`. If `AGENTS.md` does not exist, create it from the synced rule set. If it exists, update the generated/synced portions while preserving user-authored content.
+
+Do not stop after updating `.claude/rules/`; that only helps Claude Code. The Codex deliverable is root `AGENTS.md`.
+CODEX-END -->
 
 ### Step 11.1: Always Ask First
 
+<!-- CC-ONLY -->
 AskUserQuestion: "AGENTS.md exists at the repo root. Sync the updated rules back into it so non-Claude agents (Codex, Cursor, etc.) see the same context?"
 
 - **"Yes, sync now"** — proceed to Step 11.2
 - **"Show diff first"** — generate the proposed AGENTS.md content, show a diff against the current file, then ask again
 - **"Skip"** — leave AGENTS.md untouched, continue to Summary
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+If `AGENTS.md` already exists, present numbered options before overwriting broad user-authored content:
+
+- **"Yes, sync now"** — proceed to Step 11.2
+- **"Show diff first"** — generate the proposed AGENTS.md content, show a diff against the current file, then ask again
+- **"Skip"** — leave AGENTS.md untouched, continue to Summary
+
+If `AGENTS.md` does not exist, create it without asking; the user invoked `$setup-rules` from Codex, and this is the file Codex actually loads.
+CODEX-END -->
 
 ### Step 11.2: Generate Synced Content
 
@@ -559,7 +620,12 @@ Write the merged content to AGENTS.md. Report what changed: sections added, sect
 **Rules:**
 
 - Never delete AGENTS.md
+<!-- CC-ONLY -->
 - Never create AGENTS.md if it didn't already exist
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+- In Codex, create AGENTS.md when missing
+CODEX-END -->
 - Always preserve user-authored content not derivable from rules
 - Keep AGENTS.md under ~400 lines — link to rule files for deep detail rather than inlining everything
 
@@ -573,7 +639,7 @@ Report:
 - Rules: created, updated, unchanged (by directory level)
 - Path-scoping: team rules validated, violations fixed
 - Cross-check: issues found and fixed (if any)
-- AGENTS.md: synced | shown diff only | skipped | not present
+- AGENTS.md: created | synced | shown diff only | skipped | not present
 - Semble: available / not available
 
 Then offer: "Share via Share dashboard" (direct user to Console Share page at #/share) | "Discover more standards" | "Create skills with /create-skill" | "Done"

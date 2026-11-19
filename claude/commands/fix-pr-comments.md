@@ -21,7 +21,7 @@ Arguments: $ARGUMENTS
 1. Run `git rev-parse --abbrev-ref HEAD` to get the current branch name.
 2. Run `git remote -v` to determine the remote repo (owner/repo).
 3. Determine whether this is a work repo (`github-work`) or personal (`github-personal`):
-   - Work: repos under `Work/` path or matching the org (e.g. Groupon)
+   - Work: repos under `Work/` path or owned by the employer's GitHub org
    - Personal: everything else
 4. Use the appropriate GitHub MCP (`github-work` or `github-personal`) to find the open PR for this branch via `list_pull_requests` filtered by `head` branch.
 5. If no PR found, inform the user and stop.

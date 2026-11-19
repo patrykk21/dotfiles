@@ -16,9 +16,13 @@ If any NO → return to Step 2.
 
 **Propose 2–3 approaches only when there is a genuine architectural choice** (patch at call site vs. fix at source vs. add validation layer, with materially different scope/regression/maintenance trade-offs). For each: name, what it fixes, trade-offs, recommendation.
 
-**⛔ Ground approach labels in the root cause.** Step 2.5 already produced a concrete `Root Cause: file:line — function_name()` statement and Step 2.3 ran `codegraph_context`. When proposing alternatives, option labels must reference the actual symbols/files involved — e.g., `Patch at OrderHandler.validate (call site, src/handlers/order.py:88)` vs. `Fix at source OrderValidator.check (src/validators/order.py:42)`. Generic labels ("patch at call site" / "fix at source") with no symbol names are a regression — the data to ground them is already in your investigation notes.
+**Ground approach labels in the root cause.** Step 2.5 already produced a concrete `Root Cause: file:line — function_name()` statement and Step 2.3 ran `codegraph_context`. When proposing alternatives, option labels must reference the actual symbols/files involved — e.g., `Patch at OrderHandler.validate (call site, src/handlers/order.py:88)` vs. `Fix at source OrderValidator.check (src/validators/order.py:42)`. Generic labels ("patch at call site" / "fix at source") with no symbol names are a regression — the data to ground them is already in your investigation notes.
 
 When a genuine choice exists AND `PILOT_PLAN_QUESTIONS_ENABLED` is not `"false"`: use `AskUserQuestion` to pick.
+
+<!-- CODEX-START
+Codex override: if the source-level fix is clearly correct and reversible, choose it without asking and record the decision in `## Fix Approach`. Ask one bundled plain-text question only when the wrong choice would change multiple tasks, add a new dependency, or alter user-visible behavior outside the bug.
+CODEX-END -->
 
 ```bash
 ~/.pilot/bin/pilot notify plan_approval "Fix Approach" "<plan-slug> — fix strategy" --plan-path "<plan_path>" 2>/dev/null || true

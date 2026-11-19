@@ -22,7 +22,7 @@ resolve_master_session() {
 }
 
 # Generate the next available grouped child session name for a master.
-# e.g., if ECH-123 and ECH-123_g2 exist, returns ECH-123_g3.
+# e.g., if PROJ-123 and PROJ-123_g2 exist, returns PROJ-123_g3.
 next_grouped_session_name() {
     local master="$1"
     local n=2

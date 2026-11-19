@@ -3,7 +3,6 @@ name: spec-verify
 description: "Spec verification phase - tests, execution, rules audit, code review"
 argument-hint: "<path/to/plan.md>"
 user-invocable: false
-model: opus[1m]
 ---
 
 # /spec-verify - Verification Phase
@@ -17,8 +16,14 @@ model: opus[1m]
 
 ## ⛔ KEY CONSTRAINTS
 
-1. **Run code review when enabled** — Step 1 launches `changes-review` via `Task(subagent_type="pilot:changes-review")` when `PILOT_CHANGES_REVIEW_ENABLED` is not `"false"` (read in Step 0). To disable, use Console Settings → Reviewers → Changes Review toggle.
+<!-- CC-ONLY -->
+1. **Run code review when enabled** — Step 1 launches `changes-review` via `Task(subagent_type="changes-review")` when `PILOT_CHANGES_REVIEW_ENABLED` is not `"false"` (read in Step 0). To disable, use Console Settings → Reviewers → Changes Review toggle.
 2. **Only changes-review — NEVER spec-review** — Do NOT launch `spec-review` during verification. Do NOT read or reference `findings-spec-review-*.json` files — they are stale artifacts from the planning phase that were already addressed during implementation. If you encounter a spec-review findings file, **ignore it completely**.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+1. **Run native Codex changes review when enabled** — Step 1 launches the managed `changes-review` custom agent via `multi_agent_v1.spawn_agent` when `PILOT_CHANGES_REVIEW_ENABLED` is not `"false"` (read in Step 0). Step 3 waits for and applies its findings.
+2. **Only changes-review — NEVER spec-review** — Do NOT launch `spec-review` during verification. Planning findings are stale artifacts from the planning phase and must be ignored.
+CODEX-END -->
 3. **NO stopping** — Everything automatic. Never ask "Should I fix these?"
 4. **Fix ALL findings** — must_fix AND should_fix. No permission needed.
 5. **Code changes finish BEFORE runtime testing** — Phase A then Phase B.
@@ -30,8 +35,9 @@ model: opus[1m]
 
 ### 0.1 Read Toggle Configuration
 
-**⛔ Run FIRST, before any other step.** Read the reviewer toggle env vars:
+**Run first, before any other step.** Read the reviewer toggle env vars:
 
+<!-- CC-ONLY -->
 ```bash
 echo "REVIEWER=$PILOT_CHANGES_REVIEW_ENABLED CODEX_CHG=$PILOT_CODEX_CHANGES_REVIEW_ENABLED"
 ```
@@ -39,6 +45,14 @@ echo "REVIEWER=$PILOT_CHANGES_REVIEW_ENABLED CODEX_CHG=$PILOT_CODEX_CHANGES_REVI
 Codex reviewers are controlled entirely by Console Settings — the env vars are authoritative.
 
 Reference these values in Steps 1 (Launch Review), 3 (Collect Results — Codex collection).
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+```bash
+echo "REVIEWER=$PILOT_CHANGES_REVIEW_ENABLED"
+```
+
+Native Codex changes review is controlled by the regular reviewer toggle. Reference this value in Steps 1 and 3.
+CODEX-END -->
 
 ### 0.2 Process Overview
 
@@ -71,15 +85,17 @@ Read the plan's Runtime Environment section (if present) and the changed file ty
 
 ### 1a: Clean Up Stale Spec-Review Findings (always run, before any launch)
 
-**⛔ ALWAYS run this first** — regardless of whether changes-review is enabled. Spec-review findings are stale artifacts from the planning phase that were already addressed during implementation.
+**Always run this first** — regardless of whether changes-review is enabled. Spec-review findings are stale artifacts from the planning phase that were already addressed during implementation.
 
 ```bash
-rm -f ~/.pilot/sessions/$PILOT_SESSION_ID/findings-spec-review-*.json
+SESS_DIR="$HOME/.pilot/sessions/${PILOT_SESSION_ID:-default}"
+test -d "$SESS_DIR" && find "$SESS_DIR" -maxdepth 1 -name 'findings-spec-review-*.json' -delete
 ```
 
 ---
 
-**⛔ If `PILOT_CHANGES_REVIEW_ENABLED` is `"false"` (from Step 0),** skip the rest of this step and proceed to Step 2. (Automated checks in Step 2 still run; only the agent-based review is skipped.)
+<!-- CC-ONLY -->
+**If `PILOT_CHANGES_REVIEW_ENABLED` is `"false"` (from Step 0),** skip the rest of this step and proceed to Step 2. (Automated checks in Step 2 still run; only the agent-based review is skipped.)
 
 **When enabled:** Launch the reviewer IMMEDIATELY — it works in the background while you run automated checks.
 
@@ -100,15 +116,16 @@ Output path: `~/.pilot/sessions/<session-id>/findings-changes-review-<plan-slug>
 
 #### 1c: Launch
 
-**⛔ Delete stale changes-review findings before launching** (previous run may have left a file):
+**Delete stale changes-review findings before launching** (previous run may have left a file):
 
 ```bash
-rm -f ~/.pilot/sessions/$PILOT_SESSION_ID/findings-changes-review-*.json
+SESS_DIR="$HOME/.pilot/sessions/${PILOT_SESSION_ID:-default}"
+test -d "$SESS_DIR" && find "$SESS_DIR" -maxdepth 1 -name 'findings-changes-review-*.json' -delete
 ```
 
 ```
 Task(
-  subagent_type="pilot:changes-review",
+  subagent_type="changes-review",
   run_in_background=true,
   prompt="""
   **Plan file:** <plan-path>
@@ -134,7 +151,7 @@ Task(
 
 Launch Codex review NOW — it runs in parallel with the Claude reviewer above.
 
-**⛔ Codex-once rule.** Codex runs at most once per `/spec` invocation. Before launching, check the sentinel file. If it exists, the review already ran in this session — skip the launch and the collection sub-step in Step 3. Verify-phase iterations (re-verify after fixing findings, code-review-gate annotation fixes) do NOT trigger another Codex run.
+**Codex-once rule.** Codex runs at most once per `/spec` invocation. Before launching, check the sentinel file. If it exists, the review already ran in this session — skip the launch and the collection sub-step in Step 3. Verify-phase iterations (re-verify after fixing findings, code-review-gate annotation fixes) do NOT trigger another Codex run.
 
 ```bash
 SESS_ID="${PILOT_SESSION_ID:-default}"
@@ -151,14 +168,14 @@ CODEX_COMPANION=$(ls ~/.claude/plugins/cache/openai-codex/codex/*/scripts/codex-
 PROJECT_ROOT="${CLAUDE_PROJECT_ROOT:-$(pwd)}"
 ```
 
-2. Build the review prompt file by rendering the **template at `${CLAUDE_PLUGIN_ROOT}/agents/changes-review-codex.md`**. The template is the single source of truth for code-review semantics — do NOT re-state the prompt inline in this skill. Substitute four placeholders:
+2. Build the review prompt file by rendering the **template at `$HOME/.claude/agents/changes-review-codex.md`**. The template is the single source of truth for code-review semantics — do NOT re-state the prompt inline in this skill. Substitute four placeholders:
    - `{{PLAN_PATH}}` — absolute path to the plan file
    - `{{PLAN_GOAL}}` — the 1–2 sentence Goal sentence from the plan's `## Summary`
    - `{{BASE_REF}}` — `main` (or the worktree base branch detected via `pilot worktree status --json`)
    - `{{CHANGED_FILES}}` — newline-separated paths to the files the plan said it would touch (extracted from each task's `Files:` block)
 
 ```bash
-PROMPT_TEMPLATE="${CLAUDE_PLUGIN_ROOT}/agents/changes-review-codex.md"
+PROMPT_TEMPLATE="$HOME/.claude/agents/changes-review-codex.md"
 PROMPT_FILE="/tmp/codex-changes-review-${PILOT_SESSION_ID:-default}-<plan-slug>.md"
 
 PLAN_PATH="/absolute/path/to/docs/plans/YYYY-MM-DD-<slug>.md"
@@ -179,7 +196,7 @@ pathlib.Path(os.environ["PROMPT_FILE"]).write_text(text)
 '
 ```
 
-3. Launch the task in background. **⛔ For `task`, the companion's `--background` flag IS supported** (unlike `review`/`adversarial-review`). Use the companion's own background mode — the launch command returns the job ID immediately on stdout. Capture the job ID for collection in Step 3.
+3. Launch the task in background. **For `task`, the companion's `--background` flag IS supported** (unlike `review`/`adversarial-review`). Use the companion's own background mode — the launch command returns the job ID immediately on stdout. Capture the job ID for collection in Step 3.
 
    ```
    Bash(
@@ -191,9 +208,62 @@ pathlib.Path(os.environ["PROMPT_FILE"]).write_text(text)
 
    The stdout looks like: `Codex Task started in the background as task-<id>. Check /codex:status task-<id> for progress.` Extract the `task-…` token and store as `JOB_ID`.
 
-**Why `task` instead of `adversarial-review --scope working-tree`?** Two reasons: (1) consistency with `spec-plan`, where plan files are gitignored and only `task` works; (2) single source of truth — the Codex prompt lives in `pilot/agents/changes-review-codex.md` and is shared by all `/spec` and `/fix` Codex calls, instead of being embedded in skill steps. Codex still gets the diff — the template instructs it to run `git diff {{BASE_REF}}..HEAD -- {{CHANGED_FILES}}` itself via Bash.
+   **Verify registration before letting Step 3 poll** — fail-fast guard against synthetic-ID launches:
+
+   ```bash
+   node "$CODEX_COMPANION" status "$JOB_ID" --json 2>/dev/null | grep -q '"status":' \
+     || { echo "Codex launch did not register with broker — JOB_ID is synthetic. Skipping Codex this run."; JOB_ID=""; }
+   ```
+
+   If `$JOB_ID` is empty after this check, skip Step 3 polling and proceed with Claude reviewer only.
 
 **Do NOT wait** — proceed to Step 2 immediately. You'll be notified when the polling bash (Step 3) completes.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+**If `PILOT_CHANGES_REVIEW_ENABLED` is `"false"` (from Step 0),** skip the rest of this step and proceed directly to Step 2 (Automated Checks).
+
+**When enabled:** launch the managed Codex custom agent immediately. It runs while automated checks execute in Step 2.
+
+Gather context first:
+
+```bash
+git status --short
+```
+
+Collect: changed files list, runtime environment info, test framework constraints, and plan risks section. Derive the plan slug from the plan filename by stripping the date prefix and `.md`.
+
+Persist the returned agent id so Step 3 can survive long checks or compaction. Use a deterministic session file:
+
+```bash
+SESS_DIR="$HOME/.pilot/sessions/${PILOT_SESSION_ID:-default}"
+AGENT_ID_FILE="$SESS_DIR/changes-review-agent-id-<plan-slug>.txt"
+mkdir -p "$SESS_DIR"
+```
+
+```python
+review = multi_agent_v1.spawn_agent(
+    agent_type="changes-review",
+    message="""
+    Plan file: <plan-path>
+    User request: <original task description that invoked $spec>
+    Changed files: [file list]
+    Runtime environment: [how to start, port, deploy path]
+    Test framework constraints: [what it can/cannot test]
+
+    Review implementation: compliance, quality, and goal achievement.
+    Return ONLY valid JSON matching the changes-review schema.
+    Include the plan file path in the `plan_file` field.
+    """,
+)
+CHANGES_REVIEW_AGENT_ID = review.agent_id
+```
+
+After spawning, write `CHANGES_REVIEW_AGENT_ID` to `$AGENT_ID_FILE`.
+
+Do NOT wait here. Proceed directly to Step 2.
+
+Self-review the implementation diff before proceeding: `git diff --stat` to verify scope matches the plan, and spot-check changed files for obvious issues (security, missing error handling, dead code).
+CODEX-END -->
 
 ## Step 2: Automated Checks
 
@@ -222,12 +292,20 @@ Run all mechanical checks in sequence. Fix any failures before proceeding.
     2. Verify each feature exists in new code
     3. Run new code and verify same behavior
 
+    <!-- CC-ONLY -->
     **If features are MISSING:** Run the iteration-cap check from Step 11 first (read `Iterations:` from the plan header; if `>= 3` ask the user Continue / Pivot / Abandon before incrementing). On Continue: add tasks with `[MISSING]` prefix, set `Status: PENDING`, increment `Iterations`, register status change, invoke `Skill(skill='spec-implement', args='<plan-path>')`.
+    <!-- /CC-ONLY -->
+    <!-- CODEX-START
+    **If features are MISSING:** Run the iteration-cap check from Step 11 first (read `Iterations:` from the plan header; if `>= 3` present the user with Continue / Pivot / Abandon options before incrementing). On Continue: add tasks with `[MISSING]` prefix, set `Status: PENDING`, increment `Iterations`, register status change, then continue immediately with the `$spec-implement` skill instructions using arguments: `<plan-path>`.
+    CODEX-END -->
 
 ## Step 3: Collect Review Results & Re-Verify
 
-**⛔ If `PILOT_CHANGES_REVIEW_ENABLED` is `"false"` (from Step 0 — Step 1 was skipped),** skip this step entirely and proceed to Step 4 (Phase B). There are no findings to collect.
+<!-- CC-ONLY -->
+**If `PILOT_CHANGES_REVIEW_ENABLED` is `"false"` (from Step 0 — Step 1 was skipped),** skip this step entirely and proceed to Step 4 (Phase B). There are no findings to collect.
+<!-- /CC-ONLY -->
 
+<!-- CC-ONLY -->
 **When enabled — mandatory. Never skip** — even if you're confident, context is high, or tests pass.
 
 **⛔ NEVER use `TaskOutput`** to retrieve results — it dumps the full agent transcript into context, wasting thousands of tokens.
@@ -241,7 +319,7 @@ for i in $(seq 1 250); do [ -f "$OUTPUT_PATH" ] && echo "READY" && break; sleep 
 
 Then Read the file once. If not READY after ~8 min, re-launch synchronously.
 
-**⛔ Validate findings:** After reading the JSON, verify that the `plan_file` field matches the current plan path. If it doesn't match, the findings are stale from a previous `/spec` — delete the file, re-launch the reviewer, and wait again.
+**Validate findings:** After reading the JSON, verify that the `plan_file` field matches the current plan path. If it doesn't match, the findings are stale from a previous `/spec` — delete the file, re-launch the reviewer, and wait again.
 
 #### Fix Claude Reviewer Findings
 
@@ -255,7 +333,7 @@ For each fix: implement → run relevant tests → log "Fixed: [title]"
 
 #### Collect Codex Results (if launched)
 
-**⛔ MANDATORY — NEVER skip or defer the Codex review.** If Codex was launched in Step 1, you MUST collect and act on its results before proceeding past Step 3. The Codex review runs as a `Bash(run_in_background=true)` — you will be automatically notified when it completes.
+**⛔ Never skip or defer the Codex review.** If Codex was launched in Step 1, collect and act on its results before proceeding past Step 3. The Codex review runs as a `Bash(run_in_background=true)` — you will be automatically notified when it completes.
 
 **⛔ The completion notification is the ONLY valid signal.** Do NOT read the output file to check if the review is done. The file may contain partial output from an in-progress review — reading it before the notification arrives leads to false conclusions ("no findings" when the review is still running). This is the #1 cause of premature Codex skip.
 
@@ -267,15 +345,18 @@ For each fix: implement → run relevant tests → log "Fixed: [title]"
 JOB_ID="<captured-task-id from Step 1>"
 for i in $(seq 1 250); do
   STATE=$(node "$CODEX_COMPANION" status "$JOB_ID" --json 2>/dev/null \
-    | uv run --no-project python -c "import json,sys; print((json.load(sys.stdin).get('job') or {}).get('status') or '')")
+    | uv run --no-project python -c "import json,sys
+try: print((json.load(sys.stdin).get('job') or {}).get('status') or 'unknown')
+except Exception: print('parse_error')" 2>/dev/null)
   case "$STATE" in
-    completed) echo "READY"; break ;;
-    failed)    echo "FAILED"; break ;;
+    completed)                  echo "READY @ iter=$i"; break ;;
+    failed|parse_error|unknown) echo "FAIL state=$STATE iter=$i"; break ;;
   esac
   sleep 4
 done
 ```
 
+Treat `parse_error`/`unknown` as failure (job vanished or broker unreachable) — do NOT continue spinning.
 Run this as `Bash(run_in_background=true, timeout=600000)`. Code reviews typically take 2–6 minutes; the 10-minute ceiling is the safety margin.
 
 1. **When (and ONLY when) the completion notification arrives**, fetch the findings via the companion's public interface:
@@ -284,7 +365,7 @@ Run this as `Bash(run_in_background=true, timeout=600000)`. Code reviews typical
    node "$CODEX_COMPANION" result "$JOB_ID" --json > /tmp/codex-task-result-$$.json
    ```
 
-   Read `/tmp/codex-task-result-$$.json` via `ctx_execute_file` (or Read for small payloads). The relevant fields:
+   Read `/tmp/codex-task-result-$$.json` with the `Read` tool. The relevant fields:
    - `storedJob.status` — must be `"completed"`. If `"failed"`, treat as a re-launch trigger; do not silently proceed.
    - `storedJob.result.rawOutput` — a string containing Codex's response. With our prompt template, this is JSON matching the `{verdict, summary, findings, next_steps}` schema.
    - `storedJob.rendered` — same content rendered for display; useful as a fallback if `rawOutput` is malformed.
@@ -323,12 +404,45 @@ rm -f "/tmp/codex-changes-review-${PILOT_SESSION_ID:-default}-<plan-slug>.md"
 **Skip** when fixes were localized (terminology, error handling, test updates, minor bugs). Run tests + lint to confirm, proceed to Phase B.
 
 **Re-verify** when fixes required new functionality, changed APIs, or significant new code paths: re-launch changes-review, fix new findings. Max 2 iterations before adding remaining issues to plan.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+**If `PILOT_CHANGES_REVIEW_ENABLED` is `"false"` (from Step 0 — Step 1 was skipped),** skip this step entirely and proceed to Step 4 (Phase B).
+
+**When enabled — mandatory. Never skip.** Read the `changes-review` agent id captured in Step 1 from working notes or the session file:
+
+```bash
+AGENT_ID_FILE="$HOME/.pilot/sessions/${PILOT_SESSION_ID:-default}/changes-review-agent-id-<plan-slug>.txt"
+```
+
+If `CHANGES_REVIEW_AGENT_ID` is missing and the file exists, read the file and use its trimmed contents. If both are missing or empty, re-launch `changes-review` once using the Step 1 prompt, persist the new id to the file, then continue. Do not silently skip review while `PILOT_CHANGES_REVIEW_ENABLED` is enabled.
+
+Wait for the final result:
+
+```python
+result = multi_agent_v1.wait_agent(targets=[CHANGES_REVIEW_AGENT_ID], timeout_ms=600000)
+```
+
+Parse the agent's final message as JSON. If parsing fails, treat the raw final message as one `suggestion` finding and continue; do not re-launch on parse failure.
+
+Validate `plan_file` matches the current plan. If it does not, discard the stale result and self-review the diff before proceeding.
+
+Severity mapping:
+- `must_fix` → fix immediately
+- `should_fix` → fix immediately
+- `suggestion` → implement if quick
+
+For each fix: implement → run relevant tests → log `Fixed: [title]`.
+
+After all findings are handled, re-run the relevant automated checks from Step 2 before proceeding to Step 4.
+CODEX-END -->
 
 ## Phase B — Verify the Running Program
 
 All code is finalized. No more code changes except critical bugs found during execution.
 
 **If runtime profile is Minimal:** Run build check (Step 4a), then skip to Final section.
+
+⛔ **For API and Full profiles: before declaring "I can't reach a live instance", run the 4-tier live-target probe in Step 7's sub-step `7a-pre`.** That probe applies to Phase B as a whole, not just to E2E — it tells the model to (1) reuse a running local server, (2) start one if a start command exists, (3) detect deploy backends and attempt a preview deploy with eligible credentials, and only then (4) fall back to unit-only with an explicit recorded gap. Skipping this probe and claiming "no live target available" without naming the tiers attempted is a `must_fix` finding.
 
 ## Step 4: Build, Deploy, and Verify Code Identity
 
@@ -339,6 +453,8 @@ Build/compile the project. Verify zero errors.
 #### 4b: Deploy (if applicable)
 
 If project builds artifacts deployed separately from source: copy to install location, restart services. Check `ps aux | grep <service>` before restarting shared services.
+
+**For platform deploys (Vercel / Fly / Netlify / etc.):** the live-target probe in `07-e2e-and-final-regression.md` § 7a-pre Tier 3 handles preview deploys automatically. Re-using its credential-detection logic here avoids two divergent code paths.
 
 #### 4c: Code Identity Verification
 
@@ -387,13 +503,89 @@ List what was **NOT** verified and why. Include in the verification report (Step
 
 **If runtime profile is not Full:** Skip directly to sub-section 7f (Final Regression). The Full-profile E2E sub-steps below assume a UI/browser entry point.
 
+### ⛔ 7a-pre: Resolve a Live Target Before Touching the Browser
+
+**⛔ MANDATORY — never skip to "unit-verified" without completing this probe.** The single most common verify-phase failure mode is: tests pass, no live server is up, the model concludes "unit-verified" and marks the plan VERIFIED without ever interacting with a deployed instance. The four-tier browser priority below is useless if no URL exists to navigate to. This sub-step exists to force an actual deploy attempt before any "I can't run E2E" claim.
+
+Run the probe in order. The FIRST tier that returns a working URL wins; later tiers exist only as fallbacks.
+
+#### Tier 1 — Reuse an already-running local server
+
+If the plan's `## Runtime Environment` section names a local port:
+
+```bash
+PORT="<port from plan, e.g. 41777>"
+if curl -s --max-time 3 -o /dev/null -w '%{http_code}' "http://localhost:$PORT/" | grep -qE '^(2|3)'; then
+  TARGET_URL="http://localhost:$PORT"
+  echo "TIER1_OK $TARGET_URL"
+fi
+```
+
+When the harness blocks `curl`, substitute `mcp__plugin_pilot_web-fetch__fetch_url` with a 3s timeout.
+
+#### Tier 2 — Start the local dev server yourself
+
+If Tier 1 fails AND the plan's Runtime Environment names a start command (`bun run dev`, `npm run dev`, `vercel dev --listen <port>`, `flask run`, `uvicorn ...`):
+
+<!-- CC-ONLY -->
+1. Start in background: `Bash(command="cd <cwd> && <start command>", run_in_background=true, timeout=180000)`
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+1. Start the server as a background process from `<cwd>` using `<start command>`. Use the available background process tool or dev-server workflow, and keep the session id isolated when required by `browser-automation.md`.
+CODEX-END -->
+2. Poll the health endpoint for up to 60s (200/301/302 = ready)
+3. On success: `TARGET_URL=http://localhost:<port>`, proceed
+4. On failure: capture the last 30 lines of the background process's output file and INCLUDE THEM in the verification report — do NOT silently drop to Tier 3
+
+#### Tier 3 — Probe deploy credentials and attempt a preview deploy
+
+Generic across deploy backends. Detect from repo:
+
+| Marker file / dir | Backend | Auth-check command | Preview deploy |
+|---|---|---|---|
+| `vercel.json` / `.vercel/` | Vercel | `vercel whoami` | `vercel deploy --yes` |
+| `fly.toml` | Fly.io | `flyctl auth whoami` | `flyctl deploy --strategy immediate` |
+| `netlify.toml` / `.netlify/` | Netlify | `netlify status` | `netlify deploy --build` |
+| `wrangler.toml` / `wrangler.jsonc` | Cloudflare | `wrangler whoami` | `wrangler deploy --dry-run=false` |
+| `render.yaml` | Render | `render whoami` (or skip — Render needs PR) | n/a |
+| `cdk.json` / `serverless.yml` | AWS | `aws sts get-caller-identity` | `cdk deploy` / `serverless deploy` |
+| `.github/workflows/deploy*.yml` | GitHub Actions | `gh auth status` + `gh workflow run` | trigger workflow + poll |
+| `Procfile` | Heroku | `heroku auth:whoami` | `heroku create --no-remote && git push heroku` |
+
+**Probe algorithm:**
+
+1. Detect candidate backends by checking marker files (`ls vercel.json fly.toml ...` or `git ls-files`).
+2. For each candidate, run its auth-check command with a short timeout. Authenticated → eligible.
+3. If ≥ 1 backend is eligible, pick the first one (or the user-preferred one if the plan / `CLAUDE.md` specifies) and run its preview-deploy command. Capture the resulting URL.
+4. **Project-config gotchas to handle automatically:**
+   - Vercel projects with a `rootDirectory` set in dashboard need the CLI run from the **repo root** (not the configured root directory), otherwise the CLI duplicates the path. If the first deploy attempt errors with `<path>/<configured-root>` doesn't exist, retry from the repo root.
+   - Builds that need a fresh dependency install: pass the appropriate flag (`vercel deploy --build-env INSTALL=true` / `fly deploy --build-only`).
+5. On success: `TARGET_URL=<preview URL>`, proceed.
+6. If NO backend is eligible (no marker files, OR markers exist but every auth-check fails): produce a one-line probe summary in the verification report (`Deploy probe: vercel auth=missing, fly auth=missing → no live target available`) and proceed to the unit-only fallback below — explicitly acknowledging the gap.
+
+#### Tier 4 — Unit-only fallback (only after Tiers 1–3 above all returned no URL)
+
+⛔ **You MUST have executed Tiers 1, 2, AND 3 above** — and recorded their outcomes — before marking any scenario `UNIT_VERIFIED` instead of `LIVE_PASS`. Document:
+
+```
+Live-target probe summary:
+- Tier 1 (local port <p>): <FAIL reason or NOT_APPLICABLE>
+- Tier 2 (start dev server): <FAIL reason or NOT_ATTEMPTED because Tier 1 succeeded>
+- Tier 3 (deploy creds): <backend auth status, deploy outcome, error if any>
+- Falling back to UNIT_VERIFIED for the following scenarios: …
+```
+
+Failing to record this gap in the verification report is a `must_fix` finding by definition — the next reviewer will treat absence of the summary as silent skip.
+
 ### 7a: Resolve Browser Tool
 
 **4-tier priority** (see `browser-automation.md`): Chrome → Chrome DevTools MCP → playwright-cli → agent-browser.
 
+<!-- CC-ONLY -->
 1. **Claude Code Chrome:** Check if `mcp__claude-in-chrome__*` tools are in your available/deferred tools list. If available, use Chrome for all E2E steps below. Load tools via `ToolSearch(query="select:mcp__claude-in-chrome__<tool>")`. No session isolation needed.
 
 2. **Chrome DevTools MCP:** If Chrome extension is unavailable, check for `mcp__plugin_chrome-devtools-mcp_chrome-devtools__*` tools. Load via `ToolSearch(query="chrome-devtools-mcp", max_results=30)`. Use `take_snapshot()` for a11y tree with uids, `click(uid=...)` / `fill(uid=...)` for interaction.
+<!-- /CC-ONLY -->
 
 3. **playwright-cli (CLI fallback):** If neither Chrome tool is available, use playwright-cli for thorough E2E.
 ```bash
@@ -426,28 +618,39 @@ Then skip to 7e (close browser + write results).
 
 ### 7c: Execute Structured Scenarios
 
-Create one task per scenario for tracking. Execute Critical first, then High, then Medium.
+Execute Critical first, then High, then Medium.
+
+<!-- CC-ONLY -->
+Create one task per scenario for tracking:
 
 ```
 TaskCreate(subject="TS-NNN: [name]", description="[priority] | [preconditions]")
 ```
+<!-- /CC-ONLY -->
 
 **For each scenario:**
 
+<!-- CC-ONLY -->
 1. `TaskUpdate → in_progress`
-2. Execute each step using the resolved browser tool:
+<!-- /CC-ONLY -->
+1. Execute each step using the resolved browser tool:
    - **Chrome:** `navigate` to open pages, `read_page` after interactions, `computer`/`form_input` per the step's action
    - **Chrome DevTools MCP:** `navigate_page` to open pages, `take_snapshot` after interactions, `click(uid=...)`/`fill(uid=...)` per the step's action
    - **playwright-cli:** `open`/`goto` to navigate, `snapshot` after interactions, `click`/`fill`/`press` per the step's action (refs are bare: `e1` not `@e1`)
    - **agent-browser:** `open`/`goto` to navigate, `snapshot -i` after interactions, `click`/`fill`/`press` per the step's action (refs use `@`: `@e1`)
    - Verify the expected result by reading the page output
-3. **PASS:** All steps match expected results → `TaskUpdate → completed`, note `TS-NNN: PASS`
+3. **PASS:** All steps match expected results → note `TS-NNN: PASS`
 4. **FAIL:** Step result doesn't match expected:
    - Analyze root cause, implement minimal fix, re-run relevant tests (stay in Phase B — no code changes that need re-review)
    - Re-execute the scenario (counts as fix attempt 1)
    - If still failing: implement second fix, re-execute (fix attempt 2)
-   - After 2 failed fix attempts: `TaskUpdate → completed`, note `TS-NNN: KNOWN_ISSUE — [description]`
+   - After 2 failed fix attempts: note `TS-NNN: KNOWN_ISSUE — [description]`
+<!-- CC-ONLY -->
 5. **Critical KNOWN_ISSUE** → run the iteration-cap check from Step 11 (read `Iterations:` from the plan header; if `>= 3` ask the user Continue / Pivot / Abandon before incrementing). On Continue: set `Status: PENDING`, increment `Iterations`, register status change, invoke `Skill(skill='spec-implement', args='<plan-path>')` — do not proceed to VERIFIED. On Pivot/Abandon: do not invoke spec-implement; surface to user per Step 11.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+5. **Critical KNOWN_ISSUE** → run the iteration-cap check from Step 11 (read `Iterations:` from the plan header; if `>= 3` present the user with Continue / Pivot / Abandon options before incrementing). On Continue: set `Status: PENDING`, increment `Iterations`, register status change, then continue immediately with the `$spec-implement` skill instructions using arguments: `<plan-path>` — do not proceed to VERIFIED. On Pivot/Abandon: do not invoke spec-implement; surface to user per Step 11.
+CODEX-END -->
 6. **High/Medium KNOWN_ISSUE** → document and continue (non-blocking)
 
 ### 7d: Write E2E Results to Plan
@@ -551,9 +754,14 @@ Read the annotation file with the Read tool. If the file doesn't exist, treat as
 
 **⛔ MANDATORY before marking VERIFIED.** All automated checks pass — but the user should review the actual code changes.
 
+<!-- CC-ONLY -->
 **⛔ MUST use `AskUserQuestion`** — the stop guard only allows stopping when it detects this tool in the transcript. Plain text output will cause the stop guard to block session exit while waiting for user feedback.
 
 **⛔ Resume / compaction / idle:** if you wake into a session where the previous Step 10 is unresolved (no in-turn approve keyword received from the user), **re-ask via `AskUserQuestion`**. Do NOT infer approval from "checks all passed," empty annotations, or a long quiet gap. Silence is never approval.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+**⛔ Present options as numbered text and wait for user response.** Do NOT infer approval from "checks all passed" or silence. Explicit approval keywords required.
+CODEX-END -->
 
 1. Notify:
    ```bash
@@ -617,6 +825,7 @@ If any of the three is false → return to Step 10 and re-ask. Common traps that
 
 ⛔ **Iteration cap — check BEFORE re-invoking spec-implement.** Read `Iterations:` from the plan header. If `Iterations >= 3` BEFORE incrementing, stop the verify→implement loop and surface to the user. An infinite verify→implement loop on a feature plan is the single largest token-burn pattern in the workflow — three failed verifications means the plan is wrong, not that one more implement pass will fix it.
 
+<!-- CC-ONLY -->
 ```
 AskUserQuestion(
   question="Three verify iterations have failed for this plan. This pattern usually means the plan's design is incomplete or a verify check is mis-specified — not that one more implement pass will fix it. What now?",
@@ -627,9 +836,22 @@ AskUserQuestion(
   ]
 )
 ```
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+Present these numbered options and wait for user response:
+
+1. Continue — try one more iteration (rarely the right answer)
+2. Pivot — let me re-investigate the plan with you
+3. Abandon — leave PENDING, I'll come back to it
+CODEX-END -->
 
 Handle:
+<!-- CC-ONLY -->
 - **Continue:** increment `Iterations`, write `## Verification Gaps`, register status, invoke `Skill(skill='spec-implement', args='<plan-path>')` as below.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+- **Continue:** increment `Iterations`, write `## Verification Gaps`, register status, then continue immediately with the `$spec-implement` skill instructions using arguments: `<plan-path>`.
+CODEX-END -->
 - **Pivot:** set `Status: PENDING`, do NOT invoke spec-implement. Tell the user you're standing by for new investigation direction.
 - **Abandon:** leave `Status: PENDING`, do not invoke spec-implement. Stop.
 
@@ -642,6 +864,11 @@ Handle:
    ```markdown
    | Gap | Type | Severity | Affected Files | Fix Description |
    ```
+<!-- CC-ONLY -->
 5. Invoke `Skill(skill='spec-implement', args='<plan-path>')`
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+5. Continue immediately with the `$spec-implement` skill instructions using arguments: `<plan-path>`.
+CODEX-END -->
 
 ARGUMENTS: $ARGUMENTS

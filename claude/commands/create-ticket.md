@@ -1,6 +1,6 @@
 ---
 description: Creates Jira tickets using Atlassian MCP with comprehensive task analysis and structured formatting
-allowed-tools: mcp__atlassian-remote__createJiraIssue, mcp__atlassian-remote__getJiraProjectIssueTypesMetadata, mcp__atlassian-remote__getAccessibleAtlassianResources
+allowed-tools: mcp__atlassian__createJiraIssue, mcp__atlassian__getJiraProjectIssueTypesMetadata, mcp__atlassian__getAccessibleAtlassianResources
 ---
 
 # Create Ticket Command

@@ -3,10 +3,9 @@ name: spec-bugfix-verify
 description: "Bugfix verification phase - tests, quality checks, fix confirmation"
 argument-hint: "<path/to/plan.md>"
 user-invocable: false
-model: opus[1m]
 hooks:
   Stop:
-    - command: uv run --no-project python "${CLAUDE_PLUGIN_ROOT}/hooks/spec_verify_validator.py"
+    - command: uv run --no-project python "$HOME/.claude/hooks/spec_verify_validator.py"
 ---
 
 # /spec-bugfix-verify - Bugfix Verification Phase
@@ -141,7 +140,12 @@ Check whether the plan has a `## Verification Scenario` section (only present fo
 **Resolve browser tool (4-tier):** Check if `mcp__claude-in-chrome__*` tools are available → use Chrome. Otherwise check for `mcp__plugin_chrome-devtools-mcp_chrome-devtools__*` → use Chrome DevTools MCP. Otherwise use playwright-cli (preferred CLI) or agent-browser (lightweight). See `browser-automation.md`.
 
 ```bash
+<!-- CC-ONLY -->
 # Chrome DevTools MCP: load via ToolSearch(query="chrome-devtools-mcp", max_results=30)
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+# Chrome DevTools MCP: use the available Chrome DevTools MCP tools if present; if deferred, load them with the available tool-discovery helper.
+CODEX-END -->
 # playwright-cli:
 playwright-cli -s=$PILOT_SESSION_ID open <url>
 # agent-browser fallback:
@@ -158,7 +162,12 @@ agent-browser --session "$AB_SESSION" open <url>
 3. **PASS:** Scenario confirms fix works — close browser (CLI tools only), proceed to Step 4
 4. **FAIL (attempt 1):** Analyze root cause, implement fix, re-run tests, re-execute scenario
 5. **FAIL (attempt 2):** Implement second fix, re-run tests, re-execute scenario
+<!-- CC-ONLY -->
 6. **FAIL after 2 attempts:** The bug is not fully fixed — set `Status: PENDING`, increment `Iterations`, invoke `Skill(skill='spec-implement', args='<plan-path>')`. Do not proceed to VERIFIED.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+6. **FAIL after 2 attempts:** The bug is not fully fixed — set `Status: PENDING`, increment `Iterations`, then continue immediately with the `$spec-implement` skill instructions using arguments: `<plan-path>`. Do not proceed to VERIFIED.
+CODEX-END -->
 
 ```bash
 # Chrome DevTools MCP: no explicit close needed
@@ -198,9 +207,14 @@ Read the annotation file with the Read tool. If the file doesn't exist, treat as
 
 **⛔ MANDATORY before marking VERIFIED.**
 
+<!-- CC-ONLY -->
 **⛔ MUST use `AskUserQuestion`** — the stop guard only allows stopping when it detects this tool in the transcript. Plain text output will cause the stop guard to block session exit while waiting for user feedback.
 
 **⛔ Resume / compaction / idle:** if you wake into a session where the previous Step 6 is unresolved (no in-turn approve keyword received from the user), **re-ask via `AskUserQuestion`**. Do NOT infer approval from "checks all passed," empty annotations, or a long quiet gap. Silence is never approval.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+**⛔ Present options as numbered text and wait for user response.** Do NOT infer approval from "checks all passed" or silence. Explicit approval keywords required.
+CODEX-END -->
 
 1. Notify:
    ```bash
@@ -256,6 +270,7 @@ Run /clear before starting new work — this resets context while keeping projec
 
 ⛔ **Iteration cap.** Read `Iterations:` from the plan header. If `Iterations >= 3` BEFORE incrementing, stop the fix-on-fix loop:
 
+<!-- CC-ONLY -->
 ```
 AskUserQuestion(
   question="Three fix iterations have failed verification. This pattern usually means the bug is architectural — fixing symptoms in different places, each fix revealing a new failure mode. What now?",
@@ -266,12 +281,30 @@ AskUserQuestion(
   ]
 )
 ```
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+Present these numbered options and wait for user response:
+
+1. Continue — try one more fix (rarely the right answer)
+2. Pivot — let me re-investigate root cause with you
+3. Abandon — leave PENDING, I'll come back to it
+CODEX-END -->
 
 Handle:
+<!-- CC-ONLY -->
 - **Continue:** increment `Iterations`, invoke `Skill(skill='spec-implement', args='<plan-path>')` as below.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+- **Continue:** increment `Iterations`, then continue immediately with the `$spec-implement` skill instructions using arguments: `<plan-path>`.
+CODEX-END -->
 - **Pivot:** set `Status: PENDING`, do NOT invoke spec-implement. Tell the user you're standing by for new investigation direction.
 - **Abandon:** leave `Status: PENDING`, do not invoke spec-implement. Stop.
 
+<!-- CC-ONLY -->
 **When `Iterations < 3`:** Add fix tasks, set `Status: PENDING`, increment `Iterations`, invoke `Skill(skill='spec-implement', args='<plan-path>')`.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+**When `Iterations < 3`:** Add fix tasks, set `Status: PENDING`, increment `Iterations`, then continue immediately with the `$spec-implement` skill instructions using arguments: `<plan-path>`.
+CODEX-END -->
 
 ARGUMENTS: $ARGUMENTS

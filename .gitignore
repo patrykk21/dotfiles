@@ -85,3 +85,19 @@ conductor/config.env
 conductor/jira-credentials.env
 conductor/*.credentials*
 claude/plugins/cache/
+
+# Claude Code runtime state; plugins are reinstalled from claude/plugins.list
+claude/plugins/
+claude/skills/synced/
+
+# Secrets and credentials never go in this public repo; these lines stay last so nothing re-includes them.
+*.env
+*.env.*
+!*.env.example
+*credentials*
+*.key
+*.pem
+.env*
+!.env.example
+# Agent-team runtime state
+claude/teams/

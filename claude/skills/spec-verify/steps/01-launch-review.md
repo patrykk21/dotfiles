@@ -4,15 +4,17 @@
 
 ### 1a: Clean Up Stale Spec-Review Findings (always run, before any launch)
 
-**⛔ ALWAYS run this first** — regardless of whether changes-review is enabled. Spec-review findings are stale artifacts from the planning phase that were already addressed during implementation.
+**Always run this first** — regardless of whether changes-review is enabled. Spec-review findings are stale artifacts from the planning phase that were already addressed during implementation.
 
 ```bash
-rm -f ~/.pilot/sessions/$PILOT_SESSION_ID/findings-spec-review-*.json
+SESS_DIR="$HOME/.pilot/sessions/${PILOT_SESSION_ID:-default}"
+test -d "$SESS_DIR" && find "$SESS_DIR" -maxdepth 1 -name 'findings-spec-review-*.json' -delete
 ```
 
 ---
 
-**⛔ If `PILOT_CHANGES_REVIEW_ENABLED` is `"false"` (from Step 0),** skip the rest of this step and proceed to Step 2. (Automated checks in Step 2 still run; only the agent-based review is skipped.)
+<!-- CC-ONLY -->
+**If `PILOT_CHANGES_REVIEW_ENABLED` is `"false"` (from Step 0),** skip the rest of this step and proceed to Step 2. (Automated checks in Step 2 still run; only the agent-based review is skipped.)
 
 **When enabled:** Launch the reviewer IMMEDIATELY — it works in the background while you run automated checks.
 
@@ -33,15 +35,16 @@ Output path: `~/.pilot/sessions/<session-id>/findings-changes-review-<plan-slug>
 
 #### 1c: Launch
 
-**⛔ Delete stale changes-review findings before launching** (previous run may have left a file):
+**Delete stale changes-review findings before launching** (previous run may have left a file):
 
 ```bash
-rm -f ~/.pilot/sessions/$PILOT_SESSION_ID/findings-changes-review-*.json
+SESS_DIR="$HOME/.pilot/sessions/${PILOT_SESSION_ID:-default}"
+test -d "$SESS_DIR" && find "$SESS_DIR" -maxdepth 1 -name 'findings-changes-review-*.json' -delete
 ```
 
 ```
 Task(
-  subagent_type="pilot:changes-review",
+  subagent_type="changes-review",
   run_in_background=true,
   prompt="""
   **Plan file:** <plan-path>
@@ -67,7 +70,7 @@ Task(
 
 Launch Codex review NOW — it runs in parallel with the Claude reviewer above.
 
-**⛔ Codex-once rule.** Codex runs at most once per `/spec` invocation. Before launching, check the sentinel file. If it exists, the review already ran in this session — skip the launch and the collection sub-step in Step 3. Verify-phase iterations (re-verify after fixing findings, code-review-gate annotation fixes) do NOT trigger another Codex run.
+**Codex-once rule.** Codex runs at most once per `/spec` invocation. Before launching, check the sentinel file. If it exists, the review already ran in this session — skip the launch and the collection sub-step in Step 3. Verify-phase iterations (re-verify after fixing findings, code-review-gate annotation fixes) do NOT trigger another Codex run.
 
 ```bash
 SESS_ID="${PILOT_SESSION_ID:-default}"
@@ -84,14 +87,14 @@ CODEX_COMPANION=$(ls ~/.claude/plugins/cache/openai-codex/codex/*/scripts/codex-
 PROJECT_ROOT="${CLAUDE_PROJECT_ROOT:-$(pwd)}"
 ```
 
-2. Build the review prompt file by rendering the **template at `${CLAUDE_PLUGIN_ROOT}/agents/changes-review-codex.md`**. The template is the single source of truth for code-review semantics — do NOT re-state the prompt inline in this skill. Substitute four placeholders:
+2. Build the review prompt file by rendering the **template at `$HOME/.claude/agents/changes-review-codex.md`**. The template is the single source of truth for code-review semantics — do NOT re-state the prompt inline in this skill. Substitute four placeholders:
    - `{{PLAN_PATH}}` — absolute path to the plan file
    - `{{PLAN_GOAL}}` — the 1–2 sentence Goal sentence from the plan's `## Summary`
    - `{{BASE_REF}}` — `main` (or the worktree base branch detected via `pilot worktree status --json`)
    - `{{CHANGED_FILES}}` — newline-separated paths to the files the plan said it would touch (extracted from each task's `Files:` block)
 
 ```bash
-PROMPT_TEMPLATE="${CLAUDE_PLUGIN_ROOT}/agents/changes-review-codex.md"
+PROMPT_TEMPLATE="$HOME/.claude/agents/changes-review-codex.md"
 PROMPT_FILE="/tmp/codex-changes-review-${PILOT_SESSION_ID:-default}-<plan-slug>.md"
 
 PLAN_PATH="/absolute/path/to/docs/plans/YYYY-MM-DD-<slug>.md"
@@ -112,7 +115,7 @@ pathlib.Path(os.environ["PROMPT_FILE"]).write_text(text)
 '
 ```
 
-3. Launch the task in background. **⛔ For `task`, the companion's `--background` flag IS supported** (unlike `review`/`adversarial-review`). Use the companion's own background mode — the launch command returns the job ID immediately on stdout. Capture the job ID for collection in Step 3.
+3. Launch the task in background. **For `task`, the companion's `--background` flag IS supported** (unlike `review`/`adversarial-review`). Use the companion's own background mode — the launch command returns the job ID immediately on stdout. Capture the job ID for collection in Step 3.
 
    ```
    Bash(
@@ -124,6 +127,59 @@ pathlib.Path(os.environ["PROMPT_FILE"]).write_text(text)
 
    The stdout looks like: `Codex Task started in the background as task-<id>. Check /codex:status task-<id> for progress.` Extract the `task-…` token and store as `JOB_ID`.
 
-**Why `task` instead of `adversarial-review --scope working-tree`?** Two reasons: (1) consistency with `spec-plan`, where plan files are gitignored and only `task` works; (2) single source of truth — the Codex prompt lives in `pilot/agents/changes-review-codex.md` and is shared by all `/spec` and `/fix` Codex calls, instead of being embedded in skill steps. Codex still gets the diff — the template instructs it to run `git diff {{BASE_REF}}..HEAD -- {{CHANGED_FILES}}` itself via Bash.
+   **Verify registration before letting Step 3 poll** — fail-fast guard against synthetic-ID launches:
+
+   ```bash
+   node "$CODEX_COMPANION" status "$JOB_ID" --json 2>/dev/null | grep -q '"status":' \
+     || { echo "Codex launch did not register with broker — JOB_ID is synthetic. Skipping Codex this run."; JOB_ID=""; }
+   ```
+
+   If `$JOB_ID` is empty after this check, skip Step 3 polling and proceed with Claude reviewer only.
 
 **Do NOT wait** — proceed to Step 2 immediately. You'll be notified when the polling bash (Step 3) completes.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+**If `PILOT_CHANGES_REVIEW_ENABLED` is `"false"` (from Step 0),** skip the rest of this step and proceed directly to Step 2 (Automated Checks).
+
+**When enabled:** launch the managed Codex custom agent immediately. It runs while automated checks execute in Step 2.
+
+Gather context first:
+
+```bash
+git status --short
+```
+
+Collect: changed files list, runtime environment info, test framework constraints, and plan risks section. Derive the plan slug from the plan filename by stripping the date prefix and `.md`.
+
+Persist the returned agent id so Step 3 can survive long checks or compaction. Use a deterministic session file:
+
+```bash
+SESS_DIR="$HOME/.pilot/sessions/${PILOT_SESSION_ID:-default}"
+AGENT_ID_FILE="$SESS_DIR/changes-review-agent-id-<plan-slug>.txt"
+mkdir -p "$SESS_DIR"
+```
+
+```python
+review = multi_agent_v1.spawn_agent(
+    agent_type="changes-review",
+    message="""
+    Plan file: <plan-path>
+    User request: <original task description that invoked $spec>
+    Changed files: [file list]
+    Runtime environment: [how to start, port, deploy path]
+    Test framework constraints: [what it can/cannot test]
+
+    Review implementation: compliance, quality, and goal achievement.
+    Return ONLY valid JSON matching the changes-review schema.
+    Include the plan file path in the `plan_file` field.
+    """,
+)
+CHANGES_REVIEW_AGENT_ID = review.agent_id
+```
+
+After spawning, write `CHANGES_REVIEW_AGENT_ID` to `$AGENT_ID_FILE`.
+
+Do NOT wait here. Proceed directly to Step 2.
+
+Self-review the implementation diff before proceeding: `git diff --stat` to verify scope matches the plan, and spot-check changed files for obvious issues (security, missing error handling, dead code).
+CODEX-END -->

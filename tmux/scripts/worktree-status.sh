@@ -13,7 +13,7 @@ SESSION=$(resolve_master_session "$RAW_SESSION")
 CURRENT_DIR=$(tmux display-message -p '#{pane_current_path}')
 
 # Get SERVER_PORT from metadata using unified function
-# The session name is the ticket (e.g., ECH-123)
+# The session name is the ticket (e.g., PROJ-123)
 SERVER_PORT=""
 
 # First check if we're in a worktree by path
@@ -82,7 +82,7 @@ else
     # In a worktree - extract ticket name from path or session
     WORKTREE_NAME=$(basename "$WORKTREE_PATH")
     
-    # Try to extract ticket pattern (e.g., ECH-123)
+    # Try to extract ticket pattern (e.g., PROJ-123)
     if [[ "$WORKTREE_NAME" =~ ([A-Z]+-[0-9]+) ]]; then
         TICKET="${BASH_REMATCH[1]}"
     elif [[ "$SESSION" =~ ([A-Z]+-[0-9]+) ]]; then

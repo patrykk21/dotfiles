@@ -3,7 +3,6 @@ name: fix
 description: "Bugfix workflow — investigate, RED test, fix, verify end-to-end, done. Standard command for bugs. Stops cleanly and asks the user to re-invoke with /spec when the bug exceeds this workflow's scope."
 argument-hint: "<bug description>"
 user-invocable: true
-model: opus
 ---
 
 # /fix — Bugfix Workflow
@@ -49,6 +48,14 @@ Bugfix workflow with TDD. Investigate the bug, write the failing test, fix at th
 - **No `Iterations:` counter.** If your fix doesn't work after one re-attempt, stop and tell the user to switch to `/spec` — don't loop.
 - **No approval mid-flow.** Single end-of-flow confirmation only when `PILOT_PLAN_APPROVAL_ENABLED` is enabled.
 - **Stopping is success, not failure.** Recognising "this is bigger than a quick fix" and bailing out is the right call. Wasting time in the quick lane on a multi-component bug is the failure.
+<!-- CC-ONLY -->
+- **Use the `AskUserQuestion` tool for user questions** — it renders a structured form; don't fall back to plain-text numbered questions
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+- **Use plain-text numbered options for user questions** — the `AskUserQuestion` tool isn't callable in Codex
+- **Browser tools for E2E verification:** Use playwright-cli or agent-browser (Claude Code Chrome and Chrome DevTools MCP are not available in Codex)
+- **The Codex plugin companion review is not available** — its broker is Claude-Code-only. The native `changes-review` custom agent still runs in Step 6.1 when the Changes Review toggle is enabled.
+CODEX-END -->
 
 ---
 

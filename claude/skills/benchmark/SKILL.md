@@ -1,13 +1,12 @@
 ---
 name: benchmark
-description: Benchmark and evaluate Claude Code rules, skills, and workflows with quantitative before/after comparisons. Use whenever the user wants to measure the impact of rules/skills/workflows, compare versions, or validate that a rule pack improves outputs.
+description: Benchmark and evaluate rules, skills, and workflows with quantitative before/after comparisons. Use whenever the user wants to measure the impact of rules/skills/workflows, compare versions, or validate that a rule pack improves outputs.
 user-invocable: true
-model: opus[1m]
 ---
 
 # /benchmark — Benchmark & Evaluation Framework
 
-Measure the real impact of Claude Code rules and skills by running with/without comparisons, grading outputs against assertions, and presenting the findings inline.
+Measure the real impact of rules and skills by running with/without comparisons, grading outputs against assertions, and presenting the findings inline.
 
 ## When to use this skill
 
@@ -22,15 +21,33 @@ Two target types — both run in isolated `/tmp/pilot-bench-*` directories, one 
 
 | Target type | `with/` config | `without/` config | Use when |
 |-------------|---------------|-------------------|----------|
+<!-- CC-ONLY -->
 | `skill` | Skill installed in `.claude/skills/<name>/` | Empty `.claude/` | Measuring "should we ship this skill?" |
 | `rules` | Rule file(s) copied into `.claude/rules/` | Empty `.claude/` | Measuring "does this rule/pack improve behavior?" |
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+| `skill` | Skill installed in `.agents/skills/<name>/` | Empty root `AGENTS.md` | Measuring "should we ship this skill?" |
+| `rules` | Rule file(s) composed into root `AGENTS.md` | Empty root `AGENTS.md` | Measuring "does this rule/pack improve behavior?" |
+CODEX-END -->
 
 Workflow-style skills like `/spec` are benchmarked as `type=skill` — present vs absent.
+
+<!-- CC-ONLY -->
+**Model selection:** Pilot-shipped skills (`spec-plan`, `fix`, `prd`, `create-skill`, `setup-rules`, …) don't carry a `model:` in their frontmatter — active model is controlled by Claude Code's `/model`. The runner defaults those benchmarks to `claude-sonnet-4-6`; pass `--model opus` explicitly to run them on Opus instead. Bot-* skills still carry hard-coded `model: sonnet`.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+**Model selection:** When `--agent codex` is used and no `--model` is passed, the runner omits `--model` and lets Codex use its active default model. Pass an explicit Codex model with `--model` only when comparing models.
+CODEX-END -->
 
 ## Isolation guarantees
 
 - **Per-run filesystem sandbox.** Each (eval, config, run) triple gets its own `/tmp/pilot-bench-*/` cwd. Use relative paths in prompts, or the `{sandbox}` placeholder when you need an absolute path. Hardcoded `/tmp/<fixed-name>/` in prompts is flagged at load time.
+<!-- CC-ONLY -->
 - **Global-rule auto-hiding.** `~/.claude/rules/<basename>.md` and `~/.claude/skills/<name>/` are moved aside for the duration of the run when they duplicate the target, then restored automatically. Layered fail-safes (on-disk recovery manifest + atexit + SIGINT/SIGTERM/SIGHUP handlers + next-run sweep) make the restore robust against kill -9, power loss, and segfaults. Opt out with `--no-isolate-global` for realistic "day-to-day" measurement.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+- **Global-skill auto-hiding.** `~/.agents/skills/<name>/` is moved aside for the duration of Codex skill benchmarks when it duplicates the target, then restored automatically. Codex rules benchmarks use an isolated root `AGENTS.md`; pass `--no-isolate-global` only when you intentionally want globally-installed skills present too.
+CODEX-END -->
 
 ## Workflow
 
@@ -47,13 +64,22 @@ Follow these steps sequentially:
 
 **Config path:** `benchmarks/<target-name>/evals.json`
 **Outputs:** `benchmarks/<target-name>/runs/<timestamp>/`
+<!-- CC-ONLY -->
 **Runner:** `PYTHONPATH=~/.claude/skills/benchmark uv run python -m scripts.runner --config <evals.json> --skip-permissions`
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+**Runner:** `PYTHONPATH=~/.agents/skills/benchmark uv run python -m scripts.runner --config <evals.json> --skip-permissions --agent codex --grader-timeout 600`
+CODEX-END -->
 
 **Defaults worth knowing:**
 - `--runs 1` (keeps token cost low; bump only for variance analysis)
 - `--workers 4` (bump to `min(total_runs, 8)` for small eval sets so all runs land in one wave)
-- `--model` is read from the target skill's frontmatter (alias → ID); rules and model-less skills fall back to `claude-sonnet-4-6`
+- `--model` is read from the target skill's frontmatter for Claude (alias → ID); rules and model-less Claude skills fall back to `claude-sonnet-4-6`; Codex defaults to the active Codex model unless `--model` is passed
 - `--grader-model` defaults to the same model as `--model` so executor and grader stay matched
+<!-- CODEX-START
+- Codex child runs execute inside fresh non-git temp directories; the runner passes `--skip-git-repo-check` to every `codex exec` child automatically.
+- Codex grading can run longer than Claude-style stream grading because the grader reopens transcript and output files. Use `--grader-timeout 600` for file-writing evals or after any `grader-failed` timeout so you do not burn a full rerun on a missing `grading.json`.
+CODEX-END -->
 
 # Step 1 — Intake
 
@@ -120,11 +146,21 @@ When in doubt, ask: "Is this a reusable skill (has `SKILL.md`) or a rule pack (p
 If the user can't remember exact names, list them:
 
 ```bash
+<!-- CC-ONLY -->
 # Skills in this project
 ls -1 pilot/skills/ ~/.claude/skills/
 
 # Rules in this project
 ls -1 pilot/rules/ ~/.claude/rules/
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+# Skills in this project
+ls -1 pilot/skills/ .agents/skills/ ~/.agents/skills/ 2>/dev/null
+
+# Rules in this project
+ls -1 pilot/rules/ .claude/rules/ 2>/dev/null
+# Codex project rules are materialized from repo-root AGENTS.md when benchmarking.
+CODEX-END -->
 ```
 
 Skip Pilot internals like `bot-*` unless the user specifically asks for them.
@@ -176,7 +212,7 @@ Draft 3 realistic prompts with **falsifiable**, **discriminating** assertions. T
 }
 ```
 
-## ⛔ Path isolation — required
+## Path isolation — required
 
 Each run gets its own filesystem sandbox. Prompts must reference that sandbox, not a shared absolute path, or the `with` and `without` runs will read each other's outputs.
 
@@ -187,7 +223,7 @@ Two safe ways to specify where outputs go:
 | **Relative paths** (preferred) | `Save the result to slugify.py` | The subprocess cwd is already the per-run sandbox, so bare filenames land in the right place. Simpler, fewer tokens. |
 | **`{sandbox}` placeholder** | `Save to {sandbox}/slugify.py` | Use when the prompt genuinely needs an absolute path — the runner substitutes `{sandbox}` with the per-run directory before executing. |
 
-⛔ **Never write `/tmp/<fixed-name>/file.py` in a prompt.** The runner emits a warning and proceeds, but the benchmark is invalid — both configs write to the same path.
+**Never write `/tmp/<fixed-name>/file.py` in a prompt.** The runner emits a warning and proceeds, but the benchmark is invalid — both configs write to the same path.
 
 ## What makes an assertion good
 
@@ -205,11 +241,20 @@ Before committing to a full eval set:
 
 1. Hand-author one eval for this target.
 2. Run baseline only:
+<!-- CC-ONLY -->
    ```bash
    PYTHONPATH=~/.claude/skills/benchmark uv run python -m scripts.runner \
        --config benchmarks/<target>/evals.json --configs without --runs 1 \
        --skip-permissions
    ```
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+   ```bash
+   PYTHONPATH=~/.agents/skills/benchmark uv run python -m scripts.runner \
+       --config benchmarks/<target>/evals.json --configs without --runs 1 \
+       --skip-permissions --agent codex --grader-timeout 600
+   ```
+CODEX-END -->
 3. Inspect the baseline output (read `grading.json` for each run). If baseline passes 3/3 assertions, **rewrite the assertions** — they're not discriminating.
 
 Only after the baseline fails at least one assertion do you have evidence that the eval measures something real. Skip the gate only when the user explicitly says they want a quick smoke test.
@@ -237,10 +282,16 @@ Go to Step 4 (execute).
 
 # Step 4 — Execute
 
+<!-- CC-ONLY -->
 Run the runner **in the background** so the user gets live status updates while it runs. Foreground bash blocks for the full duration (often 5-30 minutes) and shows nothing until the end — that's a bad UX, don't do it.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+Run the runner with the Codex shell execution tool. If it yields a long-running session, keep the session id and poll it for status; otherwise read the command output directly when it completes.
+CODEX-END -->
 
-## Launch in the background
+## Launch
 
+<!-- CC-ONLY -->
 Use the `Bash` tool with `run_in_background=true`. Capture the returned task ID; you will need it to read output and check completion.
 
 ```
@@ -252,15 +303,42 @@ Bash(
   run_in_background=true,
 )
 ```
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+```bash
+PYTHONPATH=~/.agents/skills/benchmark uv run python -m scripts.runner \
+  --config benchmarks/<target-name>/evals.json \
+  --skip-permissions --agent codex --grader-timeout 600
+```
+CODEX-END -->
 
+<!-- CC-ONLY -->
 That's it for arguments — defaults handle the rest. The runner reads the target skill's `model:` frontmatter and uses that for both executor and grader. Rules targets and skills without a `model:` field fall back to `claude-sonnet-4-6`.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+That's it for arguments — defaults handle the rest. With `--agent codex`, the runner installs skills in `.agents/skills/<name>/`, composes rules into root `AGENTS.md`, and omits `--model` unless you pass one explicitly so Codex uses its active default model.
+CODEX-END -->
+
+<!-- CODEX-START
+Codex runs happen in freshly-created temp directories, which are intentionally not git repositories. The runner adds `--skip-git-repo-check` to each child `codex exec` automatically; if you see `Not inside a trusted directory and --skip-git-repo-check was not specified`, update or fix the runner before rerunning the benchmark.
+CODEX-END -->
 
 **Why `uv run`:** every Python invocation in this project uses `uv run` — no system `python` or `python3`. It ensures the right interpreter and dependency set.
 
+<!-- CC-ONLY -->
 **Why `--skip-permissions`:** all benchmark runs need this flag because `claude -p` is spawned non-interactively (no terminal to answer permission prompts). It passes `--dangerously-skip-permissions` to every executor and grader subprocess. Only use in a trusted environment — the grader reads arbitrary file paths passed by evals.json.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+**Why `--skip-permissions`:** all benchmark runs need this flag because `codex exec` is spawned non-interactively. It configures full-access sandbox permissions for every executor and grader subprocess. Only use in a trusted environment — the grader reads arbitrary file paths passed by evals.json.
+CODEX-END -->
+
+<!-- CODEX-START
+**Why `--grader-timeout 600`:** Codex graders reopen transcripts and generated files from disk, and artifact-heavy evals can exceed the 300s default even when executor runs succeed. Prefer starting Codex comparisons with 600s so a single slow grader does not force a full rerun just to produce `grading.json`.
+CODEX-END -->
 
 ## Surface the plan header to the user immediately
 
+<!-- CC-ONLY -->
 As soon as the runner starts, it prints a plan header (config path, target, output dir, evals × configs × runs, models). Read it with `BashOutput` and relay it verbatim to the user so they see the scope and ETA up front:
 
 ```
@@ -268,20 +346,31 @@ BashOutput(bash_id="<task_id>")
 ```
 
 Then send a brief intro to the user, e.g.:
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+As soon as the runner starts, it prints a plan header (config path, target, output dir, evals × configs × runs, models). Relay it verbatim to the user so they see the scope and ETA up front.
 
-> Benchmark started in the background. **Plan:** 6 evals × 2 configs × 1 run = 12 runs, executor=claude-opus-4-7. Estimated ~30-45 min on opus. I'll surface progress as runs complete and the final summary when it finishes.
+Then send a brief intro to the user, e.g.:
+CODEX-END -->
+
+> Benchmark started. **Plan:** 6 evals × 2 configs × 1 run = 12 runs, executor=<model>. Estimated ~30-45 min. I'll surface progress as runs complete and the final summary when it finishes.
 
 ## Status updates while it runs
 
-The runner emits two kinds of stdout that Claude should look for:
+The runner emits these stdout patterns to watch for:
 
 | Pattern | When | What to do |
 |---------|------|-----------|
 | `[N/M] ✓ eval-X config run-N  78.3s, 12.4k tok  · ... ETA Xm` | Per completed run | Once you've seen >2 of these, you have an ETA — relay the latest ETA to the user when they ask or every ~5 min. |
 | `· [snapshot Xs elapsed] N done · M in-flight · K queued · F failed` | Every 30s while in-flight | Use these as quick "still alive" pings. |
-| `✗ eval-X config run-N  failed: <reason>` | On run failure | Surface immediately to the user — failures often mean config issues (timeout, claude-cli-not-found, grader-no-output). |
+| `✗ eval-X config run-N  failed: <reason>` | On run failure | Surface immediately to the user — failures often mean config issues (timeout, missing agent CLI, grader-no-output). |
 
+<!-- CC-ONLY -->
 **You will be notified automatically when the background task completes** — do NOT sleep, poll, or proactively check on its progress. Continue with other work or respond to the user's questions in the meantime. When the user asks "how's it going?", call `BashOutput(bash_id=...)` to fetch the latest lines and summarize them.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+If the shell tool returns a running session id, poll that session for the latest lines when the user asks "how's it going?" or when the session completes.
+CODEX-END -->
 
 ## When the runner completes
 
@@ -297,7 +386,7 @@ Benchmark complete in 33m14s  (12 ok, 0 failed, 0 skipped)
 Wrote benchmarks/<target>/runs/<ts>/benchmark.json
 ```
 
-Read the final BashOutput and:
+Read the final output and:
 1. Quote the summary block to the user
 2. Compute and surface the headline `delta.pass_rate` from `benchmark.json` (signed string like `+0.50`)
 3. Note any per-eval outliers if `stddev > 0.3`
@@ -307,14 +396,22 @@ Read the final BashOutput and:
 | Flag | Default | When to override |
 |------|---------|------------------|
 | `--runs N` | `1` | `2-3` only when measuring variance — N runs are now parallelized across workers, so wall time grows sub-linearly. |
-| `--model <id>` | skill frontmatter → `claude-sonnet-4-6` | Cross-model comparison. Accepts `opus`/`sonnet`/`haiku` aliases or explicit `claude-...` IDs. |
+| `--model <id>` | Claude: skill frontmatter → `claude-sonnet-4-6`; Codex: active Codex default | Cross-model comparison. Claude accepts `opus`/`sonnet`/`haiku` aliases or explicit `claude-...` IDs. Codex passes the value directly to `codex exec --model`; omit it to use the active Codex model. |
 | `--grader-model <id>` | same as `--model` | Run the grader at a different tier (rare — pairing them avoids "smart writer judged by dumb grader" artifacts). |
 | `--configs with,without` | both | Smoke test one side. |
 | `--workers N` | `4` | Drop to `2` when running opus to be kinder to rate limits. For small eval sets bump to `min(total_runs, 8)` so every run lands in the first wave (3 evals × 2 configs × 1 run = 6 → `--workers 6` cuts wall time roughly in half). The runner submits one pool task per (eval, config, run_idx) so workers stay saturated. |
-| `--no-isolate-global` | off | Disable auto-hiding of `~/.claude/rules/<basename>.md` and `~/.claude/skills/<name>/` during the run. Default behavior is to move globally-installed copies of the target aside (with crash-proof recovery manifest) so the `without` config is truly without the target. Use `--no-isolate-global` only when you want to measure the target **in addition to** global guidance. |
+<!-- CC-ONLY -->
+| `--no-isolate-global` | off | Disable auto-hiding of globally-installed counterparts during the run. Claude hides matching `~/.claude/rules/<basename>.md` and `~/.claude/skills/<name>/`. Use only when you want to measure the target **in addition to** global guidance. |
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+| `--no-isolate-global` | off | Disable auto-hiding of globally-installed counterparts during the run. Codex hides matching `~/.agents/skills/<name>/`. Use only when you want to measure the target **in addition to** global guidance. |
+CODEX-END -->
 | `--restore-hidden` | off | Exit after recovering any `.pilot-bench-hidden-*` files left by a crashed prior run (normally swept automatically on every startup). |
 | `--timeout <sec>` | `600` | Bump for slow models or large prompts. |
 | `--grader-timeout <sec>` | `300` | Bump if `grader-no-output` failures appear. |
+<!-- CODEX-START
+| `--grader-timeout 600` | override | Recommended for Codex file-writing evals; it prevents a successful executor run from becoming an unusable partial result because the grader timed out while reading artifacts. |
+CODEX-END -->
 | `--output <dir>` | `benchmarks/<target>/runs/<ts>/` | Override when you want a specific output path. |
 
 ## Failure handling
@@ -323,7 +420,14 @@ When you see `failed.json` referenced (or a `✗ failed:` line):
 
 - `reason: timeout` — bump `--timeout` or reduce `--runs`.
 - `reason: no-result-event` — stream-json stream was malformed. Inspect `outputs/transcript.jsonl` for the raw stream.
+<!-- CC-ONLY -->
 - `reason: claude-cli-not-found` — the `claude` CLI isn't on PATH. Install Claude Code first.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+- `reason: codex-cli-not-found` — the `codex` CLI isn't on PATH. Install Codex CLI first.
+- `reason: codex-exec-failed` with `Not inside a trusted directory and --skip-git-repo-check was not specified` — the runner is missing the Codex temp-directory trust flag. Add `--skip-git-repo-check` to executor and grader `codex exec` commands, then rerun.
+- `reason: grader-failed` with `timed out after 300 seconds` — rerun with `--grader-timeout 600`; the executor output is usually usable, but the missing `grading.json` makes the aggregate incomplete.
+CODEX-END -->
 - `reason: grader-no-output` / `grader-invalid-json` — the grader subagent failed. Retry or bump `--grader-model` a tier.
 
 A few failed runs do not abort the rest of the benchmark — each writes its own `failed.json` and the runner continues. Surface failures to the user but only stop everything if more than half are failing.

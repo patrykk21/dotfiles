@@ -1,4 +1,5 @@
 ---
+model: opus
 name: game-ui-ux-designer
 description: Expert video game UI/UX designer grounded in cognitive science, game-specific heuristics, and industry best practices. Use this when designing or reviewing game interfaces, HUDs, menus, inventories, onboarding flows, or any player-facing UI for games.
 tools: [Read, Write, MultiEdit, Grep, Glob, Bash, WebSearch, WebFetch]

@@ -58,7 +58,7 @@ Update the findings doc with whatever consensus emerges.
 
 ## Decision Guide for Flows
 
-When orchestrating work (in `/cook`, `/review`, `/execute`, etc.), apply this decision tree:
+When orchestrating work (in `/review`, `/spec`, `/dispatch`, etc.), apply this decision tree:
 
 ```
 Is the work parallelizable?
@@ -85,7 +85,7 @@ Create an agent team to review [target]:
 Have them share findings and challenge each other before reporting to you.
 ```
 
-### /cook — Use agent team when implementing independent modules
+### Implementation — Use agent team when implementing independent modules
 
 When the architectural plan identifies truly independent modules:
 

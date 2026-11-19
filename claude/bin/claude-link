@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# Builds ~/.claude from two layers:
+#   base     ~/.config/claude            (public dotfiles: generic workflow)
+#   company  ~/.claude/company/<name>/   (private: one folder per employer)
+# skills, commands, agents and rules become folders of symlinks into the layers,
+# so names stay flat and both layers load. Safe to re-run.
+set -euo pipefail
+
+CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
+BASE="${CLAUDE_BASE:-$HOME/.config/claude}"
+WHOLE=(CLAUDE.md RTK.md hooks statusline)
+FARMS=(skills commands agents rules)
+# Managed by Claude Code itself (claude.ai skill sync); stays machine-local.
+MACHINE_LOCAL=(synced)
+
+status=0
+layers=("$BASE")
+for dir in "$CLAUDE_HOME"/company/*/; do
+  [ -d "$dir" ] && layers+=("${dir%/}")
+done
+
+is_machine_local() {
+  local name=$1 m
+  for m in "${MACHINE_LOCAL[@]}"; do [ "$name" = "$m" ] && return 0; done
+  return 1
+}
+
+link() {
+  local src=$1 dest=$2
+  if [ -L "$dest" ]; then
+    [ "$(readlink "$dest")" = "$src" ] && return 0
+    rm "$dest"
+  elif [ -e "$dest" ]; then
+    echo "skip: $dest is a real file or folder; move it into a layer" >&2
+    status=1
+    return 0
+  fi
+  ln -s "$src" "$dest"
+}
+
+mkdir -p "$CLAUDE_HOME"
+for name in "${WHOLE[@]}"; do
+  [ -e "$BASE/$name" ] && link "$BASE/$name" "$CLAUDE_HOME/$name"
+done
+
+for kind in "${FARMS[@]}"; do
+  dest="$CLAUDE_HOME/$kind"
+  [ -L "$dest" ] && rm "$dest"
+  mkdir -p "$dest"
+  for entry in "$dest"/* "$dest"/.[!.]*; do
+    [ -L "$entry" ] && [ ! -e "$entry" ] && rm "$entry"
+  done
+  # bash 3.2 (macOS default) has no associative arrays, so track names in a string.
+  seen=$'\n'
+  for layer in "${layers[@]}"; do
+    [ -d "$layer/$kind" ] || continue
+    for src in "$layer/$kind"/*; do
+      [ -e "$src" ] || continue
+      name=$(basename "$src")
+      is_machine_local "$name" && continue
+      case "$seen" in
+        *$'\n'"$name"$'\n'*)
+          echo "conflict: $kind/$name exists in more than one layer; keeping the first" >&2
+          status=1
+          continue ;;
+      esac
+      seen+="$name"$'\n'
+      link "$src" "$dest/$name"
+    done
+  done
+  for entry in "$dest"/*; do
+    [ -e "$entry" ] || continue
+    name=$(basename "$entry")
+    if [ ! -L "$entry" ] && ! is_machine_local "$name"; then
+      echo "unfiled: $kind/$name lives only on this machine; move it into a layer and re-run" >&2
+      status=1
+    fi
+  done
+done
+
+exit $status

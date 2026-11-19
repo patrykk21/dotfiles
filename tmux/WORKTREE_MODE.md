@@ -28,9 +28,9 @@ Within the picker:
 - `Escape` - Cancel
 
 ### Create Worktree (`c`)
-1. Prompts for ticket name (e.g., "ECH-123")
-2. Creates git worktree at `../repo-ECH-123`
-3. Creates branch `feature/ECH-123`
+1. Prompts for ticket name (e.g., "PROJ-123")
+2. Creates git worktree at `../repo-PROJ-123`
+3. Creates branch `feature/PROJ-123`
 4. Copies configuration files:
    - All `.env*` files
    - `.claude/` directory
@@ -59,7 +59,7 @@ Within the picker:
 1. **Start new ticket**:
    - `Ctrl+Shift+W` to enter worktree mode
    - `c` to create new worktree
-   - Type `ECH-123` when prompted
+   - Type `PROJ-123` when prompted
    - Automatically switched to new session with 3 tabs
 
 2. **Switch between tickets**:

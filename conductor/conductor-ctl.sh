@@ -87,6 +87,87 @@ session_is_alive() {
     return 1
 }
 
+# Collect a PID and all of its descendants (depth-first). Echoes one PID per line.
+# Needed because a dev server is a tree: bun → node → next-server. Only the node's
+# argv embeds the worktree path; the next-server child (the actual CPU hog) shows
+# argv "next-server (vX)" with no path, so it must be reached via the parent.
+_descendant_pids() {
+    local root="$1"
+    echo "$root"
+    local child
+    for child in $(pgrep -P "$root" 2>/dev/null || true); do
+        _descendant_pids "$child"
+    done
+}
+
+# Kill any lingering processes tied to a worktree (dev servers, file watchers, etc.)
+# that aren't tracked by tmux or PID files. Dev servers started with `bun run dev`
+# reparent to launchd/init (PPID 1), so killing the tmux session never reaches them.
+#
+# Finds "seed" processes two ways, then kills each seed's entire subtree:
+#   1. Command line referencing the worktree path — catches the node process whose
+#      argv embeds the absolute worktree path. Survives even after the worktree
+#      directory has been deleted (the orphan case).
+#   2. Current working directory at/under the worktree — catches bun/next-server
+#      that don't name the path in argv (only while the directory still exists).
+# Subtree expansion then reaches the next-server child in the orphan case where its
+# directory is gone and only its node parent could be matched by argv.
+# Safe under `set -euo pipefail`: every step is guarded with `|| true`.
+kill_worktree_procs() {
+    local wt_path="$1"
+    [ -n "$wt_path" ] || return 0
+
+    # Resolve the real path too, so cwd matching survives symlinked parents
+    # (e.g. macOS /var -> /private/var).
+    local wt_real="$wt_path"
+    if [ -d "$wt_path" ]; then
+        wt_real=$(cd "$wt_path" 2>/dev/null && pwd -P 2>/dev/null || echo "$wt_path")
+    fi
+
+    local seeds=""
+
+    # 1. By command line (works post-deletion).
+    seeds=$(pgrep -f "$wt_path" 2>/dev/null || true)
+
+    # 2. By cwd (only meaningful while the directory exists), matching either the
+    #    given path or its resolved real path.
+    if [ -d "$wt_path" ]; then
+        local cwd_pids
+        cwd_pids=$(lsof -a -d cwd -F pn 2>/dev/null | awk -v d1="$wt_path" -v d2="$wt_real" '
+            /^p/{ pid=substr($0,2) }
+            /^n/{ p=substr($0,2);
+                  if (p==d1 || index(p, d1"/")==1 || p==d2 || index(p, d2"/")==1) print pid }' || true)
+        seeds=$(printf '%s\n%s\n' "$seeds" "$cwd_pids")
+    fi
+
+    # Normalize seeds: numeric, unique, excluding this script's own PID.
+    seeds=$(echo "$seeds" | tr ' ' '\n' | grep -E '^[0-9]+$' | sort -u | grep -v "^$$\$" || true)
+    [ -z "$seeds" ] && return 0
+
+    # Expand each seed to its full subtree (reaches next-server children), then
+    # re-dedupe and drop our own PID again.
+    local pids="" s
+    for s in $seeds; do
+        pids="$pids
+$(_descendant_pids "$s")"
+    done
+    pids=$(echo "$pids" | tr ' ' '\n' | grep -E '^[0-9]+$' | sort -u | grep -v "^$$\$" || true)
+    [ -z "$pids" ] && return 0
+
+    # Graceful TERM first, then SIGKILL any straggler (next-server can ignore TERM
+    # while mid-compile under turbopack).
+    echo "$pids" | xargs kill 2>/dev/null || true
+    sleep 1
+    local p
+    for p in $pids; do
+        kill -0 "$p" 2>/dev/null && kill -9 "$p" 2>/dev/null || true
+    done
+
+    local n
+    n=$(echo "$pids" | grep -c . || true)
+    echo "    killed $n lingering worktree process(es)"
+}
+
 scheduler_load() {
     case "$(detect_os)" in
         macos)
@@ -493,6 +574,9 @@ case "${1:-help}" in
             done
         fi
 
+        # Kill lingering worktree processes (dev servers, watchers) untracked above.
+        kill_worktree_procs "$worktree_path"
+
         # Remove worktree and branch
         if [ -d "$worktree_path" ]; then
             git -C "$worktree_path" worktree remove "$worktree_path" --force 2>/dev/null || \
@@ -726,6 +810,11 @@ case "${1:-help}" in
                 fi
                 rm -f "$pidfile"
             done
+
+            # 2b. Kill lingering worktree processes (dev servers, watchers) that are
+            #     untracked by tmux/PID files. Run BEFORE removing the dir so cwd
+            #     matching works and git worktree remove isn't blocked by busy files.
+            kill_worktree_procs "$wt_path"
 
             # 3. Remove worktree (if exists)
             if [ -d "$wt_path" ]; then

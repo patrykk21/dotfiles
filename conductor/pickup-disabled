@@ -1,0 +1,21 @@
+Jira auto-pickup disabled — do NOT poll Jira by label (battery/CPU).
+Originally 2026-06-15 (battery drain); made permanent 2026-06-24.
+
+This flag is the ONLY thing still off. As of 2026-06-26 the launchd timer
+(com.conductor, every 300s) is intentionally back ON so it can do the *cheap*
+work every tick:
+  - PR/CI babysitting + marker-driven actions (conductor.sh, pre-pickup section)
+  - worktree summaries (Pass 2: summarize-dirty -> summarize-worktree)
+  - PR-state probing (Pass 3: probe-pr-state, throttled per session)
+
+What this flag still does: conductor.sh sees it (line ~2453) and skips the Jira
+label query + AI ticket picker — the actual battery culprit was the per-tick Jira
+network poll, not the local summarize/babysit work. So the timer runs but never
+auto-picks new tickets from Jira labels.
+
+Manual dispatch still works: conductor run <project> "<ticket-url>"
+
+To ALSO re-enable Jira label auto-pickup (the heavy part): delete this file.
+To turn the whole timer back off:
+  launchctl bootout gui/$(id -u)/com.conductor
+  launchctl disable gui/$(id -u)/com.conductor

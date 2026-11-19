@@ -4,6 +4,8 @@
 
 # Source session group utilities
 source "$(dirname "$0")/tmux-session-utils.sh"
+# Source worktree process cleanup (kills reparented dev servers like conductor does)
+source "$(dirname "$0")/worktree-proc-utils.sh"
 
 while true; do
     # Run the picker
@@ -37,12 +39,25 @@ while true; do
                 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
                 source "$SCRIPT_DIR/worktree-metadata.sh"
                 
-                # Kill tmux session group if it exists
-                kill_session_group "$TICKET"
-                
-                # Remove metadata if it exists
-                remove_session_metadata "$REPO_NAME" "$TICKET"
-                
+                # ORDERING INVARIANT: remove the worktree BEFORE killing its
+                # session/metadata. If the session is killed first and removal then
+                # fails, the worktree is stranded with no session to retry from
+                # (the orphan bug). So below: kill procs → remove worktree (abort on
+                # failure, session kept) → drop metadata → kill session LAST.
+
+                # Kill lingering dev servers / watchers that reparented away from
+                # the tmux session (bun → node → next-server holding port 3000).
+                # Run BEFORE removal so cwd matching works and busy files don't
+                # block `git worktree remove`. Must be a plain statement (not a
+                # command substitution) — see worktree-proc-utils.sh; result comes
+                # back in $WT_KILLED_PROCS.
+                kill_worktree_procs "$WORKTREE_PATH"
+                if [ "${WT_KILLED_PROCS:-0}" -gt 0 ]; then
+                    KILL_MSG="killed $WT_KILLED_PROCS process(es)"
+                else
+                    KILL_MSG=""
+                fi
+
                 # Remove the git worktree — capture stderr so real failures
                 # don't get swallowed into a bogus success toast.
                 REMOVE_ERR=$(git worktree remove "$WORKTREE_PATH" --force 2>&1 >/dev/null)
@@ -54,14 +69,19 @@ while true; do
                     REMOVE_RC=$?
                 fi
 
-                if [ $REMOVE_RC -eq 0 ]; then
-                    tmux display-message -d 2000 "✓ Deleted worktree: $TICKET"
-                else
-                    # Surface the real git error so the user can act on it
+                if [ $REMOVE_RC -ne 0 ]; then
+                    # Removal failed — abort WITHOUT killing the session, so nothing
+                    # is orphaned and the user can retry. Surface the real git error.
                     SHORT_ERR=$(echo "$REMOVE_ERR" | head -1)
-                    tmux display-message -d 4000 "✗ Failed to delete $TICKET: $SHORT_ERR"
+                    tmux display-message -d 4000 "✗ Failed to delete $TICKET (session kept): $SHORT_ERR"
+                    continue
                 fi
-                
+
+                # Worktree is gone — now finish the irreversible teardown.
+                remove_session_metadata "$REPO_NAME" "$TICKET"
+                kill_session_group "$TICKET"
+                tmux display-message -d 2000 "✓ Deleted worktree: $TICKET${KILL_MSG:+ ($KILL_MSG)}"
+
                 # Show the picker again to see updated list
                 continue
             else

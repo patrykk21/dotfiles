@@ -3,7 +3,6 @@ name: prd
 description: "Generate Product Requirements Documents with optional research — brainstorm, challenge assumptions, define scope"
 argument-hint: "<idea or feature description>"
 user-invocable: true
-model: opus[1m]
 ---
 
 # /prd - Generate Product Requirements Documents
@@ -35,17 +34,39 @@ Understand → Research (optional) → Ideate (if vague) → Clarify → Propose
 ```
 
 **Two modes inside one flow:**
-- **Divergent (Ideate):** free-form prose, Claude pitches directions, user reacts. Used when the idea is vague.
+- **Divergent (Ideate):** free-form prose, the agent pitches directions, user reacts. Used when the idea is vague.
 - **Convergent (Clarify → Converge):** structured `AskUserQuestion` forms with predefined options. Used once the shape is known.
 
 The phase boundary is a default, not a wall — Clarify can drop back into 1-2 prose turns when a question opens a genuinely new unknown, then return to structured forms.
 
 The entire flow is conversational. One question at a time. No rushing to solutions.
 
+<!-- CC-ONLY -->
+**Use the `AskUserQuestion` tool for user questions during convergent phases (Steps 4-8)** — it renders a structured form; don't fall back to plain-text numbered questions.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+**Use plain-text numbered options for user questions** — the Claude question tool isn't callable in Codex. Present 2-4 concrete options with trade-offs, and wait for the user's response.
+
+### Codex PRD Pacing Contract
+
+For Codex, PRD quality means enough product clarity to hand off to `$spec`, not exhaustive discovery.
+
+- Reach a first complete PRD draft before context reaches 40% unless the user explicitly asks for deep research or brainstorming.
+- Use one bounded project-context pass: at most one CodeGraph orientation call when existing runtime-code structure is unknown, plus at most one Semble search, then targeted reads. Skip CodeGraph for docs, rules, markdown, config, UI copy, or named paths.
+- Default to Quick research for repo-local ideas. Ask about Standard or Deep research only when the user requests market/current external context or the idea depends on external facts.
+- Ask at most two decision prompts before the PRD draft: one scope/requirements prompt and one approach/scope confirmation prompt. If the answer is reversible, document the assumption and draft.
+- Do not keep ideating after a viable direction exists. Capture alternatives as deferred ideas and move to the PRD.
+CODEX-END -->
+
 ## Step 1: Understand the Idea
 
 1. **Restate the idea** in your own words — confirm you understand what the user is thinking
-2. **Explore the project context with CodeGraph** — start with `codegraph_context(task="<idea description>")` to discover relevant entry points, symbols, and existing code. Use `codegraph_search` + `codegraph_explore` for deeper understanding of specific areas. Use `codegraph_files` to understand project structure. Check docs and recent commits for additional context.
+<!-- CC-ONLY -->
+2. **Explore the project context** — `codegraph_context(task="<idea description>")` for structure, then `mcp__semble__search` for intent-based discovery (feature areas, configuration patterns, cross-cutting concerns). Use `codegraph_search` + `codegraph_explore` for deeper symbol understanding. Check docs and recent commits for additional context.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+2. **Explore the project context with a bounded pass** — use `codegraph_context(task="<idea description>")` only when the idea touches existing runtime code and entry points are unknown, then at most one `mcp__semble__search` for intent-based discovery. If the user names paths, docs, rules, config, UI copy, or concrete features, read those files directly instead of spending a graph call.
+CODEX-END -->
 3. **Identify the core problem** — what problem does this solve? For whom? Why now?
 4. **Scope check — is this one PRD, or several?** If the request spans multiple independent subsystems (e.g., "build a platform with chat, file storage, billing, and analytics"), flag it now. Do not spend the rest of the workflow refining details of a project that needs to be split first.
 
@@ -54,17 +75,27 @@ The entire flow is conversational. One question at a time. No rushing to solutio
    - Suggest a build order (what unblocks what)
    - Pick **one** sub-project to PRD now — the rest become follow-up PRDs
 
+   <!-- CC-ONLY -->
    Use `AskUserQuestion` to confirm the chosen sub-project before continuing.
+   <!-- /CC-ONLY -->
+   <!-- CODEX-START
+   Use one bundled plain-text prompt to confirm the chosen sub-project before continuing.
+   CODEX-END -->
 
 Do NOT jump to solutions. Understand the problem space first.
 
 ## Step 2: Research (Optional)
 
+<!-- CC-ONLY -->
 **After understanding the idea, ask the user which research tier they want.** Use `AskUserQuestion` with these options:
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+**Codex default:** choose Quick unless the user explicitly asked for research or the PRD depends on current external facts. If research is needed, ask one plain-text tier question with these options:
+CODEX-END -->
 
 - **Quick (Recommended for simple ideas)** — "Skip research, go straight to brainstorming or clarification"
-- **Standard** — "Quick web research: competitors, prior art, best practices (5-10 searches)"
-- **Deep** — "Thorough parallel research: multiple angles, comprehensive findings (uses sub-agents, higher token cost)"
+- **Standard** — "Light in-session web research: competitors, prior art, best practices (5-10 searches, stays in this conversation)"
+- **Deep** — "Full multi-angle research with source verification and a cited report (higher token cost)"
 
 ### Quick Tier
 
@@ -77,9 +108,16 @@ Skip this phase entirely. Proceed to Step 4.
    - Prior art and existing solutions ("how companies solve X")
    - Technical approaches ("best practices for X")
    - User experience patterns ("UX patterns for X")
+<!-- CC-ONLY -->
 2. **Discover web-search tool:** `ToolSearch(query="+web-search search")`
 3. **Execute searches sequentially**, gathering key findings from each
 4. **Optionally fetch full pages** for promising results: `ToolSearch(query="+web-fetch fetch")` then `fetch_url(url="...")`
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+2. **Use available web tools directly:** prefer the web-search MCP tool (`mcp__web_search__search`) when available.
+3. **Execute searches sequentially**, gathering key findings from each.
+4. **Optionally fetch full pages** for promising results with the web-fetch MCP tool (`mcp__web_fetch__fetch_url`) when available.
+CODEX-END -->
 5. **Compile research summary:**
    - Key findings (3-5 bullet points)
    - Sources with links
@@ -89,37 +127,38 @@ Skip this phase entirely. Proceed to Step 4.
 
 ### Deep Tier
 
-1. **Generate a research outline** with 3-5 research angles based on the topic. Examples:
+<!-- CC-ONLY -->
+Deep research is owned by the dedicated **`deep-research` skill** — a harness that decomposes the question into multiple angles, fans out parallel web searches, fetches and de-duplicates sources, adversarially verifies each claim, and synthesizes a cited report. Do **not** run searches or spawn your own sub-agents here; hand the whole research loop to the skill.
+
+1. **Compose a focused research question** from the idea plus everything learned in Step 1 — weave in the concrete constraints, stack, audience, and context you've gathered so the research is scoped, not generic. A sharp, specific question is the single biggest driver of report quality.
+2. **Invoke the skill:**
+   ```
+   Skill(skill="deep-research", args="<focused research question, constraints woven in>")
+   ```
+   - The skill may ask 2-3 clarifying questions if scope is still broad — answer them from PRD context where you can, otherwise relay them to the user.
+   - It runs a multi-agent workflow (higher token cost) and returns a cited, fact-checked report.
+3. **If the skill is unavailable or its run fails,** fall back to the **Standard tier** above (in-session web search) so research still happens — never silently skip it.
+4. **Synthesize the returned report** into the research summary, preserving source links and any confidence/caveat notes.
+
+**Cap:** none needed — the `deep-research` skill manages its own breadth and token budget.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+The `deep-research` skill is Claude-Code-only and unavailable in Codex, so Deep research in Codex uses the multi-angle in-session approach:
+
+1. **Generate a research outline** with 2-3 research angles based on the topic. Examples:
    - "Competitor landscape" — what exists, market positioning, pricing
    - "Technical approaches" — architectures, frameworks, implementation patterns
    - "User experience" — UX patterns, onboarding flows, common pain points
-   - "Prior art" — academic papers, blog posts, case studies
-2. **Launch 2-4 web-search-agent sub-agents in parallel:**
+2. **Run searches sequentially** (one per angle, 2-3 search queries each). Use the web-search MCP tool (`mcp__web_search__search`) if available. For each angle:
+   - Execute 2-3 targeted searches
+   - Optionally fetch full pages for promising results via `mcp__web_fetch__fetch_url`
+   - Compile findings per angle
+3. **Synthesize findings** across all angles into a comprehensive research summary.
 
-   For each research angle:
-   ```
-   Agent(
-     subagent_type="web-search-agent",
-     run_in_background=true,
-     prompt="Research angle: <angle_name>\n\nTopic: <user_topic>\n\nFocus on: <specific questions for this angle>\n\nReturn findings in this format:\n## <Angle Name>\n### Key Findings\n- ...\n### Sources\n- [Link](url)\n### Trade-offs & Considerations\n- ...\n\nWrite your findings to: <output_path>"
-   )
-   ```
+**Codex cap:** at most 2 research angles with 2-3 searches each unless the user explicitly asks for exhaustive research.
+CODEX-END -->
 
-   Output path: `/tmp/prd-research-<angle-slug>.md`
-
-3. **Wait for all agents to complete** (bash polling):
-   ```bash
-   for i in $(seq 1 120); do
-     COUNT=$(ls /tmp/prd-research-*.md 2>/dev/null | wc -l)
-     [ "$COUNT" -ge <expected_count> ] && echo "ALL_DONE" && break
-     sleep 2
-   done
-   ```
-4. **Read all output files** and synthesize into a comprehensive research summary
-5. **Present synthesized findings to user** — organized by angle, with key insights highlighted
-6. **Clean up temp files:** `rm -f /tmp/prd-research-*.md`
-
-**Cap:** Maximum 4 parallel agents, each limited to 5 search queries.
+**Then (both agents):** present the synthesized findings to the user — organized by source/angle, key insights and caveats highlighted — before proceeding to ideation (Step 3) or clarification (Step 4).
 
 ### Research Output
 
@@ -129,7 +168,7 @@ When research was performed (Standard or Deep), the findings are embedded in the
 
 **Purpose:** When the input is vague ("I want better onboarding", "something for team updates"), riff with the user before locking into structured questions. This is the divergent phase — generate, react, refine.
 
-**⛔ Skip this step entirely when:**
+**Skip this step entirely when:**
 - The user's input already names a concrete thing to build ("Add OAuth login with Google", "Migrate the worker from cron to BullMQ")
 - Step 1 found existing code that clearly answers what's being built
 - Research (Step 2) already produced a chosen direction
@@ -175,13 +214,25 @@ Then proceed to Step 4 (Clarify) with `AskUserQuestion`.
 
 ## Step 4: Ask Clarifying Questions
 
-**⛔ ALWAYS use the `AskUserQuestion` tool** — never list numbered questions in plain text. Each question gets its own entry with 2-4 predefined options users can select. This provides a structured form UI that is much easier to answer than freeform text.
+<!-- CC-ONLY -->
+**Use the `AskUserQuestion` tool for clarifications** — it renders a structured form that's much easier to answer than freeform text, with each question its own entry of 2-4 predefined options. Don't fall back to numbered questions in prose.
+<!-- /CC-ONLY -->
 
+<!-- CC-ONLY -->
 **One question at a time, building on previous answers.** Each `AskUserQuestion` call focuses on a single decision point, and the next question must follow from what the user just said — not from a fixed checklist. If the user's answer exposes a new assumption or constraint, pivot there instead of marching through pre-planned topics.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+**Codex clarification cap:** ask one bundled plain-text numbered-options prompt with at most 3 decision points. If the user's answer opens a major new unknown, ask one follow-up prompt; otherwise draft the PRD with documented assumptions.
+CODEX-END -->
 
-**⛔ Skip obvious questions.** Do not ask anything already answered by the one-line idea, the codebase exploration in Step 1, or earlier answers in this conversation. The goal is to surface what the user hasn't thought about yet, not to collect a standard intake form.
+**Skip obvious questions.** Do not ask anything already answered by the one-line idea, the codebase exploration in Step 1, or earlier answers in this conversation. The goal is to surface what the user hasn't thought about yet, not to collect a standard intake form.
 
-**⛔ Code-first rule.** Before each question, ask "can the codebase answer this?" If yes — read the code. Use `codegraph_context`, `codegraph_search`, `codegraph_explore`, or Semble to resolve "how does X currently work / where does Y live / what's the existing pattern for Z". Only ask the user about things code can't tell you: purpose, priorities, audience, constraints, scope boundaries, behavioural expectations not yet encoded. Asking the user about facts the code already encodes wastes their time and signals you didn't explore.
+<!-- CC-ONLY -->
+**Code-first rule.** Before each question, ask "can the codebase answer this?" If yes — read the code. Use `codegraph_context`, `codegraph_search`, `codegraph_explore`, or Semble to resolve "how does X currently work / where does Y live / what's the existing pattern for Z". Only ask the user about things code can't tell you: purpose, priorities, audience, constraints, scope boundaries, behavioural expectations not yet encoded. Asking the user about facts the code already encodes wastes their time and signals you didn't explore.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+**Code-first rule.** Before asking, answer codebase facts with the bounded context from Step 1 and targeted reads. Only ask about purpose, priorities, audience, scope boundaries, and behavior the code cannot encode.
+CODEX-END -->
 
 Coverage areas (ask only where genuinely unclear):
 - **Purpose** — what's the core outcome the user wants?
@@ -199,7 +250,12 @@ Coverage areas (ask only where genuinely unclear):
 - Surface trade-offs — "That's possible, but it comes at the cost of Z"
 - Be constructive but strategic — don't be a yes-man
 - If the idea has red flags or scope creep risks, raise them now
+<!-- CC-ONLY -->
 - Typically 3-6 questions total, depending on complexity — stop asking once you have 90% of the spec
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+- Typically 1 bundled prompt, plus one follow-up only for a real blocking unknown — stop asking once you have enough to draft a useful PRD.
+CODEX-END -->
 
 ## Step 5: Propose Approaches
 
@@ -212,12 +268,20 @@ After understanding the problem:
 3. **Present approaches as context**, then use `AskUserQuestion` for selection
 4. **Get the user's choice** before proceeding
 
+<!-- CODEX-START
+Codex override: when one approach is clearly best and reversible, select it, state the trade-off, and proceed to scope confirmation. Ask a plain-text selection question only when the wrong approach would materially change scope, user experience, data model, or implementation cost.
+CODEX-END -->
+
 Each approach should have:
 - A short name
 - How it works (2-3 sentences)
 - Trade-offs framed as "X at the cost of Y"
 
 **Selection:** After presenting approaches in text, use `AskUserQuestion` with each approach as an option. Mark your recommended approach clearly. The user selects — don't proceed without a choice.
+
+<!-- CODEX-START
+Selection questions count toward the two-prompt Codex PRD cap. Do not ask separately for approach and scope when one combined prompt can confirm both.
+CODEX-END -->
 
 ## Step 6: Converge on Scope
 
@@ -232,6 +296,10 @@ Based on the chosen approach:
 - "Yes, scope looks right — proceed to PRD"
 - "No, I want to adjust scope" — let me specify what to add/remove
 - "Let's discuss further" — I have questions about the scope
+
+<!-- CODEX-START
+Codex override: combine scope confirmation with the approach decision when possible. If the scope follows directly from prior answers, write the PRD and mark the scope assumptions clearly instead of asking another confirmation prompt.
+CODEX-END -->
 
 ## Step 7: Write the PRD
 
@@ -250,6 +318,12 @@ mkdir -p docs/prd
 
 Created: YYYY-MM-DD
 Author: [user email from pilot status]
+<!-- CC-ONLY -->
+Agent: [Claude Code if $CLAUDE_CODE_ENTRYPOINT is set, otherwise Codex]
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+Agent: Codex
+CODEX-END -->
 Category: [one of: Feature, Infrastructure, UX, API, Performance, Security, Documentation, Integration]
 Status: Draft
 Research: [Quick | Standard | Deep | None]
@@ -305,6 +379,13 @@ Research: [Quick | Standard | Deep | None]
 
 If the command returns a non-empty email, include `Author: <email>` in the header. If empty or fails, omit the Author line.
 
+<!-- CC-ONLY -->
+**Agent detection:** If `$CLAUDE_CODE_ENTRYPOINT` is set, write `Agent: Claude Code`. Otherwise, write `Agent: Codex`.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+**Agent:** Write `Agent: Codex`.
+CODEX-END -->
+
 **Category selection:** During the conversation (Step 4 or Step 6), use `AskUserQuestion` to select the PRD category from the fixed set: Feature, Infrastructure, UX, API, Performance, Security, Documentation, Integration.
 
 After writing:
@@ -344,9 +425,14 @@ Use `AskUserQuestion` with options:
 
 ### If yes — invoke /spec:
 
+<!-- CC-ONLY -->
 ```
 Skill('spec', args='<one-line-summary> — PRD: docs/prd/YYYY-MM-DD-slug.md — see PRD for full requirements')
 ```
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+Codex has no callable phase-dispatch tool. Continue immediately with the `$spec` skill instructions using arguments: `<one-line-summary> — PRD: docs/prd/YYYY-MM-DD-slug.md — see PRD for full requirements`.
+CODEX-END -->
 
 **The args string must NOT end in `.md`** — the trailing text after the path prevents the `/spec` dispatcher from treating it as an existing plan file. The dispatcher only triggers plan-file mode when args end with `.md` AND the file exists.
 

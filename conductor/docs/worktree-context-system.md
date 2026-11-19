@@ -48,16 +48,16 @@ Set at worktree creation, immutable after. Replaces current `<ticket>.json`.
 ```json
 {
   "schema_version": 1,
-  "ticket": "ECH-639",
+  "ticket": "PROJ-639",
   "title": "Incidents severity visibility",
-  "branch": "ECH-639-incidents-sev-vis",
-  "session_name": "ECH-639-incidents-sev-vis",
-  "worktree_path": "/Users/vigenerr/worktrees/echelon/ECH-639-incidents-sev-vis",
+  "branch": "PROJ-639-incidents-sev-vis",
+  "session_name": "PROJ-639-incidents-sev-vis",
+  "worktree_path": "/Users/vigenerr/worktrees/myapp/PROJ-639-incidents-sev-vis",
   "port": 55231,
   "tabs": ["editor", "server", "claude"],
   "created": "2026-04-19T10:00:00Z",
   "jira_url": "https://...",
-  "project": "echelon"
+  "project": "myapp"
 }
 ```
 
@@ -88,7 +88,7 @@ Structured metadata about the current summary. Single writer: summarizer.
   "headline": "Waiting on sev4 color decision",
   "updated": "2026-04-22T14:30:00Z",
   "signal_hash": "sha256:…",
-  "pr": "groupon/echelon#123",
+  "pr": "org/myapp#123",
   "pr_state": "open",
   "last_activity_source": "claude"
 }
@@ -98,7 +98,7 @@ Structured metadata about the current summary. Single writer: summarizer.
 Prose narrative. Summarizer rewrites it; user may edit between regenerations (signal hash detects user edits via file mtime and preserves a "user notes" section).
 
 ```markdown
-# ECH-639 · Incidents severity visibility
+# PROJ-639 · Incidents severity visibility
 
 ## Objective
 Stable 1–3 lines pulled from Jira summary+description.
@@ -116,7 +116,7 @@ Q: Should sev4 render as gray or yellow?
 A: Pending user decision.
 
 ## Pointers
-PR: groupon/echelon#123
+PR: org/myapp#123
 Slack: <user-pasted link>
 
 ## User notes
@@ -318,10 +318,10 @@ Steps:
 Wrap existing tmux worktree picker. For each session, read `summary.json` + `conductor.json` (single-digit microseconds) and render:
 
 ```
-ECH-639   3d   BLOCKED          Waiting on sev4 color decision
-ECH-621   2h   ACTIVE           MCP OAuth stateless impl
-ECH-603   5d   WAITING_REVIEW   @alice's comments unaddressed
-ECH-673   1w   STALE            —
+PROJ-639  3d   BLOCKED          Waiting on sev4 color decision
+PROJ-621  2h   ACTIVE           MCP OAuth stateless impl
+PROJ-603  5d   WAITING_REVIEW   @alice's comments unaddressed
+PROJ-673  1w   STALE            —
 ```
 
 Columns: ticket, relative time since `meta.last_accessed`, status, headline.
@@ -377,7 +377,7 @@ If cost grows unexpectedly: fall back to Haiku for the "headline-only" update pa
 1. **Jira ticket body caching** — per-worktree cache file or a shared `~/.config/conductor/cache/jira/<ticket>.json`? Lean shared; saves redundant fetches across worktrees for the same epic/link.
 2. **PR state source** — poll via `gh` every N minutes, or subscribe to GitHub webhooks (heavier setup, more accurate)? Start with polling in the scheduler.
 3. **User-added notes flow** — should `/pause-worktree` accept an inline note (`/pause-worktree "blocked on infra team"`) that gets appended to context.md's User notes? Minor UX question.
-4. **Multi-project support** — current design hardcodes `~/worktrees/echelon/`. Need to iterate `~/worktrees/*/` in the scheduler for multi-project. Should be a one-line change but worth making a config entry.
+4. **Multi-project support** — current design hardcodes `~/worktrees/myapp/`. Need to iterate `~/worktrees/*/` in the scheduler for multi-project. Should be a one-line change but worth making a config entry.
 5. **Cleanup** — when does a `<ticket>/` directory get deleted? On `worktree-abandoned` event? On git branch deletion detected by a sweeper? Leaning: sweeper that runs daily and removes dirs whose branch no longer exists.
 
 ## Implementation phases

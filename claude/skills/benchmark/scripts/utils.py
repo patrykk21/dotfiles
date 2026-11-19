@@ -63,6 +63,7 @@ def strip_conditional_loading_frontmatter(content: str) -> tuple[str, list[str]]
     new_lines = [lines[0], *new_front, *lines[end_idx:]]
     return "\n".join(new_lines), removed
 
+
 VALID_TARGET_TYPES: set[str] = {"skill", "rules"}
 
 TargetType = Literal["skill", "rules"]
@@ -368,7 +369,7 @@ def load_target_config(evals_path: Path) -> TargetConfig:
 
 
 _MODEL_ALIASES: dict[str, str] = {
-    "opus": "claude-opus-4-7",
+    "opus": "claude-opus-4-8",
     "sonnet": "claude-sonnet-4-6",
     "haiku": "claude-haiku-4-5-20251001",
 }

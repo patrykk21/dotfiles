@@ -201,7 +201,7 @@ WORKTREE_SETUP_HOOK="$PROJECT_DIR/.conductor/setup-worktree.sh"
 You don't need the scheduler to use conductor. In any Claude Code session:
 
 ```
-/conductor https://groupondev.atlassian.net/browse/ECH-571
+/conductor https://your-company.atlassian.net/browse/PROJ-571
 ```
 
 Claude will:
@@ -262,3 +262,17 @@ The ticket flow detects the platform from the URL and uses appropriate tools:
 | `app.clickup.com/t/*` | ClickUp | WebFetch |
 | `linear.app/*/issue/*` | Linear | WebFetch |
 | `github.com/*/issues/*` | GitHub | GitHub MCP |
+
+## Employer Layer
+
+Anything that belongs to one employer stays out of this repo, in `~/.claude/company/<name>/`. Conductor reads these from there:
+
+| Path | Read by | Effect |
+|---|---|---|
+| `company.env` → `WORK_ROOT` | `conductor.sh` | A project whose `PROJECT_DIR` is inside this directory belongs to that employer. |
+| `company.env` → `PACKAGES_TOKEN_ALIASES` | `conductor.sh`, before `INSTALL_CMD` | Space-separated names an `.npmrc` uses for the GitHub Packages token. Conductor copies the token between `GITHUB_PACKAGES_TOKEN` and these names, filling whichever are empty. |
+| `conductor/jira-hygiene-prompt.md` | `conductor.sh`, when it writes a session prompt | Appended to the prompt for Jira tickets of that employer's projects, with `{{TICKET_KEY}}` replaced. |
+| `conductor/hooks/<project>-setup.sh` | `conductor.sh`, after creating a worktree | The project's setup hook, used when its config doesn't set `WORKTREE_SETUP_HOOK`. Runs only if executable. |
+| `conductor/projects/<project>.md` | `/conductor`, Phase 0.3 | The project's guide: extra skill-routing rows, a pre-push checklist, its PR base, guardrails. |
+
+GitHub Enterprise needs no setting. Conductor takes the host from the repo's remote URL and reaches any host other than `github.com` with `GH_HOST=<host>`. An SSH host alias (a name with no dot, such as `git@work-gh:org/repo`) counts as `github.com`.

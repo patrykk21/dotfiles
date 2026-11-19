@@ -15,7 +15,7 @@
 #     3. --purge mode deletes anything in _abandoned/ older than GRACE_DAYS.
 #
 # Default scope (no --project) is ALL projects under WORKTREES_ROOT, but the
-# --project flag lets us pilot on echelon first before flipping it loose.
+# --project flag lets us pilot on one project first before flipping it loose.
 
 set -uo pipefail
 

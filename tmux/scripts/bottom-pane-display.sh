@@ -79,6 +79,6 @@ while true; do
         LAST_WIDTH="$WIDTH"
     fi
     
-    # Short sleep to reduce CPU usage
-    sleep 0.1
+    # Each pass forks tput and tmux; one pass per second keeps 30+ panes cheap
+    sleep 1
 done

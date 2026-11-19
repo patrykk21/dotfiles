@@ -1,99 +1,20 @@
+---
+name: youtube-transcript
+description: Fetch a YouTube video's full transcript from its captions as chaptered, timestamped Markdown. Use when the user shares a YouTube link and wants it transcribed, summarized, or learned from.
+---
+
 # youtube-transcript
 
-Fetch transcript from YouTube videos
-
-## Usage
-
-`/youtube-transcript <youtube_url>`
-
-## What it does
-
-1. Downloads YouTube video transcript using yt-dlp
-2. Extracts and cleans the text from VTT format
-3. Returns clean, readable transcript text
-
-## Requirements
-
-- `yt-dlp` must be installed (`brew install yt-dlp`)
-
-## Implementation
+Run the bundled script with the video URL and save the output to a file in the scratchpad directory, named after the video ID:
 
 ```bash
-#!/bin/bash
-# Fetch and clean YouTube transcript
-
-URL="$1"
-
-if [ -z "$URL" ]; then
-    echo "Error: Please provide a YouTube URL"
-    exit 1
-fi
-
-# Extract video ID from URL
-VIDEO_ID=$(echo "$URL" | sed -n 's/.*[?&]v=\([^&]*\).*/\1/p')
-if [ -z "$VIDEO_ID" ]; then
-    VIDEO_ID=$(echo "$URL" | sed -n 's/.*youtu\.be\/\([^?]*\).*/\1/p')
-fi
-
-if [ -z "$VIDEO_ID" ]; then
-    echo "Error: Could not extract video ID from URL"
-    exit 1
-fi
-
-# Create temp directory
-TEMP_DIR="/tmp/yt-transcript-$$"
-mkdir -p "$TEMP_DIR"
-cd "$TEMP_DIR"
-
-# Download transcript
-echo "Fetching transcript for video: $VIDEO_ID..." >&2
-yt-dlp --write-auto-sub --sub-lang en --skip-download --sub-format vtt -o "transcript" "$URL" 2>&1 | grep -v "Downloading" >&2
-
-# Check if transcript was downloaded
-if [ ! -f "transcript.en.vtt" ]; then
-    echo "Error: No English transcript available for this video" >&2
-    cd /
-    rm -rf "$TEMP_DIR"
-    exit 1
-fi
-
-# Clean and extract transcript text
-awk '
-BEGIN { prev = "" }
-/^WEBVTT/ { next }
-/^Kind:/ { next }
-/^Language:/ { next }
-/^$/ { next }
-/^[0-9][0-9]:/ { next }
-/align:start/ { next }
-{
-    gsub(/<[^>]*>/, "")
-    gsub(/^[ \t]+/, "")
-    gsub(/[ \t]+$/, "")
-    if (length($0) == 0) next
-    if ($0 == prev) next
-    printf "%s ", $0
-    prev = $0
-}
-' "transcript.en.vtt"
-
-# Cleanup
-cd /
-rm -rf "$TEMP_DIR"
+python3 -I ~/.claude/skills/youtube-transcript/transcript.py "<youtube-url>" > "<scratchpad>/transcript-<video-id>.md"
 ```
 
-## Output
+Then read that file.
 
-Returns the full transcript as continuous text, suitable for:
-- Summarization
-- Analysis
-- Content extraction
-- Note-taking
+The script picks the best caption track in this order: manual English, auto-generated original English, auto-generated English (machine-translated), then the original-language auto track. It removes sound tags such as [music], splits the text into ~45-second paragraphs, and starts a new section at each chapter from the video description. The header says which track was used, so pass that on when the transcript came from auto-captions.
 
-## Example
+If the script reports no captions, say so. Transcribing the audio needs a speech-to-text tool such as whisper.
 
-```bash
-/youtube-transcript https://www.youtube.com/watch?v=wL-UOhZrc40
-```
-
-Returns the full transcript of the video for further processing.
+Requires `yt-dlp` (`brew install yt-dlp`).

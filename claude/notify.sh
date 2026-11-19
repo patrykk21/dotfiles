@@ -3,6 +3,9 @@
 # Claude Code ntfy.sh notification script
 # Sends notifications when Claude needs attention
 
+# Paused while this file exists; delete it to resume notifications.
+[ -f "$HOME/.claude/notify.disabled" ] && exit 0
+
 # Configuration via environment variables
 NTFY_TOPIC="${CLAUDE_NOTIFY_TOPIC:-claude-code}"
 NTFY_SERVER="${CLAUDE_NOTIFY_SERVER:-https://ntfy.sh}"
@@ -43,15 +46,28 @@ send_notification() {
 hook_type="${1:-unknown}"
 tool_name="${CLAUDE_TOOL_NAME:-}"
 
-# Detect project and worktree from cwd
-WORKTREES_BASE="$HOME/worktrees"
-if [[ "$PWD" == "$WORKTREES_BASE/"* ]]; then
-    relative="${PWD#$WORKTREES_BASE/}"
-    project_name=$(echo "$relative" | cut -d'/' -f1)
-    worktree_name=$(echo "$relative" | cut -d'/' -f2)
-    working_dir="$project_name/$worktree_name"
+# Label resolution, first match wins:
+#   1. CLAUDE_NOTIFY_LABEL — explicit per-session label set at launch
+#   2. git: "project/worktree" in a linked worktree, "project" in the base repo.
+#      In a linked worktree, --git-dir points inside the main repo's .git/worktrees/,
+#      while --git-common-dir points at the main repo's .git — they differ only there.
+#   3. basename of cwd
+if [ -n "$CLAUDE_NOTIFY_LABEL" ]; then
+    working_dir="$CLAUDE_NOTIFY_LABEL"
 else
-    working_dir="$(basename "$PWD")"
+    toplevel=$(git -C "$PWD" rev-parse --show-toplevel 2>/dev/null)
+    if [ -n "$toplevel" ]; then
+        git_dir=$(git -C "$PWD" rev-parse --path-format=absolute --git-dir 2>/dev/null)
+        common_dir=$(git -C "$PWD" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+        if [ -n "$common_dir" ] && [ "$git_dir" != "$common_dir" ]; then
+            project_name=$(basename "$(dirname "$common_dir")")
+            working_dir="$project_name/$(basename "$toplevel")"
+        else
+            working_dir=$(basename "$toplevel")
+        fi
+    else
+        working_dir=$(basename "$PWD")
+    fi
 fi
 
 case "$hook_type" in

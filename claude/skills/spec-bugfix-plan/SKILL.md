@@ -3,10 +3,9 @@ name: spec-bugfix-plan
 description: "Bugfix spec planning phase - investigate root cause, design fix, get approval"
 argument-hint: "<bug description> or <path/to/plan.md>"
 user-invocable: false
-model: opus[1m]
 hooks:
   Stop:
-    - command: uv run --no-project python "${CLAUDE_PLUGIN_ROOT}/hooks/spec_plan_validator.py"
+    - command: uv run --no-project python "$HOME/.claude/hooks/spec_plan_validator.py"
 ---
 
 # /spec-bugfix-plan - Bugfix Planning Phase
@@ -15,7 +14,12 @@ hooks:
 
 **Input:** Bug description (new) or plan path (continue unapproved)
 **Output:** Approved bugfix plan at `docs/plans/YYYY-MM-DD-<slug>.md` with `Type: Bugfix`
+<!-- CC-ONLY -->
 **Next:** On approval → `Skill(skill='spec-implement', args='<plan-path>')`
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+**Next:** On approval → continue immediately with the `$spec-implement` skill instructions using arguments: `<plan-path>`.
+CODEX-END -->
 
 **Note:** This skill is invoked when the user types `/spec "<bug description>"` — they chose the full spec workflow. For a bugfix workflow without a plan file, users invoke `/fix` directly (separate user-facing command). The two are distinct entry points — honour the user's choice.
 
@@ -50,8 +54,27 @@ If Step 2 is incomplete, you cannot propose fixes. Symptom fixes are failure. Re
 - **NEVER assume — verify by reading files.** Trace the bug to actual file:line.
 - **Lean ≠ skipping steps.** Small bugs get short tasks, not fewer tasks. The three-task structure (Reproducing Test → Fix → Quality Gate) is non-negotiable.
 - **Plan file is source of truth** — survives across auto-compaction cycles
-- **ALWAYS use `AskUserQuestion` tool** for clarifications — never list numbered questions in plain text
-- **⛔ If `PILOT_PLAN_QUESTIONS_ENABLED` is `"false"` (from Step 0),** skip all `AskUserQuestion` calls (Steps 2.1, 2.5 escalation, 3 approach selection). Make reasonable default assumptions (including selecting the recommended fix approach) and document them in the plan. Continue autonomously.
+<!-- CC-ONLY -->
+- **Use the `AskUserQuestion` tool for clarifications** — it renders a structured form; don't fall back to plain-text numbered questions
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+- **Use plain-text numbered options for clarifications** — the Claude question tool isn't callable in Codex
+CODEX-END -->
+- **If `PILOT_PLAN_QUESTIONS_ENABLED` is `"false"` (from Step 0),** skip all `AskUserQuestion` calls (Steps 2.1, 2.5 escalation, 3 approach selection). Make reasonable default assumptions (including selecting the recommended fix approach) and document them in the plan. Continue autonomously.
+
+<!-- CODEX-START
+
+### Codex Bugfix Planning Speed Contract
+
+For Codex, bugfix quality means a traced root cause, a reproducing RED test plan, and a source-level fix strategy. It does not mean exhaustive graph traversal.
+
+- Reach the first complete bugfix plan before context reaches 35% unless the bug is not reproducible.
+- **Planning context ceiling — total planning must not exceed ~55% of the context window (hard cap 60%).** The 35% first-draft target leaves headroom for the RED test plan and self-review, NOT deeper traversal. On the ~256K Codex window that is ≈140K tokens. If context approaches ~55% before approval, stop investigating and finalize the bugfix plan with the traced root cause, RED test name, and fix file you already have — the fix itself happens during implementation, which needs the remaining budget. Planning that eats >60% has already failed.
+- Use a bounded investigation: one reproduction attempt path, at most one CodeGraph orientation call when the entry point is unknown, one Semble intent search, then targeted reads of the suspected files. Skip CodeGraph for docs, rules, markdown, config, UI copy, reviews of a known diff, or named paths.
+- Run callers/callees/impact only after a likely root-cause function is known and the bug spans more than one component.
+- Ask at most one bundled clarification prompt before the approval prompt. If the missing signal blocks reproduction, ask; otherwise record a Medium-confidence root cause and a verification task.
+- Stop investigating once you can state `Root Cause: file:line — function() does X but should do Y`, name the RED test, and name the source file the fix must touch.
+CODEX-END -->
 
 > **NOTE: During `/spec`, use the structured workflow below — not CC's native plan mode.**
 
@@ -59,13 +82,13 @@ If Step 2 is incomplete, you cannot propose fixes. Symptom fixes are failure. Re
 
 ### 0.1 Read Toggle Configuration
 
-**⛔ Run FIRST, before any other step.** Read all toggle env vars in a single Bash call:
+**Run first, before any other step.** Read all toggle env vars in a single Bash call:
 
 ```bash
-echo "QUESTIONS=$PILOT_PLAN_QUESTIONS_ENABLED APPROVAL=$PILOT_PLAN_APPROVAL_ENABLED"
+echo "QUESTIONS=$PILOT_PLAN_QUESTIONS_ENABLED APPROVAL=$PILOT_PLAN_APPROVAL_ENABLED MODEL_SWITCH=$PILOT_MODEL_SWITCH_ENABLED"
 ```
 
-Reference these values throughout: Steps 2.1/2.5 (questions) and 6 (approval). Bugfix planning does not run Codex — adversarial review only runs once per `/spec` invocation, on the implementation in `spec-verify`.
+Reference these values throughout: Steps 2.1/2.5 (questions) and 6 (approval + Model Switching handoff). Bugfix planning does not run Codex — adversarial review only runs once per `/spec` invocation, on the implementation in `spec-verify`.
 
 ### 0.2 Red Flags — STOP and Follow Process
 
@@ -154,6 +177,12 @@ If any answer is NO → return to Step 2. No exceptions, even for "obvious" bugs
 2b. **Create worktree early (if `--worktree=yes`):** Same pattern as spec-plan Step 2.
 3. **Generate filename:** `docs/plans/YYYY-MM-DD-<bug-slug>.md`
 4. **Fetch author email** (best-effort): same as spec-plan Step 2 step 4. If non-empty, include `Author: <email>` in header. If empty/fails, omit.
+<!-- CC-ONLY -->
+4b. **Detect agent:** If `$CLAUDE_CODE_ENTRYPOINT` is set, agent is `Claude Code`. Otherwise, agent is `Codex`.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+4b. **Set agent:** Use `Codex`.
+CODEX-END -->
 5. **Write header:**
 
    ```markdown
@@ -161,6 +190,12 @@ If any answer is NO → return to Step 2. No exceptions, even for "obvious" bugs
 
    Created: [Date]
    Author: [email if available]
+   <!-- CC-ONLY -->
+   Agent: [Claude Code|Codex]
+   <!-- /CC-ONLY -->
+   <!-- CODEX-START
+   Agent: Codex
+   CODEX-END -->
    Status: PENDING
    Approved: No
    Iterations: 0
@@ -184,6 +219,17 @@ If any answer is NO → return to Step 2. No exceptions, even for "obvious" bugs
 
 Complete each sub-step before the next. No shortcuts.
 
+<!-- CODEX-START
+### Codex Investigation Budget
+
+For Codex, keep investigation proportional:
+
+- Do not exceed 6 expensive investigation calls before drafting the plan. Expensive calls are CodeGraph, Semble, broad Grep, web/doc lookup, and full-file reads beyond the suspected files.
+- If the bug is local after reproduction (wrong constant, null check, typo, one renderer label, one config value), use targeted reads and skip deep graph exploration.
+- If two reproduction attempts fail because input, command, stack trace, or environment is missing, ask one bundled plain-text clarification prompt and stop guessing.
+- If three hypotheses fail, stop and ask for the missing signal instead of continuing another search loop.
+CODEX-END -->
+
 ### 2.1 Reproduce & understand
 
 - Restate **symptom** (what user observes), **trigger** (when/how), **expected behaviour**.
@@ -200,9 +246,19 @@ Complete each sub-step before the next. No shortcuts.
 
 ### 2.3 Trace the root cause
 
-**Start with `codegraph_context(task="<bug description and symptoms>")`** — single call, returns entry points, related symbols, and code context. Read it before going deeper.
+<!-- CC-ONLY -->
+**Start with `codegraph_context(task="<bug description and symptoms>")`** — single call, returns entry points, related symbols, and code context. Then `mcp__semble__search` for the bug's *intent* ("where does X get modified", "error handling in Y") — catches cross-language connections and mutation sites the graph misses.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+Use `codegraph_context(task="<bug description and symptoms>")` only when the bug location is not already named and the problem appears to involve runtime-code structure. Add one `mcp__semble__search` only when CodeGraph is weak or the bug is cross-cutting. If the user names concrete paths, docs, rules, markdown, config, UI copy, or the symptom points to a specific file, read that file instead of spending a graph call.
+CODEX-END -->
 
-**Deep dive when needed:** `codegraph_search` to find a specific symbol, then `codegraph_explore(query="<symbol names>")` for full source from all relevant files in one call.
+<!-- CC-ONLY -->
+**Deep dive when needed:** `codegraph_search` to find a specific symbol, then `codegraph_explore(query="<symbol names>")` for full source. Use `mcp__semble__find_related` from the bug site to discover parallel implementations that may share the same flaw.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+Deep dive only when the root-cause candidate remains unclear after targeted reads. Use one focused `codegraph_explore`, `mcp__semble__find_related`, or exact-text search, then return to the root-cause statement.
+CODEX-END -->
 
 **Backward tracing (symptom → source):**
 
@@ -232,6 +288,10 @@ This reveals **which** layer breaks. Investigate that layer next — don't specu
 **⛔ Mark every temporary log/print with `SPEC-DEBUG:`** (e.g. `console.log("SPEC-DEBUG: filters=", filters)`, `# SPEC-DEBUG: print(x)`). Verification greps the diff for this marker — any match fails verification and forces cleanup. Only way temporary diagnostics are allowed in the fix diff.
 
 **Structural tracing — proportional to bug scope.** For bugs spanning 2+ files, modules, or components, run `codegraph_callers` + `codegraph_callees` on the root-cause function plus `codegraph_impact` for blast radius. For local bugs (typo, off-by-one, wrong constant in one function, missing null check at one call site), `codegraph_context` from above plus a targeted Read is enough — skip the full call-graph traversal.
+
+<!-- CODEX-START
+Codex override: skip callers/callees/impact for docs, rules, markdown, UI-copy, single-file parser, or single-file config bugs unless the call path itself is the suspected failure.
+CODEX-END -->
 
 Tools: CodeGraph, Semble (`semble search`/`semble find-related` or `mcp__semble__search`/`mcp__semble__find_related`), Read/Grep/Glob for exact patterns.
 
@@ -271,9 +331,13 @@ If any NO → return to Step 2.
 
 **Propose 2–3 approaches only when there is a genuine architectural choice** (patch at call site vs. fix at source vs. add validation layer, with materially different scope/regression/maintenance trade-offs). For each: name, what it fixes, trade-offs, recommendation.
 
-**⛔ Ground approach labels in the root cause.** Step 2.5 already produced a concrete `Root Cause: file:line — function_name()` statement and Step 2.3 ran `codegraph_context`. When proposing alternatives, option labels must reference the actual symbols/files involved — e.g., `Patch at OrderHandler.validate (call site, src/handlers/order.py:88)` vs. `Fix at source OrderValidator.check (src/validators/order.py:42)`. Generic labels ("patch at call site" / "fix at source") with no symbol names are a regression — the data to ground them is already in your investigation notes.
+**Ground approach labels in the root cause.** Step 2.5 already produced a concrete `Root Cause: file:line — function_name()` statement and Step 2.3 ran `codegraph_context`. When proposing alternatives, option labels must reference the actual symbols/files involved — e.g., `Patch at OrderHandler.validate (call site, src/handlers/order.py:88)` vs. `Fix at source OrderValidator.check (src/validators/order.py:42)`. Generic labels ("patch at call site" / "fix at source") with no symbol names are a regression — the data to ground them is already in your investigation notes.
 
 When a genuine choice exists AND `PILOT_PLAN_QUESTIONS_ENABLED` is not `"false"`: use `AskUserQuestion` to pick.
+
+<!-- CODEX-START
+Codex override: if the source-level fix is clearly correct and reversible, choose it without asking and record the decision in `## Fix Approach`. Ask one bundled plain-text question only when the wrong choice would change multiple tasks, add a new dependency, or alter user-visible behavior outside the bug.
+CODEX-END -->
 
 ```bash
 ~/.pilot/bin/pilot notify plan_approval "Fix Approach" "<plan-slug> — fix strategy" --plan-path "<plan_path>" 2>/dev/null || true
@@ -346,6 +410,12 @@ Tool-agnostic — Claude Code Chrome, Chrome DevTools MCP, playwright-cli, or ag
 # [Bug Description] Fix Plan
 
 Created: [Date]
+<!-- CC-ONLY -->
+Agent: [Claude Code|Codex — from Step 1 detection]
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+Agent: Codex
+CODEX-END -->
 Status: PENDING
 Approved: No
 Iterations: 0
@@ -394,29 +464,71 @@ Type: Bugfix
 
 ## Tasks
 
-> Always 3 tasks below. Their checkboxes are the progress tracker — no separate `## Progress` section needed.
+> Always 3 tasks below. The `- [ ]` checkboxes immediately under this heading are the progress tracker (`spec-implement` toggles them `[ ]` → `[x]`); the `### Task N:` blocks hold the bodies. No separate `## Progress Tracking` section needed.
+
+- [ ] Task 1: Write Reproducing Test (RED)
+- [ ] Task 2: Implement Fix at Root Cause
+- [ ] Task 3: Quality Gate
 
 ### Task 1: Write Reproducing Test (RED)
 
 **Objective:** Encode the Behavior Contract as a failing test BEFORE writing any fix code.
-**Files:** [test files to create/modify]
-**Entry point:** [public function or endpoint the test exercises — not internal helpers]
-**DoD:** Test exists, named `test_<function>_<bug>_<expected>`, runs, fails with an error matching the documented `Currently (bug)` behavior. In worktree mode: committed as its own commit.
-**Verify:** `[command that runs ONLY this test — must FAIL]`
+
+**Files:**
+
+- Test: `[test file to create/modify]`
+
+**Key Decisions / Notes:**
+
+- Entry point: [public function or endpoint the test exercises — not internal helpers]
+
+**Definition of Done:**
+
+- [ ] Test exists and is named `test_<function>_<bug>_<expected>`.
+- [ ] Test fails with an error matching the documented `Currently (bug)` behavior.
+- [ ] In worktree mode, the RED test is committed as its own commit.
+- [ ] Verify: `[command that runs ONLY this test — must FAIL]`
 
 ### Task 2: Implement Fix at Root Cause
 
 **Objective:** Minimal change at `Root Cause: file:line` that makes the reproducing test pass without breaking `Anti-regression`.
-**Files:** [files to modify — must include the root cause file]
-**Strategy:** [how the fix satisfies the Behavior Contract — fix at source, not at symptom]
-**DoD:** Reproducing test PASSES. Full test suite PASSES (anti-regression gate for the fix). Diff touches the root-cause file. No try/except wrappers hiding the bad value; no callsite patches around the symptom.
-**Verify:** `[command that runs the reproducing test — must PASS]`
+
+**Files:**
+
+- Modify: `[root-cause file — must include Root Cause file]`
+- Test: `[test file from Task 1]`
+
+**Key Decisions / Notes:**
+
+- Strategy: [how the fix satisfies the Behavior Contract — fix at source, not at symptom]
+
+**Definition of Done:**
+
+- [ ] Reproducing test passes.
+- [ ] Diff touches the root-cause file.
+- [ ] No try/except wrappers hide the bad value; no callsite patches work around the symptom.
+- [ ] Verify: `[command that runs the reproducing test — must PASS]`
 
 ### Task 3: Quality Gate
 
 **Objective:** Lint + type check + build clean, with the full suite re-run to catch regressions introduced by any auto-fixes applied in this task.
-**DoD:** Lint clean, type check clean, build green (if applicable), full suite green. Performance audit passed (no expensive uncached work on hot paths in the diff).
-**Verify:** `[lint] && [type check] && [build if applicable] && [full suite command]`
+
+**Files:**
+
+- No production files expected; update this plan's progress and status.
+
+**Key Decisions / Notes:**
+
+- The suite runs here after lint/type/build because those commands can auto-modify imports, types, or formatting.
+
+**Definition of Done:**
+
+- [ ] Lint is clean.
+- [ ] Type check is clean.
+- [ ] Build is green if the project has a build step.
+- [ ] Full suite is green.
+- [ ] Performance audit passed: no expensive uncached work on hot paths in the diff.
+- [ ] Verify: `[lint] && [type check] && [build if applicable] && [full suite command]`
 
 **Why the suite runs again here:** lint/type checkers and formatters may auto-modify code (imports, type annotations, whitespace). A checkbox marked green should mean "suite green AFTER this task's code touches." The verify phase then runs it once more as the authoritative signal — that small redundancy is quality insurance, not waste.
 ```
@@ -429,31 +541,107 @@ Type: Bugfix
 
 **The `## Behavior Contract` section is MANDATORY for every bugfix plan** — it is the source of truth for what the reproducing test encodes and what verification audits.
 
+<!-- CODEX-START
+Before asking for approval, verify every `### Task N:` under `## Tasks` contains the exact task-card labels `**Objective:**`, `**Files:**`, `**Key Decisions / Notes:**`, and `**Definition of Done:**`. Plain labels such as `Files:`, `DoD:`, or `Verify:` do not render as clickable task-card fields.
+CODEX-END -->
+
 ## Step 5: Check for Console Annotation Feedback (Before Approval)
 
-**⛔ Run this BEFORE Step 6 (approval).** Check if the user has annotated the plan in the Console's Specifications tab. Annotations auto-save to JSON — no "Send Feedback" button needed.
+**Run this before Step 6 (approval).** Check if the user has annotated the plan in the Console's Specifications tab. Annotations auto-save to JSON — no "Send Feedback" button needed.
 
 1. Derive annotation file: `docs/plans/.annotations/<plan-filename>.json`
 2. Read the annotation file with the Read tool. If the file doesn't exist, treat as `NO_FEEDBACK`. If it exists, check whether `planAnnotations` has any entries (`FEEDBACK_EXISTS`) or is empty/missing (`NO_FEEDBACK`).
 3. **If `FEEDBACK_EXISTS`:** Each annotation in `planAnnotations` has `originalText` (selected passage) and `text` (user's note). Incorporate into plan, delete the annotation file via `rm -f "<annotation-file-path>"` (e.g. `rm -f "docs/plans/.annotations/2026-03-26-my-bug.json"`), note changes. Proceed to Step 6.
 4. **If `NO_FEEDBACK`:** proceed directly to Step 6.
 
-## Step 6: Get User Approval
+## Step 6: Get User Approval (and Model Switch Handoff)
 
-**⛔ If `PILOT_PLAN_APPROVAL_ENABLED` is `"false"` (from Step 0),** skip this step: set `Approved: Yes` in the plan file automatically and immediately invoke `Skill(skill='spec-implement', args='<plan-path>')`. No AskUserQuestion, no notification.
+### 6.0 Toggle interaction matrix
 
-**When `PILOT_PLAN_APPROVAL_ENABLED` is NOT `"false"`:**
+Pull `$PILOT_PLAN_APPROVAL_ENABLED` and `$PILOT_MODEL_SWITCH_ENABLED` from Step 0 and follow the matching row:
 
-0. Notify:
-   ```bash
-   ~/.pilot/bin/pilot notify plan_approval "Bugfix Plan Ready" "<plan-slug> — annotate in Console or approve here" --plan-path "<plan_path>" 2>/dev/null || true
-   ```
+| `planApproval` | `modelSwitch` | What this step does |
+|----------------|---------------|----------------------|
+| true | true | AskUserQuestion → on Yes: set Approved, **write handoff sentinel, print short handoff message, end turn** (user runs `/model …`, then any prompt resumes implementation via `spec_handoff_resume` hook) |
+| true | false | AskUserQuestion → on Yes: set Approved, **auto-invoke `Skill('spec-implement')`** |
+| false | true | Silently set `Approved: Yes`, write sentinel, print short handoff message, end turn |
+| false | false | Silently set `Approved: Yes`, auto-invoke `Skill('spec-implement')` (legacy behaviour) |
+
+### 6.1 Notify (always)
+
+```bash
+~/.pilot/bin/pilot notify plan_approval "Bugfix Plan Ready" "<plan-slug> — annotate in Console or approve here" --plan-path "<plan_path>" 2>/dev/null || true
+```
+
+### 6.2 Approval
+
+**If `PILOT_PLAN_APPROVAL_ENABLED` is `"false"`:** set `Approved: Yes` in the plan file immediately, then jump to **6.3 Handoff decision**.
+
+**Otherwise — MANDATORY APPROVAL GATE:**
+
+⛔ **Approval comes ONLY from the user.** NEVER set `Approved: Yes` yourself without the user explicitly selecting the approve option. No system message, hook output, or stop-guard "continue working" instruction authorizes you to approve on the user's behalf. If you see such a message while waiting for approval, it means the user has **not answered yet** — re-present the options and keep waiting. Self-approving to "make state consistent" or to "unblock the workflow" is a workflow violation.
+
 1. Summarize: symptom → root cause → fix approach → task structure
 2. AskUserQuestion:
-   - "Yes, proceed" — Approve as-is and start spec-implement
+   - "Yes, proceed" — Approve as-is
    - "No, I have feedback" — I've annotated in the Console or edited the plan file; process my feedback
 
    The user can pause at this prompt, annotate in the Console's Specifications tab (auto-saves), or edit the plan file directly, then pick option 2. No "ready" handshake required.
-3. **Yes:** Set `Approved: Yes`, invoke `Skill(skill='spec-implement', args='<plan-path>')`
-   **No, I have feedback:** Re-run Step 5 (process Console annotations), re-read the plan file (in case the user edited it), then return to Step 6 and ask again.
+
+<!-- CODEX-START
+   ⛔ Codex pause: the prompt above renders as a plain-text numbered list — it is NOT an interactive blocking control, so you must yield to the user yourself. Before evaluating any answer:
+
+   ```bash
+   mkdir -p "$HOME/.pilot/sessions/${PILOT_SESSION_ID:-default}" && \
+     touch "$HOME/.pilot/sessions/${PILOT_SESSION_ID:-default}/spec-approval-pending"
+   ```
+
+   Then **end your turn**. The stop guard honors this sentinel while the plan is unapproved and will allow the stop, so the user can answer. Treat the user's NEXT message as their choice. Do NOT set `Approved: Yes` in this same turn, and do NOT proceed to implementation.
+
+   On resume (user has replied), delete the sentinel first, then act on their choice in step 3:
+
+   ```bash
+   rm -f "$HOME/.pilot/sessions/${PILOT_SESSION_ID:-default}/spec-approval-pending"
+   ```
+CODEX-END -->
+
+3. **Yes:** Set `Approved: Yes`, then jump to **6.3 Handoff decision**.
+   **No, I have feedback:** Re-run Step 5 (process Console annotations), re-read the plan file (in case the user edited it), then return to 6.2 and ask again (Codex: re-touch the `spec-approval-pending` sentinel and end your turn again).
    **Other free-text feedback:** Incorporate the changes into the plan, then re-ask with a fresh AskUserQuestion.
+
+### 6.3 Handoff decision
+
+<!-- CC-ONLY -->
+**If `PILOT_MODEL_SWITCH_ENABLED` is `"true"` (default):** write the handoff sentinel and print the short model-switch message, then end the turn. Do NOT invoke `Skill('spec-implement')` — the user will resume after optionally switching models, and the `spec_handoff_resume` hook will route the next prompt straight to implementation.
+
+```bash
+mkdir -p "$HOME/.pilot/sessions/${PILOT_SESSION_ID:-default}" && \
+  touch "$HOME/.pilot/sessions/${PILOT_SESSION_ID:-default}/spec-handoff-pending"
+```
+
+Then print this message **verbatim** (substitute the plan path):
+
+```
+Plan approved: <plan path>
+
+Switch models, then continue:
+
+  A — Keep context: `/model <name>`, then type `continue`
+  B — Fresh start:  `/model <name>`, `/clear`, then `/spec <plan path>` (lower cost)
+
+Models:
+  `/model sonnet[1m]`  — recommended
+  `/model opus[1m]`
+  `/model sonnet`
+  `/model opus`
+
+Tip: disable "Model Switching" in Settings → Automation to skip this step.
+```
+
+After printing the message, end the turn — the stop guard's handoff sentinel will allow the stop, and the next user prompt will trigger `Skill('spec-implement', '<plan-path>')` automatically (Option A). For Option B the user runs `/clear` then `/spec <plan-path>`, which the dispatcher routes directly to implementation.
+
+**If `PILOT_MODEL_SWITCH_ENABLED` is `"false"`:** do NOT write a sentinel. Invoke `Skill(skill='spec-implement', args='<plan-path>')` directly.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+Codex has no callable phase-dispatch tool and model switching is not available in Codex CLI. Continue immediately with the `$spec-implement` skill instructions using arguments: `<plan-path>`.
+CODEX-END -->

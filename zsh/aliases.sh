@@ -14,9 +14,6 @@ alias gCM='git checkout master'
 alias gCnb='git checkout -b'
 alias gCb='git checkout'
 
-# Claude Code - use cache-patched version
-alias claude='claude-patched'
-
 # Tmux with automatic session restoration (like Zellij)
 # alias tmux='tmux-auto'  # Disabled - using direct tmux for now
 

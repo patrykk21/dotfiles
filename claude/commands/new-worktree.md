@@ -12,7 +12,7 @@ Create a git worktree using the tmux worktree script. Sets up a proper tmux sess
 Arguments: `$ARGUMENTS`
 
 Extract:
-- `TICKET` — first token (required). This is the branch/worktree name (e.g. `ECH-123-fix-thing`, `PROJ-42-new-feature`)
+- `TICKET` — first token (required). This is the branch/worktree name (e.g. `WEB-123-fix-thing`, `PROJ-42-new-feature`)
 - `BASE_BRANCH` — value after `--from` flag (optional)
 
 If `TICKET` is missing, tell the user the usage and stop:
@@ -20,7 +20,7 @@ If `TICKET` is missing, tell the user the usage and stop:
 Usage: /new-worktree <ticket-name> [--from <branch>]
 
 Examples:
-  /new-worktree ECH-123-fix-auth
+  /new-worktree WEB-123-fix-auth
   /new-worktree PROJ-42-new-feature --from develop
 ```
 

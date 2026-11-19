@@ -4,9 +4,9 @@
 #
 # Usage:
 #   probe-pr-state                         # all projects, all sessions (throttled)
-#   probe-pr-state --project echelon       # scope to one project
+#   probe-pr-state --project myapp         # scope to one project
 #   probe-pr-state --force                 # bypass throttle AND re-probe terminal states
-#   probe-pr-state --ticket ECH-637-…      # single ticket
+#   probe-pr-state --ticket PROJ-637-…     # single ticket
 #   probe-pr-state --throttle-seconds 300  # skip if last probe < 300s ago (default 300)
 #
 # Throttling:

@@ -1,0 +1,184 @@
+#!/usr/bin/env bash
+# Sets up the Claude Code system on this machine (macOS or Linux/WSL2) so it matches the others.
+#
+#   git clone https://github.com/patrykk21/dotfiles.git /tmp/dotfiles
+#   /tmp/dotfiles/claude/bin/claude-bootstrap [--secrets FILE] [--scheduler] [--skip-tools]
+#
+#   --secrets FILE  import the bundle made by `claude-secrets export` on another machine
+#   --scheduler     also install conductor's ticket scheduler; run it on ONE machine only,
+#                   or two machines pick up the same tickets
+#   --skip-tools    skip Homebrew, Volta and the Claude Code installer (for tests)
+#
+# Re-runnable: every step skips what is already in place.
+set -euo pipefail
+
+DOTFILES_REPO="${DOTFILES_REPO:-https://github.com/patrykk21/dotfiles.git}"
+PRIVATE_REPO="${CLAUDE_PRIVATE_REPO:-git@github-personal:patrykk21/.claude.git}"
+CONSOLE_REPO="${WORK_CONSOLE_REPO:-git@github-personal:patrykk21/work-console.git}"
+CONSOLE_DIR="${WORK_CONSOLE_DIR:-$HOME/Work/work-console}"
+
+secrets="" scheduler=0 skip_tools=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --secrets) secrets=$2; shift 2 ;;
+    --scheduler) scheduler=1; shift ;;
+    --skip-tools) skip_tools=1; shift ;;
+    *) echo "unknown option: $1" >&2; exit 2 ;;
+  esac
+done
+if [ -n "$secrets" ]; then
+  secrets=$(cd "$(dirname "$secrets")" && pwd)/$(basename "$secrets")
+fi
+
+todo=()
+step() { printf '\n== %s\n' "$*"; }
+later() { todo+=("$*"); }
+
+# Clones URL into DIR even when DIR already has files (a fresh Claude Code install creates
+# ~/.claude). Tracked files from the repo win; a differing local copy is kept as *.before-bootstrap.
+sync_repo() {
+  local url=$1 dir=$2 tmp f
+  if [ -d "$dir/.git" ]; then
+    git -C "$dir" pull --ff-only -q || later "~${dir#"$HOME"}: has diverged from its remote; merge it by hand"
+    return 0
+  fi
+  tmp=$(mktemp -d)
+  git clone -q --no-checkout "$url" "$tmp/repo" || { rm -rf "$tmp"; return 1; }
+  mkdir -p "$dir"
+  mv "$tmp/repo/.git" "$dir/.git"
+  rm -rf "$tmp"
+  git -C "$dir" reset -q
+  while read -r f; do
+    if [ -e "$dir/$f" ]; then cp -p "$dir/$f" "$dir/$f.before-bootstrap"; fi
+  done < <(git -C "$dir" diff --name-only)
+  git -C "$dir" checkout -q -- .
+}
+
+load_brew() {
+  local p
+  for p in /opt/homebrew/bin/brew /usr/local/bin/brew /home/linuxbrew/.linuxbrew/bin/brew; do
+    if [ -x "$p" ]; then eval "$("$p" shellenv)"; return 0; fi
+  done
+  return 1
+}
+
+os=$(uname -s)
+
+if [ $skip_tools -eq 0 ]; then
+  step "Homebrew"
+  if ! command -v brew >/dev/null && ! load_brew; then
+    if [ "$os" = Linux ]; then
+      sudo apt-get update -q && sudo apt-get install -yq build-essential procps curl file git
+    fi
+    NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    load_brew
+  fi
+  brew --version | head -1
+fi
+
+step "Dotfiles (generic layer) -> ~/.config"
+sync_repo "$DOTFILES_REPO" "$HOME/.config"
+
+if [ $skip_tools -eq 0 ]; then
+  step "Generic tools (~/.config/Brewfile)"
+  brew bundle --file "$HOME/.config/Brewfile" || later "brew bundle reported failures; re-run: brew bundle --file ~/.config/Brewfile"
+fi
+
+step "Private repo (employer layers, settings) -> ~/.claude"
+private_ok=1
+sync_repo "$PRIVATE_REPO" "$HOME/.claude" || {
+  private_ok=0
+  later "clone $PRIVATE_REPO failed: set up the SSH key and the github-personal host alias, then re-run"
+}
+
+if [ $skip_tools -eq 0 ] && [ $private_ok -eq 1 ]; then
+  for bf in "$HOME"/.claude/company/*/Brewfile; do
+    [ -f "$bf" ] || continue
+    step "Employer tools ($bf)"
+    brew bundle --file "$bf" || later "brew bundle failed for $bf"
+  done
+fi
+
+if [ $skip_tools -eq 0 ]; then
+  step "Node globals (Volta)"
+  if command -v volta >/dev/null; then
+    volta setup >/dev/null
+    lists=("$HOME/.config/claude/volta.list")
+    for f in "$HOME"/.claude/company/*/volta.list; do [ -f "$f" ] && lists+=("$f"); done
+    # shellcheck disable=SC2046
+    volta install $(sed -e 's/#.*//' "${lists[@]}" | tr -s '[:space:]' ' ')
+  else
+    later "volta is missing; it comes from the Brewfile"
+  fi
+
+  step "Claude Code"
+  command -v claude >/dev/null || curl -fsSL https://claude.ai/install.sh | bash
+fi
+export PATH="$HOME/.local/bin:$HOME/.volta/bin:$PATH"
+claude --version
+
+step "Work Console -> ${CONSOLE_DIR/#$HOME/~}"
+if sync_repo "$CONSOLE_REPO" "$CONSOLE_DIR"; then
+  if command -v bun >/dev/null; then (cd "$CONSOLE_DIR" && bun install --silent); else later "bun is missing; run bun install in $CONSOLE_DIR"; fi
+else
+  later "clone $CONSOLE_REPO failed (same SSH setup as the private repo)"
+fi
+
+step "Link the layers into ~/.claude"
+"$HOME/.config/claude/bin/claude-link" || later "claude-link reported entries to sort out (see above)"
+
+step "Plugins"
+plists=("$HOME/.config/claude/plugins.list")
+for f in "$HOME"/.claude/company/*/plugins.list; do [ -f "$f" ] && plists+=("$f"); done
+known=$(claude plugin marketplace list 2>/dev/null || true)
+failed=""
+installed=$(claude plugin list 2>/dev/null || true)
+while read -r kind a b; do
+  case "$kind" in
+    marketplace)
+      src=${b/#\~/$HOME}
+      grep -q "$a" <<<"$known" && continue
+      if [[ "$src" == /* ]] && [ ! -d "$src" ]; then
+        failed+="$a "
+        later "marketplace $a: folder $src does not exist yet; create it, then re-run"
+        continue
+      fi
+      if claude plugin marketplace add "$src" >/dev/null 2>&1; then
+        echo "marketplace: $a"
+      else
+        failed+="$a "
+        later "marketplace $a: could not add $src (check SSH or network access to it), then re-run"
+      fi
+      ;;
+    plugin)
+      case " $failed" in *" ${a#*@} "*) continue ;; esac
+      grep -q "${a%@*}" <<<"$installed" && continue
+      if claude plugin install "$a" >/dev/null 2>&1; then echo "plugin: $a"; else later "plugin $a: install failed; run claude plugin install $a to see why"; fi
+      ;;
+  esac
+done < <(sed -e 's/#.*//' "${plists[@]}" | grep -v '^[[:space:]]*$')
+
+if [ -n "$secrets" ]; then
+  step "Secrets"
+  "$HOME/.config/claude/bin/claude-secrets" import "$secrets"
+else
+  later "secrets: on the old machine run claude-secrets export <file>, copy it here, then claude-secrets import <file>"
+fi
+
+step "Conductor"
+if [ $scheduler -eq 1 ] && [ -x "$HOME/.config/conductor/setup.sh" ]; then
+  "$HOME/.config/conductor/setup.sh"
+else
+  echo "scheduler not installed on this machine (pass --scheduler on the one machine that should pick up tickets)"
+fi
+
+step "Checks"
+if [ $private_ok -eq 1 ]; then
+  others=$(grep -rhoE '/(Users|home)/[A-Za-z0-9._-]+' "$HOME/.claude/settings.json" "$HOME/.claude/cclsp.json" 2>/dev/null | sort -u | grep -vx "$HOME" || true)
+  [ -n "$others" ] && later "absolute paths in ~/.claude point at $(echo $others) but HOME is $HOME; give this machine the same home path"
+fi
+
+later "sign in: claude (then /mcp for each OAuth connector), gh auth login, pilot activate <license key>"
+
+step "Left for you"
+if [ ${#todo[@]} -eq 0 ]; then echo "nothing"; else printf -- '- %s\n' "${todo[@]}"; fi

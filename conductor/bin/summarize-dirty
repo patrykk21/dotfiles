@@ -46,6 +46,14 @@ for session_dir in "${session_dirs[@]}"; do
     session_dir="${session_dir%/}"
     ticket=$(basename "$session_dir")
 
+    # Skip the base/main-repo anchor session (<repo>-base) — it isn't a managed
+    # worktree and has no single ticket to summarize.
+    repo_name="${session_dir#"$WORKTREES_ROOT"/}"
+    repo_name="${repo_name%%/*}"
+    if [[ "$ticket" == "${repo_name}-base" ]]; then
+        continue
+    fi
+
     if [[ "$force_all" -eq 1 ]]; then
         processed=$((processed+1))
         if "$SUMMARIZER" --session-dir "$session_dir" --force; then

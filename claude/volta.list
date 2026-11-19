@@ -1,0 +1,15 @@
+# Node runtime and global CLIs, installed with `volta install` on every machine.
+node@24
+@colbymchenry/codegraph
+@playwright/cli
+@vtsls/language-server
+@zed-industries/claude-code-acp
+agent-browser
+better-sqlite3
+cclsp
+fast-check
+pnpm
+prettier
+repomix
+typescript
+yarn@4

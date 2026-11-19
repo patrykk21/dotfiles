@@ -6,6 +6,8 @@
 # Source metadata functions
 source "$(dirname "$0")/worktree-metadata.sh"
 source "$(dirname "$0")/tmux-session-utils.sh"
+# Kills reparented dev servers (bun → node → next-server) the tmux session can't reach
+source "$(dirname "$0")/worktree-proc-utils.sh"
 
 # Get current session name (resolve grouped child to master)
 CURRENT_SESSION=$(resolve_master_session "$(tmux display-message -p '#S')")
@@ -100,37 +102,63 @@ if [[ "$confirm" != "YES"* ]]; then
     exit 0
 fi
 
-# Find a session to switch to (exclude grouped children and current session)
-MAIN_SESSION=$(tmux list-sessions -F "#{session_name}" | grep -v '_g[0-9]\+$' | grep -v "^${CURRENT_SESSION}$" | head -1)
+# ORDERING INVARIANT: the irreversible session-kill MUST run LAST, only after the
+# worktree is confirmed removed. Killing the session FIRST is what previously left
+# orphaned worktrees: kill_session_group can terminate this very run-shell job
+# (it was launched from the session being killed), so the worktree removal never
+# ran — session gone, worktree + reparented dev servers stranded. So we now:
+#   1. move the client off the doomed session (non-destructive),
+#   2. kill the worktree's processes,
+#   3. remove the worktree — abort here on failure, leaving the session intact,
+#   4. only then kill the session.
 
-# Switch to another session or create one if needed
+# Move the attached client to another session so it doesn't detach when we tear
+# the worktree's session down (exclude grouped children and the current session).
+MAIN_SESSION=$(tmux list-sessions -F "#{session_name}" | grep -v '_g[0-9]\+$' | grep -v "^${CURRENT_SESSION}$" | head -1)
 if [ -n "$MAIN_SESSION" ]; then
     tmux switch-client -t "$MAIN_SESSION"
 else
     # Create a new session if no other exists
     tmux new-session -d -s "main" -c "$MAIN_REPO"
     tmux switch-client -t "main"
+    MAIN_SESSION="main"
 fi
 
-# Kill the worktree session and all grouped children
-kill_session_group "$CURRENT_SESSION"
+# Kill lingering dev servers / watchers (and the worktree's shells) that would
+# otherwise keep holding files/ports. Run BEFORE removal so cwd matching works and
+# busy files don't block removal. Plain statement, not $(...) — result comes back
+# in $WT_KILLED_PROCS. $$ and its ancestors are protected inside the function.
+kill_worktree_procs "$WORKTREE_PATH"
 
+# Remove the git worktree from the MAIN repo's context (never from inside the dir
+# we're deleting). This is the critical step — it must succeed before we kill the
+# session, otherwise the user loses the only handle to retry the deletion.
+tmux display-message -d 1000 "Removing worktree at $WORKTREE_PATH..."
+cd "$MAIN_REPO" 2>/dev/null || cd / 2>/dev/null
+
+if ! git -C "$MAIN_REPO" worktree remove "$WORKTREE_PATH" --force 2>/dev/null; then
+    # If remove fails, try pruning first, then once more.
+    git -C "$MAIN_REPO" worktree prune 2>/dev/null
+    if ! git -C "$MAIN_REPO" worktree remove "$WORKTREE_PATH" --force 2>/dev/null; then
+        # Abort WITHOUT killing the session, so nothing is orphaned and the user
+        # can re-run the deletion after dealing with whatever is holding the tree.
+        tmux display-message -d 3000 "✗ Could not remove worktree '$TICKET' — session kept. Check for processes holding $WORKTREE_PATH"
+        exit 1
+    fi
+fi
+
+# Worktree is gone — now finish the irreversible teardown.
 # Remove metadata if it exists
 if [ -n "$TICKET" ]; then
     remove_session_metadata "$REPO_NAME" "$TICKET"
 fi
 
-# Remove the git worktree
-tmux display-message -d 1000 "Removing worktree at $WORKTREE_PATH..."
-
-# Force remove the worktree
-if ! git worktree remove "$WORKTREE_PATH" --force 2>/dev/null; then
-    # If remove fails, try pruning first
-    git worktree prune
-    git worktree remove "$WORKTREE_PATH" --force 2>/dev/null || {
-        tmux display-message -d 2000 "Warning: Could not remove worktree. It may need manual cleanup."
-    }
-fi
+# Kill the worktree session and all grouped children (LAST — see ordering invariant).
+kill_session_group "$CURRENT_SESSION"
 
 # Display success message
-tmux display-message -d 2000 "✓ Deleted worktree and session: $CURRENT_SESSION"
+if [ "${WT_KILLED_PROCS:-0}" -gt 0 ]; then
+    tmux display-message -d 2000 "✓ Deleted worktree and session: $CURRENT_SESSION (killed $WT_KILLED_PROCS process(es))"
+else
+    tmux display-message -d 2000 "✓ Deleted worktree and session: $CURRENT_SESSION"
+fi

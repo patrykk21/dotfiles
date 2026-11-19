@@ -15,9 +15,9 @@ if [ -z "$TICKET" ]; then
     exit 1
 fi
 
-# Validate ticket format (should contain letters and numbers, typically ECH-123 format)
+# Validate ticket format (should contain letters and numbers, typically PROJ-123 format)
 if ! echo "$TICKET" | grep -qE '^[A-Za-z]+-[0-9]+$|^[A-Za-z0-9_-]+$'; then
-    tmux display-message -d 2000 "Error: Invalid ticket format. Use format like ECH-123"
+    tmux display-message -d 2000 "Error: Invalid ticket format. Use format like PROJ-123"
     exit 1
 fi
 

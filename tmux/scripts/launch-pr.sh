@@ -25,8 +25,9 @@ if [ -z "$CURRENT_BRANCH" ]; then
 fi
 
 # Resolve gh host + token for this repo. Multi-account setups (personal
-# patrykk21/* + work c-pkotarski/groupon/*) need the right token per repo, or
-# `gh pr list` 404s when the active account can't see the repo.
+# patrykk21/* + a work account, often on a GitHub Enterprise host) need the
+# right token per repo, or `gh pr list` 404s when the active account can't see
+# the repo.
 #
 # Resolution order:
 #   1. Look up the repo in ~/worktrees/.metadata/repos.json by repo_name
@@ -41,10 +42,20 @@ fi
 # To register an account for a repo:
 #   jq '.repositories.<name>.gh_account = "<user>"' ~/worktrees/.metadata/repos.json
 REMOTE_URL=$(git -C "$CURRENT_DIR" remote get-url origin 2>/dev/null)
-GH_HOST_VAL="github.com"
+# Host of https://[user@]host/..., ssh://[user@]host[:port]/... or [user@]host:path
+REMOTE_HOST=$(printf '%s\n' "$REMOTE_URL" | sed -nE 's#^([A-Za-z][A-Za-z0-9+.-]*://)?([^@/]+@)?([^:/]+).*#\3#p')
 case "$REMOTE_URL" in
-    *github.groupondev.com*) GH_HOST_VAL="github.groupondev.com" ;;
+    http://*|https://*) ;;
+    *)
+        # An SSH remote may name an ~/.ssh/config alias; -G prints the real host without connecting.
+        SSH_HOST=$([ -n "$REMOTE_HOST" ] && ssh -G "$REMOTE_HOST" 2>/dev/null | awk '$1 == "hostname" { print $2; exit }')
+        [ -n "$SSH_HOST" ] && REMOTE_HOST="$SSH_HOST"
+        ;;
 esac
+GH_HOST_VAL="github.com"
+if [ -n "$REMOTE_HOST" ] && [ "$REMOTE_HOST" != "github.com" ]; then
+    GH_HOST_VAL="$REMOTE_HOST"
+fi
 # Extract <owner> from owner/repo at the end of the URL (handles ssh + https, optional .git)
 OWNER=$(printf '%s\n' "$REMOTE_URL" | sed -nE 's#.*[:/]([^/:]+)/[^/]+(\.git)?$#\1#p')
 

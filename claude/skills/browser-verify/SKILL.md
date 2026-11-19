@@ -68,7 +68,7 @@ Infer the URL from the description and navigate.
 ```bash
 git diff main-do...HEAD --name-only 2>/dev/null | head -20
 ```
-Map changed files to their corresponding pages. See [page-mapping.md](page-mapping.md)
+Map changed files to their corresponding pages. If the employer layer has a page map (`~/.claude/company/*/browser-verify/page-mapping.md`) for this repo's layout, use it.
 if available, otherwise use directory structure conventions.
 
 ## Step 3 — Full-Page Health Check
@@ -126,7 +126,7 @@ Structure your findings as:
   - All 3 charts loaded
   - No console errors
   - Filters responsive
-  Screenshot: /tmp/verify-ECH-672-1713200000.png
+  Screenshot: /tmp/verify-PROJ-672-1713200000.png
 ```
 
 ### Issues Found
@@ -142,7 +142,7 @@ PRE-EXISTING ISSUES (not caused by your changes):
      → Known issue, not related to this PR
 
 Console errors: 2 (1 new, 1 pre-existing)
-Screenshot: /tmp/verify-ECH-672-1713200000.png
+Screenshot: /tmp/verify-PROJ-672-1713200000.png
 ```
 
 ## Step 5 — Act on Results

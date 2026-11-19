@@ -2,7 +2,12 @@
 
 ### Guidelines
 
-- **Always use AskUserQuestion** when asking the user anything
+<!-- CC-ONLY -->
+- **Use AskUserQuestion** when asking the user anything (it renders a structured form)
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+- **Use plain-text numbered options** when asking the user anything — the `AskUserQuestion` tool isn't callable in Codex
+CODEX-END -->
 - **Explainer-first prompts** — when prompting the user to choose between options, lead with one short paragraph that names what the term means, why these skills need it, and what changes if they pick differently. Then show the choices and the recommended default. Assume the user does not know the term — never present `paths` frontmatter, MCP scoping, or rule-vs-skill distinctions as a multiple-choice without context. Walk them through one section at a time, not all sections at once.
 - **Read before writing** — check existing rules before creating
 - **Write concise rules** — every word costs tokens in context
@@ -25,6 +30,10 @@ Use `{slug}-` prefix on everything: `{slug}-project.md`, `{slug}-mcp-servers.md`
 **Custom rules** in `.claude/rules/`: `{slug}-project.md` (tech stack, structure), `{slug}-mcp-servers.md` (custom MCP servers), `{slug}-{pattern-name}.md` (tribal knowledge).
 
 Use unique names (not `plan`, `implement`, `verify`, `standards-*`) for custom rules.
+
+<!-- CODEX-START
+**Codex output:** Codex reads project instructions from repo-root `AGENTS.md`, not `.claude/rules/`. When running `$setup-rules` in Codex, `.claude/rules/` may be used as a compatible modular source, but the workflow is incomplete until root `AGENTS.md` is created or synced from those rules.
+CODEX-END -->
 
 ### Recommended Directory Structure
 
@@ -57,7 +66,7 @@ Use unique names (not `plan`, `implement`, `verify`, `standards-*`) for custom r
 | Product (`{product}/*.md`) | Recommended | Files matching product paths |
 | Team (`{product}/{team}/*.md`) | **MANDATORY** | Files matching team paths only |
 
-**⛔ Team-level rules without `paths` frontmatter load every session for every file** — defeating the purpose of scoping. Always add `paths` to team-level rules.
+**Team-level rules without `paths` frontmatter load every session for every file** — defeating the purpose of scoping. Always add `paths` to team-level rules.
 
 **Example `paths` frontmatter:**
 

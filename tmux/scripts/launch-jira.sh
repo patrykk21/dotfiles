@@ -4,7 +4,7 @@
 # Get current session name
 SESSION=$(tmux display-message -p '#S')
 
-# Extract ticket ID from session name (e.g., ECH-128 from ECH-128-sub)
+# Extract ticket ID from session name (e.g., PROJ-128 from PROJ-128-sub)
 TICKET_ID=""
 if [[ "$SESSION" =~ ([A-Z]+-[0-9]+) ]]; then
     TICKET_ID="${BASH_REMATCH[1]}"
@@ -13,8 +13,15 @@ else
     exit 1
 fi
 
+for f in "$HOME"/.claude/company/*/company.env; do [ -f "$f" ] && . "$f"; done
+
+if [ -z "$JIRA_BASE_URL" ]; then
+    tmux display-message "JIRA_BASE_URL not set: add it to ~/.claude/company/<name>/company.env"
+    exit 1
+fi
+
 # Construct Jira URL
-JIRA_URL="https://groupondev.atlassian.net/browse/$TICKET_ID"
+JIRA_URL="${JIRA_BASE_URL%/}/browse/$TICKET_ID"
 
 source ~/.config/tmux/scripts/os-utils.sh
 

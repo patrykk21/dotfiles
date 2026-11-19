@@ -1,0 +1,21 @@
+# Claude Code plugins for every machine.
+#   marketplace <name> <source>   source: GitHub owner/repo, git URL, or local folder
+#   plugin <plugin>@<marketplace>
+marketplace claude-plugins-official anthropics/claude-plugins-official
+marketplace chrome-devtools-plugins ChromeDevTools/chrome-devtools-mcp
+marketplace claude-code-lsps Piebald-AI/claude-code-lsps
+marketplace superpowers-dev obra/superpowers
+marketplace openai-codex openai/codex-plugin-cc
+marketplace wakatime https://github.com/wakatime/claude-code-wakatime.git
+plugin vercel@claude-plugins-official
+plugin clangd-lsp@claude-plugins-official
+plugin skill-creator@claude-plugins-official
+plugin pyright-lsp@claude-plugins-official
+plugin gopls-lsp@claude-plugins-official
+plugin jdtls-lsp@claude-plugins-official
+plugin codex@openai-codex
+plugin vtsls@claude-code-lsps
+plugin basedpyright@claude-code-lsps
+plugin gopls@claude-code-lsps
+plugin chrome-devtools-mcp@chrome-devtools-plugins
+plugin superpowers@superpowers-dev

@@ -3,10 +3,9 @@ name: spec-plan
 description: "Spec planning phase - explore codebase, design plan, get approval"
 argument-hint: "<task description> or <path/to/plan.md>"
 user-invocable: false
-model: opus[1m]
 hooks:
   Stop:
-    - command: uv run --no-project python "${CLAUDE_PLUGIN_ROOT}/hooks/spec_plan_validator.py"
+    - command: uv run --no-project python "$HOME/.claude/hooks/spec_plan_validator.py"
 ---
 
 # /spec-plan - Planning Phase
@@ -15,7 +14,12 @@ hooks:
 
 **Input:** Task description (new) or plan path (continue unapproved)
 **Output:** Approved plan at `docs/plans/YYYY-MM-DD-<slug>.md`
+<!-- CC-ONLY -->
 **Next:** On approval → `Skill(skill='spec-implement', args='<plan-path>')`
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+**Next:** On approval → continue immediately with the `$spec-implement` skill instructions using arguments: `<plan-path>`.
+CODEX-END -->
 
 ---
 
@@ -28,31 +32,75 @@ hooks:
 - **ONLY stopping point is plan approval** — everything else is automatic. Never ask "Should I fix these?"
 - **Re-read plan after user edits** — before asking for approval again
 - **Plan file is source of truth** — survives across auto-compaction cycles
+<!-- CC-ONLY -->
 - **Quality over speed** — never rush due to context pressure
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+- **Bounded quality** — do enough verification to make the plan actionable, then draft it.
+CODEX-END -->
+
+<!-- CODEX-START
+
+### Codex Planning Speed Contract
+
+For Codex, quality means enough verified context to write an implementable plan, not exhaustive research. This block overrides broader "always" and "mandatory" exploration language in this skill and in the rules when they conflict.
+
+- Reach a first complete plan draft before context reaches 35%.
+- **Planning context ceiling — total planning must not exceed ~55% of the context window (hard cap 60%).** The 35% target above is the *first-draft* budget; the remaining headroom is for self-review, annotation processing, and refinement — NOT more exploration. On the ~256K Codex window that is ≈140K tokens. If context approaches ~55% before approval, STOP all exploration and refinement and finalize the plan immediately with what you have; push remaining detail into per-task DoD for implementation to resolve. Crossing the ceiling means the plan is too granular — trim scope, do not keep researching. Implementation needs the larger share of the window, so planning that eats >60% has already failed.
+- Use a bounded scan: at most one CodeGraph orientation call when runtime-code structure is unknown, plus one Semble intent search at most before asking or choosing. If either result is irrelevant, pivot immediately to direct file reads. Skip CodeGraph for docs, rules, markdown, config, UI copy, reviews of a known diff, or named paths.
+- Ask at most one clarification/design batch before approval. If you can make a reversible assumption, document it under "Assumptions" or "Autonomous Decisions" and continue.
+- Stop exploration once you can name the files, commands, tests, and user-visible checks for each task. Leave implementation-time details to task DoD.
+- Do not wait for automated reviewer agents during Codex planning. Step 10 is self-review only until Codex-native review agents are available.
+CODEX-END -->
 
 ## Step 0: Setup & Question Policy
 
 ### 0.1 Read Toggle Configuration
 
-**⛔ Run FIRST, before any other step.** Read all toggle env vars in a single Bash call:
+**Run first, before any other step.** Read all toggle env vars in a single Bash call:
 
+<!-- CC-ONLY -->
 ```bash
-echo "QUESTIONS=$PILOT_PLAN_QUESTIONS_ENABLED REVIEWER=$PILOT_SPEC_REVIEW_ENABLED CODEX_SPEC=$PILOT_CODEX_SPEC_REVIEW_ENABLED APPROVAL=$PILOT_PLAN_APPROVAL_ENABLED"
+echo "QUESTIONS=$PILOT_PLAN_QUESTIONS_ENABLED REVIEWER=$PILOT_SPEC_REVIEW_ENABLED CODEX_SPEC=$PILOT_CODEX_SPEC_REVIEW_ENABLED APPROVAL=$PILOT_PLAN_APPROVAL_ENABLED MODEL_SWITCH=$PILOT_MODEL_SWITCH_ENABLED"
 ```
 
-Reference these values throughout: Steps 4/6 (questions), 10 (reviewer + Codex — Codex controlled by Console Settings), and 12 (approval).
+Reference these values throughout: Steps 4/6 (questions), 10 (reviewer + Codex — Codex controlled by Console Settings), and 12 (approval + Model Switching handoff).
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+```bash
+echo "QUESTIONS=$PILOT_PLAN_QUESTIONS_ENABLED REVIEWER=$PILOT_SPEC_REVIEW_ENABLED APPROVAL=$PILOT_PLAN_APPROVAL_ENABLED MODEL_SWITCH=$PILOT_MODEL_SWITCH_ENABLED"
+```
+
+Reference these values throughout: Steps 4/6 (questions), 10 (native Codex `spec-review` subagent), and 12 (approval + Model Switching handoff).
+CODEX-END -->
 
 ### 0.2 Asking User Questions
 
-**⛔ If `PILOT_PLAN_QUESTIONS_ENABLED` is `"false"` (above),** skip ALL `AskUserQuestion` calls in Steps 4 and 6. Make reasonable default choices (including selecting the recommended approach in Step 6) and document them in the plan under an "Autonomous Decisions" sub-section. Continue to the next step immediately.
+**If `PILOT_PLAN_QUESTIONS_ENABLED` is `"false"` (above),** skip all `AskUserQuestion` calls in Steps 4 and 6. Make reasonable default choices (including selecting the recommended approach in Step 6) and document them in the plan under an "Autonomous Decisions" sub-section. Continue to the next step immediately.
 
-**⛔ ALWAYS use the `AskUserQuestion` tool** (when questions are enabled) — never list numbered questions in plain text. Each question gets its own entry with predefined options users can select. This provides a structured form UI that is much easier to answer than freeform numbered lists.
+<!-- CC-ONLY -->
+**Use the `AskUserQuestion` tool for user questions** (when questions are enabled) — it renders a structured form that's much easier to answer than a plain-text numbered list, with each question its own entry of predefined options. Don't fall back to numbered questions in prose.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+**Use plain-text numbered options for user questions** (when questions are enabled) — the Claude question tool isn't callable in Codex. Present each question with 2-4 concrete options and wait for the user's response.
 
-**⛔ Default is to ASK, not skip.** Every plan benefits from at least one round of user alignment. Only skip questions when the task is a single-file change with zero ambiguity.
+**Codex speed override:** `PILOT_PLAN_QUESTIONS_ENABLED=true` allows questions; it does not require two question rounds. Ask only when the missing answer can materially change scope, architecture, or user-visible behavior. Keep Codex planning to one bundled prompt with at most 3 short questions, unless the user has explicitly asked for deeper planning.
+CODEX-END -->
+
+<!-- CC-ONLY -->
+**Default is to ask, not skip.** Every plan benefits from at least one round of user alignment. Only skip questions when the task is a single-file change with zero ambiguity.
 
 **Questions batched into max 2 interactions:** Batch 1 (before exploration) clarifies task/scope/priorities. Batch 2 (after exploration) covers approach selection and design decisions. **Both batches are expected for most tasks** — skipping both is the exception, not the norm.
 
 **Principles:** Present options with trade-offs (not open-ended). Start open, narrow down. Challenge vagueness — make abstract concrete. 1-2 focused questions beat 4 vague ones. Questions clarify HOW to implement, not whether to expand scope.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+**Codex default is to proceed after one bounded alignment check.** If the request is clear enough to make reversible assumptions, do not ask before drafting the plan.
+
+**Questions are capped at one interaction:** ask before exploration only when the answer changes scope or architecture. Skip Batch 2 unless the wrong choice would cause visible rework.
+
+**Principles:** prefer concrete assumptions, short trade-offs, and fast plan delivery. Questions clarify blocking decisions only.
+CODEX-END -->
 
 ## Step 1: Special Cases (conditional — skip both sub-sections if neither applies)
 
@@ -133,6 +181,13 @@ When adding tasks to an existing plan: load it, parse structure, verify compatib
 
    If the command returns a non-empty email, include `Author: <email>` in the header. If empty or fails, omit the Author line entirely.
 
+<!-- CC-ONLY -->
+4b. **Detect agent:** If `$CLAUDE_CODE_ENTRYPOINT` is set, agent is `Claude Code`. Otherwise, agent is `Codex`.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+4b. **Set agent:** Use `Codex`.
+CODEX-END -->
+
 5. **Write initial header:**
 
    ```markdown
@@ -140,6 +195,12 @@ When adding tasks to an existing plan: load it, parse structure, verify compatib
 
    Created: [Date]
    Author: [email if available]
+   <!-- CC-ONLY -->
+   Agent: [Claude Code|Codex]
+   <!-- /CC-ONLY -->
+   <!-- CODEX-START
+   Agent: Codex
+   CODEX-END -->
    Status: PENDING
    Approved: No
    Iterations: 0
@@ -165,8 +226,25 @@ When adding tasks to an existing plan: load it, parse structure, verify compatib
 
 **Why this step exists.** Batch 1 clarifying questions (Step 4) are generated *before* exploration. Without code context, options collapse to generic shapes ("extend existing" vs "new module") instead of grounded ones ("Extend `LicenseAuth` in `launcher/auth.py:42`"). A single ~2-second scan up front fixes that — and the same scan is reused in Step 5 so we never pay for `codegraph_context` twice.
 
-**⛔ Always runs**, regardless of `PILOT_PLAN_QUESTIONS_ENABLED`. Autonomous mode benefits *more* from grounded defaults, not less — when there is no user to disambiguate, the codebase has to.
+**Always runs**, regardless of `PILOT_PLAN_QUESTIONS_ENABLED`. Autonomous mode benefits *more* from grounded defaults, not less — when there is no user to disambiguate, the codebase has to.
 
+<!-- CODEX-START
+
+### Codex 3.1 Replacement: Bounded Scan
+
+For Codex, this replaces the generic 3.1 scan below.
+
+Run at most two orientation calls total:
+
+1. `codegraph_context(task="<task description from user>")` only when the task likely modifies runtime code and the entry points are not already named.
+2. `mcp__semble__search(query="<2-3 key nouns from task>", top_k=5)` only when CodeGraph is weak, the task is cross-cutting, or the task is docs/config/rules-heavy.
+
+If the user names concrete paths, docs, rules, markdown, config, UI copy, or a known diff, read those files directly instead of spending a graph call. If CodeGraph returns irrelevant symbols, treat that as a signal to stop graph exploration, not to retry with more graph tools.
+
+Capture no more than five bullets in the Workspace Scan. The scan is a routing aid, not a research report.
+CODEX-END -->
+
+<!-- CC-ONLY -->
 ### 3.1: Run the scan
 
 1. **CodeGraph orientation** (always):
@@ -177,13 +255,14 @@ When adding tasks to an existing plan: load it, parse structure, verify compatib
 
    Returns entry points, related symbols, and key code locations.
 
-2. **Semble pattern search** (skip if `codegraph_context` already returned ≥3 highly relevant hits AND the task has no clear noun targets — keep total budget under ~2s):
+2. **Semble intent search** (always — catches cross-cutting code, mutation sites, and cross-language connections that CodeGraph's structural graph misses):
 
    ```
    mcp__semble__search(query="<2-3 key nouns from task>")
    ```
 
    Use natural-language intent for conceptual tasks ("how does auth work"); use identifier-like queries when the task names a symbol ("LicenseAuth save_pretrained"). One call, top-k default.
+<!-- /CC-ONLY -->
 
 ### 3.2: Capture structured output (in-context, NOT in the plan file yet)
 
@@ -220,11 +299,12 @@ Workspace Scan
    | CLI/scripts | Output format, flags, exit codes                   |
    | Data/config | Schema, migration, validation, defaults            |
 
-4. **⛔ Code-first rule: ground every question in the Step 3 Workspace Scan output.** Before formulating a question, ask "can I answer this from the codebase?" If yes, do that instead — don't ask. For questions you do ask, **option labels must reference real files and symbols when the scan found them** — e.g., `Extend LicenseAuth in launcher/auth.py:42`, not `Extend existing module`. Only ask the user about decisions the code can't make — purpose, priority trade-offs, scope boundaries, behavioral expectations not yet encoded.
+4. **Code-first rule: ground every question in the Step 3 Workspace Scan output.** Before formulating a question, ask "can I answer this from the codebase?" If yes, do that instead — don't ask. For questions you do ask, **option labels must reference real files and symbols when the scan found them** — e.g., `Extend LicenseAuth in launcher/auth.py:42`, not `Extend existing module`. Only ask the user about decisions the code can't make — purpose, priority trade-offs, scope boundaries, behavioral expectations not yet encoded.
 
    - If `Greenfield?: yes` in the scan output, fall back to generic options and note the fallback under "Autonomous Decisions" in Step 9.
    - If the scan output names symbols/files relevant to a question, generic labels are a regression — use the names. Asking the user about facts already in the codebase, or asking with abstract options when grounded ones are available, is the single biggest source of unnecessary friction in planning.
 
+<!-- CC-ONLY -->
 5. **Ask Batch 1 questions** → notify, then use `AskUserQuestion` with each question as a separate entry with predefined options:
 
    ```bash
@@ -234,10 +314,30 @@ Workspace Scan
    Each question must have 2-4 concrete options. Use `multiSelect: true` when choices aren't mutually exclusive.
 
    Even when the task seems clear, ask about: scope boundaries (what's explicitly out), priority trade-offs (speed vs completeness), or behavioral expectations (error handling, edge cases). **Only skip if the task is a trivial single-file change.**
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+5. **Codex Batch 1 policy:** ask only when the answer would change task boundaries, architecture, or user-visible behavior and cannot be inferred from the request or code.
+
+   - If no blocking question remains, continue and record any reversible defaults in the plan under "Assumptions" or "Autonomous Decisions".
+   - If asking, notify first, then send one plain-text prompt with at most 3 short questions and 2-3 concrete options each.
+   - Do not ask the user to choose between facts the codebase can answer. Read the relevant file instead.
+CODEX-END -->
 
 ## Step 5: Exploration
 
-**⛔ START FROM THE STEP 3 WORKSPACE SCAN — do NOT re-run `codegraph_context` with the same query.**
+**Start from the Step 3 Workspace Scan — don't re-run `codegraph_context` with the same query.**
+
+<!-- CODEX-START
+
+### Codex Exploration Budget
+
+For Codex, this budget overrides the broader exploration guidance below.
+
+- Spend at most 6 expensive exploration calls before the first plan draft. Expensive calls are CodeGraph, Semble, web/doc lookups, GitHub search, and broad Grep. Direct reads of already-identified files are allowed but should stay scoped to files the plan will touch.
+- For docs, rules, markdown, config, and UI-label changes, stop once the named files and one nearby pattern are verified. Do not run call graph or impact analysis.
+- For runtime code changes, run callers/callees/impact only for shared public functions you already expect to modify. Do not enumerate every dependency just to make the plan look complete.
+- If uncertainty remains after the budget, either ask one bundled question or document the assumption. Do not continue broad research before drafting the plan.
+CODEX-END -->
 
 #### 5.1: Review Step 3 scan output
 
@@ -250,8 +350,14 @@ Similar patterns: [...]
 Greenfield?: [yes | no]
 ```
 
-If `Greenfield?: yes` AND the task is conceptual rather than symbol-mapped, **now** is the time to broaden with `mcp__semble__search` using different phrasings — Step 3 only ran the obvious noun query. Otherwise, proceed to 5.2 with the scan results as your starting set of entry points.
+<!-- CC-ONLY -->
+If the scan didn't fully cover the intent (concept-heavy, cross-cutting, debugging-style, or greenfield), broaden with `mcp__semble__search` using different phrasings or `mcp__semble__find_related` from a promising hit. Then proceed to 5.2.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+If the scan did not identify candidate files, use one more targeted Semble search or ask one bundled question. If it did identify files, read those files and proceed to planning.
+CODEX-END -->
 
+<!-- CC-ONLY -->
 #### 5.2: Deep dive with CodeGraph explore
 
 After orienting, use `codegraph_search` to find specific symbol names, then:
@@ -281,16 +387,31 @@ This returns **full source code sections** from all relevant files in ONE call �
 | **Exact text/regex**            | Grep/Glob (last resort)                                 |
 
 **Areas (in order):** Architecture → Similar Features → Dependencies → Tests
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+#### 5.2: Codex focused exploration
 
+Read the concrete files the plan will touch and one nearby test or pattern file when available. Use one additional `codegraph_explore`, `mcp__semble__find_related`, or exact-text search only when a target file remains unclear.
+
+**Areas (in order):** target behavior -> target files -> tests. Skip broad architecture surveys unless the user requested an architectural change.
+CODEX-END -->
+
+<!-- CC-ONLY -->
 #### 5.4: Dependency analysis (MANDATORY for 3+ file changes)
 
 For every function you plan to modify: (1) `codegraph_callers` + `codegraph_callees` for the call graph, (2) `Grep` for the symbol name to catch callers the graph may miss, (3) `codegraph_impact` to assess blast radius. CodeGraph gives structure; Grep gives completeness — use both.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+#### 5.4: Dependency analysis (Codex scoped)
+
+Run dependency analysis only for runtime functions/classes whose behavior will change and whose callers are not obvious from the files already read. Skip this step for docs, rules, config, markdown-only, generated text, and UI-copy changes.
+CODEX-END -->
 
 For each area: document hypotheses, note full file paths, track unanswered questions. After exploration: read identified files to verify hypotheses, build complete mental model, identify integration points, note reusable patterns.
 
 ## Step 6: Approach Selection & Design Decisions
 
-**⛔ Do NOT skip this step.** After exploration, always weigh competing approaches before committing. Even when one approach seems obvious, considering alternatives validates the choice and surfaces blind spots.
+**Don't skip this step.** After exploration, weigh competing approaches before committing. Even when one approach seems obvious, considering alternatives validates the choice and surfaces blind spots.
 
 **Two parts — both mandatory in-process; the plan only records the chosen path:**
 
@@ -303,12 +424,18 @@ Internally consider 2-3 implementation approaches based on exploration findings.
 - **Trade-offs** — frame as **"X at the cost of Y"** — never recommend without stating what it costs
 - **Recommendation** — pick a preferred approach with reasoning
 
+<!-- CC-ONLY -->
 If exploration also revealed scope ambiguity (gaps, optional features, multiple directions), include scope items as part of this step. `AskUserQuestion(multiSelect: true)` for scope items; unselected items go to "Out of Scope" or "Deferred Ideas."
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+If exploration reveals scope ambiguity, prefer the smallest implementable scope that satisfies the request and record excluded items under "Out of Scope". Ask a Codex Batch 2 question only when choosing the wrong option would cause rework across multiple tasks or a user-visible mismatch.
+CODEX-END -->
 
 #### Part B: Design Decisions
 
 Within the chosen approach, resolve remaining design choices. Each decision gets 2-3 concrete options with trade-offs and your recommendation.
 
+<!-- CC-ONLY -->
 **Notify, then ask (Batch 2):**
 
 ```bash
@@ -318,6 +445,12 @@ Within the chosen approach, resolve remaining design choices. Each decision gets
 Use `AskUserQuestion` — Part A (approach selection) and Part B (design decisions) can be combined into a single Batch 2 interaction when the decisions are related.
 
 **When questions are disabled (`PILOT_PLAN_QUESTIONS_ENABLED=false`):** Still evaluate approaches and design decisions internally. Select the recommended approach, resolve design decisions with reasonable defaults, and document all choices with reasoning in the plan's "Autonomous Decisions" section.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+**Codex Batch 2 policy:** do not ask a second question batch for ordinary trade-offs. Resolve them internally, state the chosen approach with one cost sentence, and proceed. If a Batch 2 question is unavoidable, notify first and ask one bundled plain-text prompt; after the answer, write the plan immediately.
+
+**When questions are disabled (`PILOT_PLAN_QUESTIONS_ENABLED=false`):** select the recommended approach, resolve design decisions with reasonable defaults, and document non-obvious choices in the plan's "Autonomous Decisions" section.
+CODEX-END -->
 
 **What ends up in the plan (`## Approach` section, Step 9):** only the chosen approach's **Name** and **Why** (1-2 sentences capturing what it gives us and what it costs). Do NOT list rejected alternatives in the plan — they're decision exhaust, not implementer information. The only exception: if a user-rejected option is one an implementer might re-derive ("why aren't we just doing X?"), capture that rejection as a single sentence inside the `Why:` line.
 
@@ -343,12 +476,12 @@ One responsibility per file. Files that change together live together. In existi
 
 **Task Granularity:** Each task: independently testable, focused (2-4 files max), verifiable. Split if multiple unrelated DoD criteria; merge if one can't be tested without the other. Don't create tasks for setup/boilerplate with no standalone value — fold into the first task that uses them. Task ORDER implies dependencies — no separate `Dependencies:` field needed.
 
-**Task Structure (3 required fields — keep it tight):**
+**Task Structure (4 required fields — keep it tight):**
 
 ```markdown
-### Task N: [Component Name — make the TITLE the objective. "Rename foo → bar in launcher" tells the reader everything; do not then write a 2-sentence Objective restating it.]
+### Task N: [Component Name — a short imperative title; the Objective below carries the description.]
 
-**Objective:** [OPTIONAL — include ONLY when the title cannot convey purpose. If the title is self-explanatory ("Rename X → Y", "Add /api/users endpoint", "Migrate v10 → v11"), OMIT this field entirely. When included, ≤2 sentences capturing why or cross-task implications the title can't. If covered by a specific E2E scenario, reference it inline: "verified by TS-002".]
+**Objective:** [REQUIRED — 2-3 sentences describing what this task does and why. Reads as the "what this task does" line shown below the title in the Console / pilot-shell.com spec viewer. State the change in plain prose, not bullet form. If a specific E2E scenario verifies it, reference it inline: "verified by TS-002".]
 
 **Files:**
 
@@ -387,7 +520,7 @@ When listing files for a task, do not auto-create a new `tests/.../test_<file>.p
 3. Otherwise, plan **at most 1 new unit test class + at most 1 new functional/integration test class** for this production class. More than that requires an explicit `Why >2 test classes:` note in `Key Decisions`.
 4. Never plan a test file per method or per branch. The test class is the unit; methods inside it cover branches.
 
-The reviewer agent (`pilot/agents/changes-review.md`) and `spec-verify` Step 2 audit these rules against the actual diff — they are not advisory.
+The reviewer agent and `spec-verify` Step 2 audit these rules against the actual diff — they are not advisory.
 
 **Performance considerations:** When a task processes data on a hot path (render loops, request handlers, polling callbacks), note it in Key Decisions. Flag: expensive computations that should be cached/memoized, heavy dependencies that have lighter alternatives, and repeated work that can be avoided when input hasn't changed.
 
@@ -405,7 +538,7 @@ Do NOT list "supporting artifacts" — they duplicate the per-task `Files:` bloc
 
 #### Step 7.3: Completeness Probe
 
-**⛔ Skip this step when task count ≤ 2** AND the plan does NOT touch security, authentication, data integrity, or destructive operations — the probe's ~2-min cost exceeds its value for 1–2 task changes whose error paths the implementer can audit by inspection. For 3+ task plans, OR any plan touching sensitive surfaces regardless of size, run the probe in full.
+**Skip this step when task count ≤ 2** AND the plan does NOT touch security, authentication, data integrity, or destructive operations — the probe's ~2-min cost exceeds its value for 1–2 task changes whose error paths the implementer can audit by inspection. For 3+ task plans, OR any plan touching sensitive surfaces regardless of size, run the probe in full.
 
 Before locking the truth list, work backward from the success state to find missing observable behaviors. For the chosen approach, walk these four prompts once:
 
@@ -467,10 +600,45 @@ If you find yourself writing the same fact in two places, delete one — the lon
 **Required sections:** Summary · Approach · Progress Tracking · Implementation Tasks.
 **Conditional sections** (include only when applicable, omit entirely otherwise): Out of Scope · Context for Implementer · Runtime Environment · Feature Inventory · Assumptions · Risks and Mitigations · Goal Verification · E2E Test Scenarios · Open Questions · Deferred Ideas.
 
+<!-- CODEX-START
+### Codex Console Task-Card Contract
+
+The Console and pilot-shell.com share renderer only creates clickable task cards with collapsible fields when task bodies use the exact Step 7 labels below. This is a hard output contract for Codex plans.
+
+Every task under `## Implementation Tasks` MUST use this exact shape:
+
+```markdown
+### Task N: Short imperative title
+
+**Objective:** One short prose paragraph.
+
+**Files:**
+
+- Modify: `path/to/file`
+
+**Key Decisions / Notes:**
+
+- Decision or implementation note.
+
+**Definition of Done:**
+
+- [ ] Verifiable criterion.
+- [ ] Verify: `command`
+```
+
+Do not write plain labels like `Files:`, `Key Decisions:`, `Definition of Done:`, or a separate `Verification:` block. Those do not render as the task-card fields.
+CODEX-END -->
+
 ```markdown
 # [Feature Name] Implementation Plan
 
 Created: [Date]
+<!-- CC-ONLY -->
+Agent: [Claude Code|Codex — from Step 2 detection]
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+Agent: Codex
+CODEX-END -->
 Status: PENDING
 Approved: No
 Iterations: 0
@@ -534,7 +702,7 @@ Type: Feature
 
 ## Implementation Tasks
 
-[Tasks from Step 7 — full per-task bodies.]
+[Tasks from Step 7 — full per-task bodies. Each task must include the exact bold labels `**Objective:**`, `**Files:**`, `**Key Decisions / Notes:**`, and `**Definition of Done:**`.]
 
 ## Open Questions (only if any remain unresolved at approval time)
 
@@ -545,7 +713,7 @@ Type: Feature
 
 ### 10.0: No-Placeholders Self-Check (always — before launching reviewers)
 
-⛔ Walk the plan file once, fresh-eyed, and grep for the patterns below. **Every match is a plan failure** — fix inline before sending the plan to a reviewer or asking for approval.
+Walk the plan file once, fresh-eyed, and grep for the patterns below. **Every match is a plan failure** — fix inline before sending the plan to a reviewer or asking for approval.
 
 **Forbidden placeholder patterns:**
 
@@ -567,9 +735,10 @@ If anything matches, fix it inline (no new round-trip needed). Then proceed to s
 
 ---
 
-**⛔ If `PILOT_SPEC_REVIEW_ENABLED` is `"false"` (from Step 0),** skip the Claude reviewer launch below and proceed straight to the Codex section.
+<!-- CC-ONLY -->
+**If `PILOT_SPEC_REVIEW_ENABLED` is `"false"` (from Step 0),** skip the Claude reviewer launch below and proceed straight to the Codex section.
 
-**⛔ Auto-skip the Claude reviewer for small plans.** If the plan has **task count ≤ 2** AND it does NOT touch security, authentication, data integrity, or destructive operations, skip the Claude reviewer launch — reviewer overhead exceeds value for a change the implementer can audit by inspection. Continue to the Codex section below; Codex still runs **only** when the user has explicitly opted in via `PILOT_CODEX_SPEC_REVIEW_ENABLED`.
+**Auto-skip the Claude reviewer for small plans.** If the plan has **task count ≤ 2** AND it does NOT touch security, authentication, data integrity, or destructive operations, skip the Claude reviewer launch — reviewer overhead exceeds value for a change the implementer can audit by inspection. Continue to the Codex section below; Codex still runs **only** when the user has explicitly opted in via `PILOT_CODEX_SPEC_REVIEW_ENABLED`.
 
 For 3+ task plans, OR any plan touching sensitive surfaces regardless of task count, run the Claude reviewer below in full.
 
@@ -583,7 +752,7 @@ SESS_ID=$(echo $PILOT_SESSION_ID)
 
 Output path: `~/.pilot/sessions/<SESS_ID>/findings-spec-review-<plan-slug>.json`
 
-**⛔ Delete stale findings before launching** (previous run of the same plan may have left a file):
+**Delete stale findings before launching** (previous run of the same plan may have left a file):
 
 ```bash
 rm -f "$OUTPUT_PATH"
@@ -591,7 +760,7 @@ rm -f "$OUTPUT_PATH"
 
 ```
 Task(
-  subagent_type="pilot:spec-review",
+  subagent_type="spec-review",
   run_in_background=true,
   prompt="""
   **Plan file:** <plan-path>
@@ -614,7 +783,7 @@ Task(
 
 Launch Codex review NOW — it runs in parallel with the Claude reviewer above.
 
-**⛔ Codex-once rule.** Codex runs at most once per `/spec` invocation. Before launching, check the sentinel file. If it exists, the review already ran in this session — skip the launch and the collection sub-step below. Plan iterations (annotation feedback, plan edits, fixing prior findings) do NOT trigger another Codex run.
+**Codex-once rule.** Codex runs at most once per `/spec` invocation. Before launching, check the sentinel file. If it exists, the review already ran in this session — skip the launch and the collection sub-step below. Plan iterations (annotation feedback, plan edits, fixing prior findings) do NOT trigger another Codex run.
 
 ```bash
 SESS_ID="${PILOT_SESSION_ID:-default}"
@@ -633,13 +802,13 @@ CODEX_COMPANION=$(ls ~/.claude/plugins/cache/openai-codex/codex/*/scripts/codex-
 PROJECT_ROOT="${CLAUDE_PROJECT_ROOT:-$(pwd)}"
 ```
 
-2. Build the review prompt file by rendering the **template at `${CLAUDE_PLUGIN_ROOT}/agents/spec-review-codex.md`**. The template is the single source of truth for plan-review semantics — do NOT re-state the prompt inline in this skill. Substitute three placeholders:
+2. Build the review prompt file by rendering the **template at `$HOME/.claude/agents/spec-review-codex.md`**. The template is the single source of truth for plan-review semantics — do NOT re-state the prompt inline in this skill. Substitute three placeholders:
    - `{{PLAN_PATH}}` — absolute path to the plan file
    - `{{PLAN_GOAL}}` — the 1–2 sentence Goal sentence from the plan's `## Summary`
    - `{{CONTEXT_FILES}}` — newline-separated absolute paths to source/reference files the plan ports from or extends (use the files referenced in `## Context for Implementer`)
 
 ```bash
-PROMPT_TEMPLATE="${CLAUDE_PLUGIN_ROOT}/agents/spec-review-codex.md"
+PROMPT_TEMPLATE="$HOME/.claude/agents/spec-review-codex.md"
 PROMPT_FILE="/tmp/codex-spec-review-${PILOT_SESSION_ID:-default}-<plan-slug>.md"
 
 # Set these before rendering:
@@ -661,7 +830,7 @@ pathlib.Path(os.environ["PROMPT_FILE"]).write_text(text)
 '
 ```
 
-3. Launch the task in background. **⛔ For `task`, the companion's `--background` flag IS supported (unlike `review`/`adversarial-review` where only Claude Code's `Bash(run_in_background=true)` detaches).** Use the companion's own background mode here — the launch command returns the job ID immediately on stdout. Capture the job ID for collection.
+3. Launch the task in background. **For `task`, the companion's `--background` flag IS supported** (unlike `review`/`adversarial-review`, where only Claude Code's `Bash(run_in_background=true)` detaches). Use the companion's own background mode here — the launch command returns the job ID immediately on stdout. Capture the job ID for collection.
 
    ```
    Bash(
@@ -672,6 +841,15 @@ pathlib.Path(os.environ["PROMPT_FILE"]).write_text(text)
    ```
 
    The stdout looks like: `Codex Task started in the background as task-<id>. Check /codex:status task-<id> for progress.` Extract the `task-…` token and store as `JOB_ID`.
+
+   **Verify registration before polling** — fail-fast guard against synthetic-ID launches:
+
+   ```bash
+   node "$CODEX_COMPANION" status "$JOB_ID" --json 2>/dev/null | grep -q '"status":' \
+     || { echo "Codex launch did not register with broker — JOB_ID is synthetic. Skipping Codex this run."; JOB_ID=""; }
+   ```
+
+   If `$JOB_ID` is empty, skip the Codex polling section and proceed with Claude reviewer only.
 
 **Do NOT wait** — proceed to collect the Claude reviewer results first.
 
@@ -686,13 +864,13 @@ for i in $(seq 1 150); do [ -f "$OUTPUT_PATH" ] && echo "READY" && break; sleep 
 
 Then Read the file once. If not READY after 5 min, re-launch synchronously.
 
-**⛔ Validate findings:** After reading the JSON, verify that the `plan_file` field matches the current plan path. If it doesn't match, the findings are stale from a previous `/spec` — delete the file, re-launch the reviewer, and wait again.
+**Validate findings:** After reading the JSON, verify that the `plan_file` field matches the current plan path. If it doesn't match, the findings are stale from a previous `/spec` — delete the file, re-launch the reviewer, and wait again.
 
 **Fix Claude reviewer findings immediately** — must_fix → should_fix. Suggestions if reasonable.
 
 #### Collect Codex Results (if launched)
 
-**⛔ MANDATORY — NEVER skip or defer the Codex review.** If Codex was launched above, you MUST collect and act on its results before proceeding. The Codex review runs as `Bash(run_in_background=true)` — you will be automatically notified when it completes.
+**⛔ Never skip or defer the Codex review.** If Codex was launched above, collect and act on its results before proceeding. The Codex review runs as `Bash(run_in_background=true)` — you will be automatically notified when it completes.
 
 **⛔ The completion notification is the ONLY valid signal.** Do NOT read the output file to check if the review is done. The file may contain partial output from an in-progress review — reading it before the notification arrives leads to false conclusions ("no findings" when the review is still running). This is the #1 cause of premature Codex skip.
 
@@ -729,7 +907,7 @@ Run this as `Bash(run_in_background=true, timeout=600000)`. Plan reviews typical
    node "$CODEX_COMPANION" result "$JOB_ID" --json > /tmp/codex-task-result-$$.json
    ```
 
-   Read `/tmp/codex-task-result-$$.json` via `ctx_execute_file` (or Read for small payloads). The relevant fields:
+   Read `/tmp/codex-task-result-$$.json` with the `Read` tool. The relevant fields:
    - `storedJob.status` — must be `"completed"`. If not, treat as a re-launch trigger; do not silently proceed.
    - `storedJob.result.rawOutput` — a string containing Codex's response. With our prompt, this is JSON matching the schema above.
    - `storedJob.rendered` — same content rendered for display; useful as a fallback if `rawOutput` is malformed.
@@ -756,10 +934,60 @@ rm -f "$PROMPT_FILE"
 ```
 
 **If Codex was NOT launched**, proceed after all Claude reviewer must_fix/should_fix resolved.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+**If `PILOT_SPEC_REVIEW_ENABLED` is `"false"` (from Step 0),** skip native Codex plan review and proceed to the task-card format check below.
+
+**When enabled:** launch the managed Codex custom agent and wait for its final JSON response before requesting approval.
+
+1. Spawn the review agent:
+
+```python
+review = multi_agent_v1.spawn_agent(
+    agent_type="spec-review",
+    message="""
+    Plan file: <plan-path>
+    User request: <original task description>
+    Clarifications: <any Q&A>
+
+    Review for alignment with requirements and adversarial risks.
+    Return ONLY valid JSON matching the spec-review schema.
+    Include the plan file path in the `plan_file` field.
+    """,
+)
+```
+
+2. Wait for the result:
+
+```python
+result = multi_agent_v1.wait_agent(targets=[review.agent_id], timeout_ms=600000)
+```
+
+3. Parse the agent's final message as JSON. If parsing fails, treat the raw final message as one `suggestion` finding and continue; do not launch a second reviewer.
+
+4. Validate `plan_file` matches the current plan. If it does not, discard the stale result and self-review instead of applying mismatched findings.
+
+5. Severity mapping:
+   - `must_fix` → fix immediately
+   - `should_fix` → fix immediately
+   - `suggestion` → implement if quick
+
+Fix every `must_fix` and `should_fix` inline, then re-run the no-placeholders and task-card checks before approval.
+
+Before Step 11, run this task-card format check on the plan:
+
+```bash
+grep -nE '^### Task [0-9]+:|^\*\*(Objective|Files|Key Decisions / Notes|Definition of Done):\*\*' "<plan_path>"
+```
+
+Every `### Task N:` block under `## Implementation Tasks` must contain all four bold labels: `**Objective:**`, `**Files:**`, `**Key Decisions / Notes:**`, and `**Definition of Done:**`. Fix any plain labels such as `Files:`, `Key Decisions:`, `Definition of Done:`, or `Verification:` before asking for approval.
+
+Self-review the plan for obvious issues before requesting approval: missing edge cases, unclear DoD criteria, placeholder text, wrong task-card label format, and unresolved ambiguities.
+CODEX-END -->
 
 ## Step 11: Check for Console Annotation Feedback (Before Approval)
 
-**⛔ Run this BEFORE Step 12 (approval).** Check if the user has annotated the plan in the Console's Specifications tab. Annotations auto-save to the unified JSON file — no "Send Feedback" button needed.
+**Run this before Step 12 (approval).** Check if the user has annotated the plan in the Console's Specifications tab. Annotations auto-save to the unified JSON file — no "Send Feedback" button needed.
 
 1. Derive the annotation file path from the plan path:
    - Plan: `docs/plans/2026-03-26-my-feature.md` → Annotations: `docs/plans/.annotations/2026-03-26-my-feature.json`
@@ -775,30 +1003,98 @@ rm -f "$PROMPT_FILE"
 
 4. **If `NO_FEEDBACK`:** proceed directly to Step 12.
 
-## Step 12: Get User Approval
+## Step 12: Get User Approval (and Model Switch Handoff)
 
-**⛔ If `PILOT_PLAN_APPROVAL_ENABLED` is `"false"` (from Step 0),** skip this step: set `Approved: Yes` in the plan file automatically and immediately invoke `Skill(skill='spec-implement', args='<plan-path>')`. No AskUserQuestion, no notification.
+### 12.0 Toggle interaction matrix
 
-**When `PILOT_PLAN_APPROVAL_ENABLED` is NOT `"false"` — MANDATORY APPROVAL GATE:**
+Pull `$PILOT_PLAN_APPROVAL_ENABLED` and `$PILOT_MODEL_SWITCH_ENABLED` from Step 0 and follow the matching row:
 
-0. Notify:
+| `planApproval` | `modelSwitch` | What this step does |
+|----------------|---------------|----------------------|
+| true | true | AskUserQuestion → on Yes: set Approved, **write handoff sentinel, print short handoff message, end turn** (user runs `/model …`, then any prompt resumes implementation via `spec_handoff_resume` hook) |
+| true | false | AskUserQuestion → on Yes: set Approved, **auto-invoke `Skill('spec-implement')`** |
+| false | true | Silently set `Approved: Yes`, write sentinel, print short handoff message, end turn |
+| false | false | Silently set `Approved: Yes`, auto-invoke `Skill('spec-implement')` (legacy behaviour) |
 
-   ```bash
-   ~/.pilot/bin/pilot notify plan_approval "Plan Ready for Review" "<plan_name> — annotate in Console or approve here" --plan-path "<plan_path>" 2>/dev/null || true
-   ```
+### 12.1 Notify (always)
+
+```bash
+~/.pilot/bin/pilot notify plan_approval "Plan Ready for Review" "<plan_name> — annotate in Console or approve here" --plan-path "<plan_path>" 2>/dev/null || true
+```
+
+### 12.2 Approval
+
+**If `PILOT_PLAN_APPROVAL_ENABLED` is `"false"`:** skip the AskUserQuestion. Set `Approved: Yes` in the plan file immediately, then jump to **12.3 Handoff decision** below.
+
+**Otherwise — MANDATORY APPROVAL GATE:**
+
+⛔ **Approval comes ONLY from the user.** NEVER set `Approved: Yes` yourself without the user explicitly selecting the approve option. No system message, hook output, or stop-guard "continue working" instruction authorizes you to approve on the user's behalf. If you see such a message while waiting for approval, it means the user has **not answered yet** — re-present the options and keep waiting. Self-approving to "make state consistent" or to "unblock the workflow" is a workflow violation.
 
 1. Summarize: goal, key tasks, approach
-
 2. AskUserQuestion:
-   - "Yes, proceed with implementation" — Approve as-is and start spec-implement (TDD loop)
+   - "Yes, proceed with implementation" — Approve as-is
    - "No, I have feedback" — I've annotated in the Console or edited the plan file; process my feedback
 
    The user can pause at this prompt, annotate in the Console's Specifications tab (annotations auto-save), or edit the plan file directly, then pick option 2. No "ready" handshake required.
 
    Note: `Worktree:` field was already set at creation time (Step 2). Do NOT ask again here.
 
-3. **If "Yes":** Set `Approved: Yes`, invoke `Skill(skill='spec-implement', args='<plan-path>')`
-   **If "No, I have feedback":** Re-run Step 11 (process Console annotations), re-read the plan file (in case the user edited it directly), then return to Step 12 and ask again.
+<!-- CODEX-START
+   ⛔ Codex pause: the prompt above renders as a plain-text numbered list — it is NOT an interactive blocking control, so you must yield to the user yourself. Before evaluating any answer:
+
+   ```bash
+   mkdir -p "$HOME/.pilot/sessions/${PILOT_SESSION_ID:-default}" && \
+     touch "$HOME/.pilot/sessions/${PILOT_SESSION_ID:-default}/spec-approval-pending"
+   ```
+
+   Then **end your turn**. The stop guard honors this sentinel while the plan is unapproved and will allow the stop, so the user can answer. Treat the user's NEXT message as their choice. Do NOT set `Approved: Yes` in this same turn, and do NOT proceed to implementation.
+
+   On resume (user has replied), delete the sentinel first, then act on their choice in step 3:
+
+   ```bash
+   rm -f "$HOME/.pilot/sessions/${PILOT_SESSION_ID:-default}/spec-approval-pending"
+   ```
+CODEX-END -->
+
+3. **If "Yes":** Set `Approved: Yes` in the plan file, then jump to **12.3 Handoff decision**.
+   **If "No, I have feedback":** Re-run Step 11 (process Console annotations), re-read the plan file (in case the user edited it directly), then return to 12.2 and ask again (Codex: re-touch the `spec-approval-pending` sentinel and end your turn again).
    **If other free-text feedback (config values, threshold changes, clarifications):** This is NOT approval — incorporate the changes into the plan, then re-ask with a fresh AskUserQuestion.
+
+### 12.3 Handoff decision
+
+<!-- CC-ONLY -->
+**If `PILOT_MODEL_SWITCH_ENABLED` is `"true"` (default):** write the handoff sentinel and print the short model-switch message, then end the turn. Do NOT invoke `Skill('spec-implement')` — the user will resume after optionally switching models, and the `spec_handoff_resume` hook will route the next prompt straight to implementation.
+
+```bash
+mkdir -p "$HOME/.pilot/sessions/${PILOT_SESSION_ID:-default}" && \
+  touch "$HOME/.pilot/sessions/${PILOT_SESSION_ID:-default}/spec-handoff-pending"
+```
+
+Then print this message **verbatim** (substitute the plan path):
+
+```
+Plan approved: <plan path>
+
+Switch models, then continue:
+
+  A — Keep context: `/model <name>`, then type `continue`
+  B — Fresh start:  `/model <name>`, `/clear`, then `/spec <plan path>` (lower cost)
+
+Models:
+  `/model sonnet[1m]`  — recommended
+  `/model opus[1m]`
+  `/model sonnet`
+  `/model opus`
+
+Tip: disable "Model Switching" in Settings → Automation to skip this step.
+```
+
+After printing the message, end the turn — the stop guard's handoff sentinel will allow the stop, and the next user prompt will trigger `Skill('spec-implement', '<plan-path>')` automatically (Option A). For Option B the user runs `/clear` then `/spec <plan-path>`, which the dispatcher routes directly to implementation.
+
+**If `PILOT_MODEL_SWITCH_ENABLED` is `"false"`:** do NOT write a sentinel. Invoke `Skill(skill='spec-implement', args='<plan-path>')` directly to continue plan → implement on the current model in the same session.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+Codex has no callable phase-dispatch tool and model switching is not available in Codex CLI. Continue immediately with the `$spec-implement` skill instructions using arguments: `<plan-path>`.
+CODEX-END -->
 
 ARGUMENTS: $ARGUMENTS

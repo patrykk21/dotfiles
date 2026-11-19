@@ -3,7 +3,6 @@ name: spec-implement
 description: "Spec implementation phase - TDD loop for each task in the plan"
 argument-hint: "<path/to/plan.md>"
 user-invocable: false
-model: opus[1m]
 ---
 
 # /spec-implement - Implementation Phase
@@ -23,7 +22,12 @@ model: opus[1m]
 - **NEVER SKIP TASKS** — every task must be fully implemented, no "MVP scope" exceptions
 - **Quality over speed** — never rush due to context pressure. Context warnings are informational. Finish current task with full quality — auto-compaction handles the rest.
 - **Plan file is source of truth** — re-read after auto-compaction, don't rely on conversation memory
+<!-- CC-ONLY -->
 - **NEVER stop during implementation** — the stop guard blocks premature exits. If blocked: your very next action must be a tool call (TaskList, Read plan, or code change). After user interruptions or "Continue" messages: re-read the plan and resume from the current task. Never produce text-only responses when work remains.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+- **NEVER stop during implementation** — the stop guard blocks premature exits. If blocked: your very next action must be a tool call (refresh the plan, read the plan, or make the next code/test change). After user interruptions or "Continue" messages: re-read the plan and resume from the current task. Never produce text-only responses when work remains.
+CODEX-END -->
 
 ---
 
@@ -43,9 +47,16 @@ When called after verification: read plan, check `Iterations` field, report "Sta
 2. **Summarize understanding** — demonstrate comprehension
 3. **Check current state:** `git status --short`, `git diff --name-only`, plan progress (`[x]` vs `[ ]`)
 
-**Research tools during implementation:** CodeGraph (`codegraph_context` to orient on each task, `codegraph_explore` for deep code understanding in one call, `codegraph_callers`/`codegraph_callees` before modifying any function, `codegraph_impact` for blast radius), Context7 (library docs), Semble `semble search` or `mcp__semble__search` (find patterns by intent), `semble find-related` (discover parallel implementations), grep-mcp (production examples).
+<!-- CC-ONLY -->
+**Research tools during implementation:** CodeGraph (`codegraph_context` to orient on each task, `codegraph_explore` for deep code understanding in one call, `codegraph_callers`/`codegraph_callees` before modifying a shared or non-trivial function, `codegraph_impact` for blast radius), Context7 (library docs), Semble `semble search` or `mcp__semble__search` (find patterns by intent), `semble find-related` (discover parallel implementations), grep-mcp (production examples).
 
-**⛔ Before modifying any function:** Run `codegraph_callers` + `codegraph_callees` to understand the call graph. This is not optional — it catches callers you'd otherwise miss.
+**Before modifying a shared or non-trivial function:** trace `codegraph_callers` + `codegraph_callees` — it catches callers you'd otherwise miss. A self-contained local function the plan already isolated doesn't need it.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+**Research tools during implementation:** Use CodeGraph for structural runtime-code questions (`codegraph_context` when entry points are unknown, `codegraph_explore` for known symbols, `codegraph_callers`/`codegraph_callees` before non-local function changes, `codegraph_impact` for blast radius), Context7 for library docs, Semble for intent/pattern discovery, and grep-mcp for production examples.
+
+**Codex proportionality:** Skip CodeGraph for docs, rules, markdown, config, UI copy, test-only edits, or named-path local changes unless the call graph itself is the uncertainty. Before modifying a runtime function with non-local effects, run `codegraph_callers` + `codegraph_callees`; for a local function already isolated by the plan and targeted reads, do not add graph calls just to satisfy a checklist.
+CODEX-END -->
 
 ### 1.2 Detect or Resume Worktree (Conditional)
 
@@ -68,6 +79,7 @@ All subsequent work happens inside the worktree directory.
 
 ### 1.3 Set Up Task List (MANDATORY)
 
+<!-- CC-ONLY -->
 1. **Check existing:** `TaskList` — if tasks exist from prior session, resume (don't recreate)
 2. **If empty:** Create one task per uncompleted `[ ]` plan task:
    ```
@@ -75,6 +87,12 @@ All subsequent work happens inside the worktree directory.
    ```
    Set dependencies: `TaskUpdate(taskId="...", addBlockedBy=["..."])`
 3. Skip `[x]` (already completed) tasks
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+1. List uncompleted `[ ]` plan tasks — these are your work items.
+2. Track progress by updating plan checkboxes (`[ ]` → `[x]`) after each task.
+3. Skip `[x]` (already completed) tasks.
+CODEX-END -->
 
 ## Step 2: TDD Loop
 
@@ -91,8 +109,10 @@ If you find yourself queuing 3+ RED tests before any GREEN, stop and complete th
 **For EVERY task (generic flow — features use this as-is; bugfixes use it via the Bugfix Lane overrides below):**
 
 1. **Read plan's implementation steps** — list files to create/modify/delete
-2. **Call chain analysis (MANDATORY):** For each function being modified, run `trace_call_path(function_name, direction="both", depth=2)`. Discover exact names first with `search_graph(name_pattern="...")` if needed. This traces the actual call graph — Semble text search is not a substitute.
+2. **Call chain analysis:** For each shared or non-trivial function being modified, run `codegraph_callers(symbol="function_name")` + `codegraph_callees(symbol="function_name")` (discover exact names with `codegraph_search(query="...")` first if needed). This traces the actual call graph — Semble text search is not a substitute. A self-contained local function the plan already isolated doesn't need it.
+<!-- CC-ONLY -->
 3. **Mark in_progress:** `TaskUpdate(taskId, status="in_progress")`
+<!-- /CC-ONLY -->
 4. **TDD Flow:**
    - **RED:** Write failing test → verify it fails (feature missing, not syntax error)
    - **GREEN:** Implement minimal code to pass
@@ -107,7 +127,9 @@ If you find yourself queuing 3+ RED tests before any GREEN, stop and complete th
 9. **Self-review:** Completeness? Names clear? YAGNI? Tests verify behavior not implementation?
 10. **Performance:** Is any expensive work (parsing, transforming, I/O) running on a hot path without caching or memoization? Are heavy dependencies imported fully when a lighter/tree-shaken alternative exists? Does repeated invocation (polling, re-render, request loop) redo work when input hasn't changed?
 11. **Per-task commit (worktree only):** `git add <files> && git commit -m "{type}(spec): {task-name}"`
+<!-- CC-ONLY -->
 12. **Mark completed:** `TaskUpdate(taskId, status="completed")`
+<!-- /CC-ONLY -->
 13. **Update plan file immediately** — ⛔ **NON-NEGOTIABLE.** Change `[ ]` → `[x]` for the task in `## Progress Tracking`. Update any Completed/Remaining counts. Do NOT proceed to the next task until the checkbox is updated.
 
 ---
@@ -170,7 +192,13 @@ Runner-only task. Code may change only via lint/type/formatter auto-fixes; if it
 2. **For migrations:** Feature parity check against old code. If features missing: add tasks, do NOT mark complete. See sub-section 3.1 below.
 3. Set `Status: COMPLETE` in plan
 4. Register: `~/.pilot/bin/pilot register-plan "<plan_path>" "COMPLETE" 2>/dev/null || true`
-5. Read `Type:` field → Bugfix: `Skill(skill='spec-bugfix-verify', args='<plan-path>')` | Otherwise: `Skill(skill='spec-verify', args='<plan-path>')`
+5. Read `Type:` field.
+   <!-- CC-ONLY -->
+   Bugfix: `Skill(skill='spec-bugfix-verify', args='<plan-path>')` | Otherwise: `Skill(skill='spec-verify', args='<plan-path>')`
+   <!-- /CC-ONLY -->
+   <!-- CODEX-START
+   Codex has no callable phase-dispatch tool. Bugfix: continue immediately with the `$spec-bugfix-verify` skill instructions using arguments: `<plan-path>` | Otherwise: continue immediately with the `$spec-verify` skill instructions using arguments: `<plan-path>`.
+   CODEX-END -->
 
 ### 3.1 Migration/Refactoring Additions (only when `## Feature Inventory` is present in the plan)
 

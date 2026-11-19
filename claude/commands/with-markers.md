@@ -21,8 +21,10 @@ if [ -z "$CONDUCTOR_STATE_MARKER" ]; then
 fi
 
 # Helper: write marker (compat for conductor.sh) AND emit event (instant picker refresh).
+# Uses "$*" because the renderer rewrites single-digit positional placeholders with
+# words from the invocation before bash sees them, corrupting the payload.
 report_state() {
-    local payload="$1"
+    local payload="$*"
     echo "$payload" > "$CONDUCTOR_STATE_MARKER"
     if [ -x "$HOME/.config/conductor/bin/worktree-event" ]; then
         "$HOME/.config/conductor/bin/worktree-event" conductor-state-reported \
@@ -74,8 +76,8 @@ Only these prefixes are recognized. Anything else falls through to `summary.json
 
 ### Outcome → state
 
-- **Created or updated a PR** → `report_state "awaiting_ci|PR_URL"`, then monitor CI (poll `gh pr checks` every 30s, wait 60s after pass for CodeRabbit, check reviews, fix if needed, then `report_state "awaiting_review|PR_URL"`)
-- **Fixed review comments and pushed** → `report_state "awaiting_ci|PR_URL"`, then monitor CI as above
+- **Created or updated a PR** → `report_state "awaiting_ci|PR_URL"`, then wait for CI (see *Waiting on CI*), then `report_state "awaiting_review|PR_URL"`
+- **Fixed review comments and pushed** → `report_state "awaiting_ci|PR_URL"`, then wait for CI the same way
 - **PR approved but not yet merged** → `report_state "approved|PR_URL"`
 - **PR merged** → `report_state "merged|PR_URL"`
 - **PR closed without merge / task abandoned** → `report_state "closed|reason"`
@@ -84,8 +86,45 @@ Only these prefixes are recognized. Anything else falls through to `summary.json
 - **Failed** → `report_state "failed|reason"`
 - **Task is done with no PR involved** → do **not** overwrite with `working|*`. Leave the marker at its last meaningful state (e.g., `merged`, `closed`, or whatever terminal state applies). If the task genuinely has no terminal PR state (e.g., pure local investigation), emit `closed|completed: <one-line summary>` so the picker shows `[CLOSED]` instead of `[AI WORKING]`. The Stop hook's `.done` file is what signals true session end.
 
+## Waiting on CI
+
+Never poll in the foreground, and never `sleep` between turns to pass time. Hand the wait to a
+background command that **exits on its own** when CI reaches a terminal state. You get exactly one
+notification when it does and spend no turns in between.
+
+```bash
+gh pr checks "$PR_URL" --watch --fail-fast; echo "CI_EXIT=$?"
+```
+
+Run that with `run_in_background: true`. `--watch` blocks until every check finishes, so the command
+exits once, on a terminal state. `CI_EXIT=0` means all checks passed; non-zero means at least one
+failed, and `--fail-fast` returns as soon as that is known rather than waiting out the rest.
+
+**Cover failure, not just success.** A wait that only recognises the passing case is
+indistinguishable from a wait that hung. `CI_EXIT` gives you both outcomes in one signal — branch on
+it rather than re-querying:
+
+- `CI_EXIT=0` → proceed to the review wait below
+- non-zero → fix the failure and re-push (state stays `awaiting_ci`), or `report_state "blocked|<reason>"`
+  if it is CI infrastructure rather than your change
+
+For an automated reviewer that posts after CI (CodeRabbit), wait for the review to appear instead of
+sleeping a fixed 60s — it is sometimes slower and sometimes already there:
+
+```bash
+for i in $(seq 1 20); do
+  gh pr view "$PR_URL" --json reviews \
+    --jq '.reviews[].author.login' 2>/dev/null | grep -qi coderabbit && { echo "REVIEW=posted"; exit 0; }
+  sleep 30
+done
+echo "REVIEW=timeout"
+```
+
+Also background. It exits on the first review found, or reports `timeout` after ~10 minutes so a
+silent reviewer never strands the worktree in `awaiting_ci`.
+
 ## Rules
 - **Always** update the state — never leave it on `working|*` after the command finishes
 - Use `report_state "state|details"` (defined in Step 1) — it writes the marker file AND emits a `worktree-event conductor-state-reported`, so the picker updates within seconds instead of waiting for the next scheduler tick
-- After setting `awaiting_ci`, actively monitor CI and reviews (don't just stop)
+- After setting `awaiting_ci`, wait for CI as described above — background the wait, then act on the result. Don't stop at `awaiting_ci`, and don't burn turns polling
 - Prefix must be from the Allowed vocabulary table above — no free-form states

@@ -74,6 +74,18 @@ project=$(jq -r '.project // empty' "$meta_file")
 [[ -n "$ticket" ]]         || die "meta.json missing .ticket"
 [[ -n "$worktree_path" ]]  || die "meta.json missing .worktree_path"
 
+# The base/main-repo anchor is not a managed worktree — it lives outside
+# WORKTREES_ROOT and has no single ticket/PR/objective to summarize. Never
+# generate a summary for it.
+case "$worktree_path/" in
+    "$WORKTREES_ROOT"/*) ;;
+    *)
+        log "skip $ticket: not a managed worktree (base/main repo: $worktree_path)"
+        rm -f "$flags_dir/needs-summary-update" "$flags_dir/needs-summary-update-force"
+        exit 0
+        ;;
+esac
+
 # Worktree might not exist anymore (abandoned). Bail gracefully.
 if [[ ! -d "$worktree_path" ]]; then
     log "skip $ticket: worktree_path vanished ($worktree_path)"

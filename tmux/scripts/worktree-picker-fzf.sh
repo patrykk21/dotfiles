@@ -53,11 +53,64 @@ get_worktrees() {
         [ -n "$ap_wt" ] && conductor_states="${conductor_states}${ap_wt}=${ap_st};"
     done
 
+    # Gather sessions, metadata fields, file times and seen markers in a few batched
+    # calls; spawning tmux/jq/stat/date per worktree made the picker take seconds.
+    local data_dir meta_dir f
+    data_dir=$(mktemp -d -t worktree-picker)
+    meta_dir="$WORKTREES_BASE/$REPO_NAME/.worktree-meta/sessions"
+    tmux list-sessions -F '#{session_name}' > "$data_dir/sessions" 2>/dev/null
+    local json_files=() seen_files=()
+    for f in "$meta_dir"/*/meta.json "$meta_dir"/*/summary.json "$meta_dir"/*/conductor.json; do
+        [ -f "$f" ] && json_files+=("$f")
+    done
+    for f in "$HOME/.config/conductor/seen/"*.seen; do
+        [ -f "$f" ] && seen_files+=("$f")
+    done
+    if [ ${#json_files[@]} -gt 0 ]; then
+        local jq_fields='[input_filename, (.port // "-" | tostring), (.conductor // false | tostring),
+            (.headline // "" | tostring | split("\n") | .[0] // ""), (.status // "" | tostring), (.state // "" | tostring)]
+            | map(gsub("\t"; " ")) | join("\t")'
+        # One bad JSON file aborts a multi-file jq run, so fall back to one file at a time.
+        if ! jq -r "$jq_fields" "${json_files[@]}" > "$data_dir/fields" 2>/dev/null; then
+            : > "$data_dir/fields"
+            for f in "${json_files[@]}"; do
+                jq -r "$jq_fields" "$f" >> "$data_dir/fields" 2>/dev/null
+            done
+        fi
+        stat -f '%N%t%m%t%Sm' -t '%m/%d %H:%M' "${json_files[@]}" > "$data_dir/times" 2>/dev/null
+    fi
+    if [ ${#seen_files[@]} -gt 0 ]; then
+        awk 'FNR == 1 { print FILENAME "\t" $0 }' "${seen_files[@]}" > "$data_dir/seen" 2>/dev/null
+    fi
+
     # Process each worktree
-    git worktree list --porcelain | awk -v current="$CURRENT_WORKTREE" -v repo_name="$REPO_NAME" -v safe_repo_name="$SAFE_REPO_NAME" -v worktrees_base="$WORKTREES_BASE" -v conductor_states="$conductor_states" '
+    git worktree list --porcelain | awk -v current="$CURRENT_WORKTREE" -v repo_name="$REPO_NAME" -v safe_repo_name="$SAFE_REPO_NAME" -v worktrees_base="$WORKTREES_BASE" -v conductor_states="$conductor_states" -v data_dir="$data_dir" '
+    # Mirrors `tmux has-session -t NAME`: exact name, else a unique prefix match.
+    function session_status_of(name,   i, hits) {
+        if (name in sessions) return "active"
+        hits = 0
+        for (i = 1; i <= session_count; i++) if (index(session_list[i], name) == 1) hits++
+        return hits == 1 ? "active" : "inactive"
+    }
     BEGIN {
-        # Function to check metadata file
-        metadata_cmd = "source " ENVIRON["HOME"] "/.config/tmux/scripts/worktree-metadata.sh"
+        FS_TAB = "\t"
+        while ((getline line < (data_dir "/sessions")) > 0) {
+            sessions[line] = 1
+            session_list[++session_count] = line
+        }
+        while ((getline line < (data_dir "/fields")) > 0) {
+            split(line, f, FS_TAB)
+            fields[f[1], "port"] = f[2]; fields[f[1], "conductor"] = f[3]
+            fields[f[1], "headline"] = f[4]; fields[f[1], "status"] = f[5]; fields[f[1], "state"] = f[6]
+        }
+        while ((getline line < (data_dir "/times")) > 0) {
+            split(line, f, FS_TAB)
+            exists[f[1]] = 1; mtime[f[1]] = f[2]; mdate[f[1]] = f[3]
+        }
+        while ((getline line < (data_dir "/seen")) > 0) {
+            split(line, f, FS_TAB)
+            seen_value[f[1]] = f[2]
+        }
     }
     /^worktree/ {
         path = $2
@@ -104,16 +157,9 @@ get_worktrees() {
         
         # Check session status
         if (type_text == "[BASE]") {
-            # For base repo
-            base_session_name = safe_repo_name "-base"
-            cmd = "tmux has-session -t " base_session_name " 2>/dev/null && echo active || echo inactive"
-            cmd | getline session_status
-            close(cmd)
+            session_status = session_status_of(safe_repo_name "-base")
         } else {
-            # For worktrees — check tmux session
-            cmd = "tmux has-session -t " ticket " 2>/dev/null && echo active || echo inactive"
-            cmd | getline session_status
-            close(cmd)
+            session_status = session_status_of(ticket)
         }
 
         # --- Determine STATUS (single source of truth) ---
@@ -131,26 +177,17 @@ get_worktrees() {
         summary_file  = session_dir "/summary.json"
         conductor_file = session_dir "/conductor.json"
 
-        if (system("test -f " metadata_file) == 0) {
-            cmd = "jq -r \".port // \\\"-\\\"\" " metadata_file " 2>/dev/null || echo \"-\""
-            cmd | getline port_text
-            close(cmd)
-            cmd = "jq -r \".conductor // false\" " metadata_file " 2>/dev/null || echo \"false\""
-            cmd | getline ap_flag
-            close(cmd)
-            if (ap_flag == "true") is_conductor = 1
+        if (metadata_file in exists) {
+            port_text = ((metadata_file, "port") in fields) ? fields[metadata_file, "port"] : "-"
+            if (fields[metadata_file, "conductor"] == "true") is_conductor = 1
         }
 
         # Read summary.json for LLM-generated status + headline
         headline = ""
         llm_status = ""
-        if (system("test -f " summary_file) == 0) {
-            cmd = "jq -r \".headline // \\\"\\\"\" " summary_file " 2>/dev/null"
-            cmd | getline headline
-            close(cmd)
-            cmd = "jq -r \".status // \\\"\\\"\" " summary_file " 2>/dev/null"
-            cmd | getline llm_status
-            close(cmd)
+        if (summary_file in exists) {
+            headline = fields[summary_file, "headline"]
+            llm_status = fields[summary_file, "status"]
         }
 
         if (is_conductor) type_text = "[AUTO]"
@@ -160,13 +197,9 @@ get_worktrees() {
         # approved|merged|closed|needs_input|blocked|failed). `.status` is the
         # coarse runtime signal — currently only "running" is meaningful here.
         claude_state = ""
-        if (system("test -f " conductor_file) == 0) {
-            cmd = "jq -r \".status // \\\"\\\"\" " conductor_file " 2>/dev/null"
-            cmd | getline ap_runtime_state
-            close(cmd)
-            cmd = "jq -r \".state // \\\"\\\"\" " conductor_file " 2>/dev/null"
-            cmd | getline rich_state
-            close(cmd)
+        if (conductor_file in exists) {
+            ap_runtime_state = fields[conductor_file, "status"]
+            rich_state = fields[conductor_file, "state"]
             if (ap_runtime_state == "running") claude_state = "working"
             else if (rich_state != "") claude_state = rich_state
         }
@@ -206,7 +239,7 @@ get_worktrees() {
         if (status_text == "") {
             if (session_status == "active") {
                 status_text = "[ACTIVE]"
-            } else if (system("test -f " metadata_file) == 0) {
+            } else if (metadata_file in exists) {
                 status_text = "[SAVED]"
             } else {
                 status_text = "[INACTIVE]"
@@ -218,17 +251,11 @@ get_worktrees() {
         seen_file = seen_dir "/" ticket ".seen"
         has_unseen = 0
         activity_source = ""
-        if (system("test -f " summary_file) == 0) activity_source = summary_file
-        else if (system("test -f " metadata_file) == 0) activity_source = metadata_file
+        if (summary_file in exists) activity_source = summary_file
+        else if (metadata_file in exists) activity_source = metadata_file
         if (activity_source != "" && claude_state != "merged" && claude_state != "closed") {
-            marker_epoch = 0
-            cmd = "stat -f \"%m\" " activity_source " 2>/dev/null"
-            cmd | getline marker_epoch
-            close(cmd)
-            seen_epoch = 0
-            cmd = "cat " seen_file " 2>/dev/null"
-            cmd | getline seen_epoch
-            close(cmd)
+            marker_epoch = mtime[activity_source]
+            seen_epoch = (seen_file in seen_value) ? seen_value[seen_file] : 0
             if (seen_epoch == "") seen_epoch = 0
             if (marker_epoch + 0 > seen_epoch + 0) has_unseen = 1
         }
@@ -250,13 +277,9 @@ get_worktrees() {
         last_activity = "-"
         sort_epoch = "0"
         if (activity_source != "") {
-            cmd = "date -r " activity_source " +\"%m/%d %H:%M\" 2>/dev/null"
-            cmd | getline last_activity
-            close(cmd)
+            last_activity = mdate[activity_source]
             if (last_activity == "") last_activity = "-"
-            cmd = "date -r " activity_source " +\"%s\" 2>/dev/null"
-            cmd | getline sort_epoch
-            close(cmd)
+            sort_epoch = mtime[activity_source]
             if (sort_epoch == "") sort_epoch = "0"
         }
 
@@ -270,43 +293,79 @@ get_worktrees() {
         display_headline = headline
         if (length(display_headline) > 53) display_headline = substr(display_headline, 1, 50) "..."
 
+        # The base repo is the main checkout, not a feature worktree: it has no
+        # PR/work status, AI summary, or unread activity. Blank those so it reads
+        # as a plain anchor row (the → current-position arrow is kept).
+        if (type_text == "[BASE]") {
+            status_text = ""
+            display_headline = ""
+            last_activity = "-"
+            sort_epoch = "0"
+            status_icon = (path == current) ? "→   " : "    "
+        }
+
         # Output with hidden sort key (epoch, 0 = no date = highest prio)
         printf "%s%-50s %-10s %-18s %-6s %-18s %-55s %s\t%s\n", status_icon, display_name, type_text, status_text, port_text, last_activity, display_headline, branch, sort_epoch
     }' | iconv -c -f UTF-8 -t UTF-8
+    rm -rf "$data_dir"
 }
 
 
+# Sort the get_worktrees output for display.
+# fzf default layout: the FIRST output line renders at the bottom (nearest the
+# prompt); later lines render higher up. Order is chosen so in-progress work
+# stays near the prompt and finished worktrees float to the top, out of the way:
+#   1. base                (very bottom)
+#   2. active, no timestamp
+#   3. active, timestamped — most recent nearest the prompt
+#   4. completed/errored   — MERGED/CLOSED/DONE/FAILED, most recent first (top)
+sort_worktree_lines() {
+    IFS= read -r line1; echo "$line1"
+    IFS= read -r line2; echo "$line2"
+    base_lines=""
+    active_no_ts=""
+    active_ts=""
+    terminal_ts=""
+    while IFS= read -r line; do
+        # Same split as `cut -f1` / `cut -f2`: a line without a tab is its own field 1 and 2.
+        if [[ "$line" == *$'\t'* ]]; then
+            display=${line%%$'\t'*}
+            epoch=${line#*$'\t'}
+            epoch=${epoch%%$'\t'*}
+        else
+            display=$line
+            epoch=$line
+        fi
+        if [[ "$display" == *"[BASE]"* ]]; then
+            base_lines="$display"
+        elif [[ "$display" == *"[MERGED]"* || "$display" == *"[CLOSED]"* || "$display" == *"[DONE]"* || "$display" == *"[FAILED]"* ]]; then
+            terminal_ts="${terminal_ts}${epoch}	${display}
+"
+        elif [ "$epoch" = "0" ] || [ -z "$epoch" ]; then
+            active_no_ts="${active_no_ts}${display}
+"
+        else
+            active_ts="${active_ts}${epoch}	${display}
+"
+        fi
+    done
+    [ -n "$base_lines" ] && echo "$base_lines"
+    [ -n "$active_no_ts" ] && printf '%s' "$active_no_ts"
+    [ -n "$active_ts" ] && printf '%s' "$active_ts" | sort -t$'\t' -k1 -rn | cut -f2-
+    if [ -n "$terminal_ts" ]; then
+        # Full-width divider between active work (below) and finished worktrees
+        # (above). Deliberately longer than any terminal — fzf truncates it to
+        # the visible width so it spans edge to edge at any popup size. It carries
+        # no [WORKTREE]/[BASE]/[AUTO] type token, so the action handlers skip it
+        # (guard in the selection block and in worktree-delete-from-picker.sh).
+        printf '─%.0s' $(seq 1 300); printf '\n'
+        printf '%s' "$terminal_ts" | sort -t$'\t' -k1 -rn | cut -f2-
+    fi
+}
+
 # Function to reload worktrees list
 reload_worktrees() {
-    get_worktrees | {
-        IFS= read -r line1; echo "$line1"
-        IFS= read -r line2; echo "$line2"
-        base_lines=""
-        no_ts_lines=""
-        ts_lines=""
-        while IFS= read -r line; do
-            epoch=$(echo "$line" | cut -f2)
-            display=$(echo "$line" | cut -f1)
-            if echo "$display" | grep -q '\[BASE\]'; then
-                base_lines="$display"
-            elif [ "$epoch" = "0" ] || [ -z "$epoch" ]; then
-                no_ts_lines="${no_ts_lines}${display}
-"
-            else
-                ts_lines="${ts_lines}${epoch}	${display}
-"
-            fi
-        done
-        if [ -n "$base_lines" ]; then
-            echo "$base_lines"
-        fi
-        if [ -n "$no_ts_lines" ]; then
-            printf '%s' "$no_ts_lines"
-        fi
-        if [ -n "$ts_lines" ]; then
-            printf '%s' "$ts_lines" | sort -t$'\t' -k1 -rn | cut -f2-
-        fi
-    }
+    get_worktrees | sort_worktree_lines
 }
 
 # Handle script being called with reload argument
@@ -315,41 +374,8 @@ if [ "$1" = "reload" ]; then
     exit 0
 fi
 
-# Get the worktree data
-# Sort: base at bottom, then no-timestamp, then timestamped descending (most recent at bottom)
-WORKTREE_DATA=$(get_worktrees | {
-    IFS= read -r line1; echo "$line1"
-    IFS= read -r line2; echo "$line2"
-    # Split into 3 groups, reassemble in order
-    base_lines=""
-    no_ts_lines=""
-    ts_lines=""
-    while IFS= read -r line; do
-        epoch=$(echo "$line" | cut -f2)
-        display=$(echo "$line" | cut -f1)
-        if echo "$display" | grep -q '\[BASE\]'; then
-            base_lines="$display"
-        elif [ "$epoch" = "0" ] || [ -z "$epoch" ]; then
-            no_ts_lines="${no_ts_lines}${display}
-"
-        else
-            ts_lines="${ts_lines}${epoch}	${display}
-"
-        fi
-    done
-    # Base first (bottom of fzf = first in output)
-    if [ -n "$base_lines" ]; then
-        echo "$base_lines"
-    fi
-    # No timestamp
-    if [ -n "$no_ts_lines" ]; then
-        printf '%s' "$no_ts_lines"
-    fi
-    # Timestamped descending (most recent first in output = bottom of fzf)
-    if [ -n "$ts_lines" ]; then
-        printf '%s' "$ts_lines" | sort -t$'\t' -k1 -rn | cut -f2-
-    fi
-})
+# Get the worktree data (see sort_worktree_lines for ordering rationale)
+WORKTREE_DATA=$(get_worktrees | sort_worktree_lines)
 
 # Find the longest visual line for consistent padding
 # The arrow → is 3 bytes but 1 visual character, so we need to handle this
@@ -424,6 +450,11 @@ fi
 
 # If a worktree was selected (Enter pressed), switch to it
 if [ -n "$selected" ]; then
+    # Ignore the section divider (or any line lacking a worktree type token)
+    case "$selected" in
+        *"[WORKTREE]"*|*"[BASE]"*|*"[AUTO]"*) ;;
+        *) exit 0 ;;
+    esac
     # Debug tmux environment
     echo "[PICKER DEBUG] TMUX env: '$TMUX'" >> /tmp/tmux-worktree-debug.log
     echo "[PICKER DEBUG] TMUX_PANE: '$TMUX_PANE'" >> /tmp/tmux-worktree-debug.log
@@ -479,6 +510,23 @@ if [ -n "$selected" ]; then
 
     # Parse the tab-separated values
     IFS=$'\t' read -r icon name type session port branch has_arrow <<< "$parsed_fields"
+
+    # $name came off the rendered row, which is truncated to 48 chars for column
+    # alignment. Everything downstream (seen marker, worktree path, metadata dir)
+    # keys off the untruncated name, so restore it from disk before use. Only an
+    # unambiguous single match is accepted; anything else keeps the parsed value.
+    if [ "$type" != "[BASE]" ] && [ ! -d "$WORKTREES_BASE/$REPO_NAME/$name" ]; then
+        resolved=()
+        for candidate in "$WORKTREES_BASE/$REPO_NAME/$name"*/; do
+            [ -d "$candidate" ] && resolved+=("$candidate")
+        done
+        if [ ${#resolved[@]} -eq 1 ]; then
+            name="$(basename "${resolved[0]}")"
+            echo "[PICKER DEBUG] Resolved truncated name to '$name'" >> /tmp/tmux-worktree-debug.log
+        elif [ ${#resolved[@]} -gt 1 ]; then
+            echo "[PICKER DEBUG] Ambiguous prefix '$name' (${#resolved[@]} matches), left as-is" >> /tmp/tmux-worktree-debug.log
+        fi
+    fi
 
     # Derive worktree_path from name
     if [ "$type" = "[BASE]" ]; then

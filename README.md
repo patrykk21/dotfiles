@@ -37,42 +37,38 @@ Key scripts:
 
 ### AI & Automation
 
-**[Claude Code](./claude/)** — 22 custom commands, 8 skills, 20+ specialized agents, and the GSD (Get Shit Done) framework with 33 subcommands.
+**[Claude Code](./claude/)** — the generic half of a two-layer Claude Code setup: instructions, rules, skills, commands, agents, hooks, the status line, and the lists of tools and plugins every machine installs. Employer-specific material lives in a separate private repo cloned to `~/.claude`, under `company/<name>/`. `claude/bin/claude-link` merges both layers into `~/.claude` as symlinks, so skills keep their plain names.
 
 Commands:
 | Command | What it does |
 |---------|-------------|
-| `/autopilot <url>` | Implement a ticket end-to-end from any platform (Jira, ClickUp, Linear, GitHub) |
-| `/autopilot new-project` | Run full GSD lifecycle autonomously |
-| `/cook <task>` | Architectural planning + implementation in one flow |
-| `/review [target]` | Multi-agent code review (security, perf, quality, a11y) |
-| `/explain <target>` | Deep architectural explanation without code changes |
-| `/five-fifteen` | Generate weekly report from Jira, Tempo, Git, Asana |
-| `/create-ticket <desc>` | Create structured Jira tickets via MCP |
+| `/conductor <url>` | Ticket-to-PR pipeline for Jira, ClickUp, Linear and GitHub tickets |
+| `/dispatch <task>` | Background worker agents, one per task, steered from the main conversation |
+| `/review [target]` | Multi-agent code review |
 | `/fix-pr-comments` | Fetch and fix open PR review comments |
-| `/test` | Playwright browser tests on current branch |
-| `/track <entry>` | Quick time tracking log |
-| `/time-tracking` | Analyze Jira estimates vs Tempo actuals |
-| `/new-worktree <ticket>` | Create worktree + tmux session |
-| `/team <task>` | Spawn multi-agent team for parallel work |
-| `/team-with-judge <task>` | Agent team with critical quality evaluator |
-| `/continue` | Resume work from previous session |
-| `/brag-book <item>` | Record accomplishment for reviews |
-| `/notion-entry` | Create Notion knowledge base entries |
+| `/create-ticket <desc>` | Structured Jira tickets via MCP |
+| `/recap` | Where the branch and conversation stand |
+| `/test` | Agent team that writes and runs tests for the branch |
+| `/track <entry>` | Quick time-tracking log |
+| `/new-worktree <ticket>` | Worktree + tmux session |
+| `/agent-team <task>` | Agent team for parallel work |
+| `/continue` | Resume the latest conversation in this directory |
+| `/brag-book <item>` | Record an accomplishment for reviews |
+| `/notion-entry` | Notion knowledge-base entry |
 | `/fact-check` | Verify information accuracy |
 
-Specialized agents: `code-quality-guardian`, `api-architect`, `react-component-creator`, `test-writer`, `refactor-specialist`, `database-integrator`, `deployment-engineer`, `ui-implementer`, `accessibility-guardian`, `state-manager`, `monitoring-expert`, `react-performance-optimizer`, `nextjs-page-builder`, `game-ui-ux-designer`, and 13 GSD-specific agents.
+Agents: `changes-review`, `spec-review` (each with a Codex variant), `web-search-agent`, `game-ui-ux-designer`.
 
-**[Autopilot](./autopilot/)** — Autonomous ticket-to-PR pipeline. Tag a Jira ticket, Claude implements it, creates a PR, comments back. Multi-project, cross-platform (macOS launchd / Linux systemd). Works with any ticket URL via `/autopilot`. See [autopilot/README.md](./autopilot/README.md) for full setup.
+**[Conductor](./conductor/)** — Autonomous ticket-to-PR pipeline. Tag a ticket, Claude implements it, opens a PR and comments back. Multi-project, cross-platform (macOS launchd / Linux systemd). See [conductor/README.md](./conductor/README.md).
 
 ```bash
 # Manual: pass any ticket URL in a Claude session
-/autopilot https://your-org.atlassian.net/browse/PROJ-123
+/conductor https://your-org.atlassian.net/browse/PROJ-123
 
 # Automated: scheduler polls Jira every 5 min
-autopilot add my-project
-autopilot on
-autopilot status
+conductor add my-project
+conductor on
+conductor status
 ```
 
 ### Editors
@@ -91,42 +87,30 @@ autopilot status
 
 ## Installation
 
-### Prerequisites
+### New machine (macOS, or Linux/WSL2 on Windows)
 
 ```bash
-# macOS
-brew install tmux neovim zsh starship jq curl git gh
-brew install --cask kitty ghostty aerospace
-
-# Claude Code CLI
-# Follow: https://docs.anthropic.com/en/docs/claude-code
+git clone https://github.com/patrykk21/dotfiles.git /tmp/dotfiles
+/tmp/dotfiles/claude/bin/claude-bootstrap --secrets <file>
 ```
 
-### Setup
+`claude-bootstrap` installs Homebrew and everything in `Brewfile`, clones this repo into `~/.config`, the private repo into `~/.claude` and the Work Console into `~/Work/work-console`, links the layers, installs Volta globals and plugins, and imports secrets. It ends with the sign-ins it can't do for you. It is safe to re-run.
+
+- `<file>` comes from `~/.config/claude/bin/claude-secrets export <file>` on a machine that already has the secrets (MCP servers, conductor and console env files). It is passphrase-encrypted.
+- Pass `--scheduler` on the one machine that should pick up tickets. Two schedulers would pick up the same tickets.
+- On Windows, run it inside WSL2 (Ubuntu 24.04), with the WSL user's home at the same path as on the Mac. Absolute paths in the configs then match.
+
+### Shell and editor
 
 ```bash
-# 1. Clone
-git clone https://github.com/patrykk21/dotfiles.git ~/.config
-
-# 2. Set zsh as default shell
-chsh -s /bin/zsh
-
-# 3. Install tmux plugins
-# Open tmux, press Ctrl-Space + I
-
-# 4. Open Neovim — Lazy.nvim auto-installs plugins
-nvim
-
-# 5. (Optional) Set up autopilot
-autopilot setup                    # install scheduler
-autopilot add my-project           # add a project
-$EDITOR ~/.config/autopilot/projects/my-project.env
-autopilot on                       # start polling
+chsh -s "$(command -v zsh)"   # zsh as default shell
+# tmux: open it and press Ctrl-Space + I to install plugins
+nvim                          # Lazy.nvim installs its plugins on first start
 ```
 
-### Autopilot Setup
+## Conductor Setup
 
-See [autopilot/README.md](./autopilot/README.md) for full instructions including:
+See [conductor/README.md](./conductor/README.md) for full instructions including:
 - Jira credentials
 - Multi-project config
 - Project-level worktree hooks
@@ -141,7 +125,7 @@ Tag ticket in Jira
   Scheduler (launchd/systemd, every 5 min)
         │
         ▼
-  autopilot.sh picks up ticket
+  conductor.sh picks up ticket
         │
         ├─ git worktree add (isolated branch)
         ├─ create-worktree-session.sh (tmux: claude + server + commands)
@@ -149,7 +133,7 @@ Tag ticket in Jira
         ├─ dev server starts on assigned port
         │
         ▼
-  Claude Code runs /autopilot <ticket-url>
+  Claude Code runs /conductor <ticket-url>
         │
         ├─ Fetches ticket from Jira/ClickUp/Linear/GitHub
         ├─ Reads AGENTS.md / CLAUDE.md conventions
@@ -165,8 +149,8 @@ Tag ticket in Jira
 
 - **Worktree-per-ticket**: Every ticket gets an isolated git worktree, its own tmux session, and its own dev server port. No branch switching, no conflicts.
 - **Port management**: Ports auto-generated from worktree name hash (55000-56000 range), persisted in metadata JSON, propagated via `$SERVER_PORT` env var.
-- **AI-first**: 22 Claude commands + 20 agents = most dev tasks are one command away. `/cook` for implementation, `/review` for review, `/autopilot` for full autonomy.
-- **Platform-agnostic**: `/autopilot` detects Jira, ClickUp, Linear, or GitHub Issues from the URL. Scheduler polls Jira; other platforms use manual `/autopilot` invocation.
+- **AI-first**: most dev tasks are one command away. `/spec` for planned implementation, `/review` for review, `/conductor` for full autonomy.
+- **Platform-agnostic**: `/conductor` detects Jira, ClickUp, Linear, or GitHub Issues from the URL. The scheduler polls Jira and ClickUp; other platforms use a manual `/conductor` run.
 - **Cross-platform**: Scripts use `$HOME`, `$(uname)` detection, and `setup.sh` generates the right scheduler for macOS or Linux.
 
 ## File Structure
@@ -174,8 +158,8 @@ Tag ticket in Jira
 ```
 ~/.config/
 ├── tmux/              # 60 scripts, dual status bars, worktree integration
-├── claude/            # 22 commands, 8 skills, 20+ agents, GSD framework
-├── autopilot/         # Autonomous ticket-to-PR pipeline
+├── claude/            # Claude Code generic layer: instructions, rules, skills, commands, agents
+├── conductor/         # Autonomous ticket-to-PR pipeline
 ├── nvim/              # Lua config, 40+ plugins, LSP, Treesitter
 ├── cursor/            # VSCode+Neovim, MCP servers, 6 skills
 ├── zsh/               # Aliases, exports, fzf, zoxide, transient prompts

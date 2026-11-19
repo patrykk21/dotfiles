@@ -2,7 +2,7 @@
 
 ### 10.0: No-Placeholders Self-Check (always — before launching reviewers)
 
-⛔ Walk the plan file once, fresh-eyed, and grep for the patterns below. **Every match is a plan failure** — fix inline before sending the plan to a reviewer or asking for approval.
+Walk the plan file once, fresh-eyed, and grep for the patterns below. **Every match is a plan failure** — fix inline before sending the plan to a reviewer or asking for approval.
 
 **Forbidden placeholder patterns:**
 
@@ -24,9 +24,10 @@ If anything matches, fix it inline (no new round-trip needed). Then proceed to s
 
 ---
 
-**⛔ If `PILOT_SPEC_REVIEW_ENABLED` is `"false"` (from Step 0),** skip the Claude reviewer launch below and proceed straight to the Codex section.
+<!-- CC-ONLY -->
+**If `PILOT_SPEC_REVIEW_ENABLED` is `"false"` (from Step 0),** skip the Claude reviewer launch below and proceed straight to the Codex section.
 
-**⛔ Auto-skip the Claude reviewer for small plans.** If the plan has **task count ≤ 2** AND it does NOT touch security, authentication, data integrity, or destructive operations, skip the Claude reviewer launch — reviewer overhead exceeds value for a change the implementer can audit by inspection. Continue to the Codex section below; Codex still runs **only** when the user has explicitly opted in via `PILOT_CODEX_SPEC_REVIEW_ENABLED`.
+**Auto-skip the Claude reviewer for small plans.** If the plan has **task count ≤ 2** AND it does NOT touch security, authentication, data integrity, or destructive operations, skip the Claude reviewer launch — reviewer overhead exceeds value for a change the implementer can audit by inspection. Continue to the Codex section below; Codex still runs **only** when the user has explicitly opted in via `PILOT_CODEX_SPEC_REVIEW_ENABLED`.
 
 For 3+ task plans, OR any plan touching sensitive surfaces regardless of task count, run the Claude reviewer below in full.
 
@@ -40,7 +41,7 @@ SESS_ID=$(echo $PILOT_SESSION_ID)
 
 Output path: `~/.pilot/sessions/<SESS_ID>/findings-spec-review-<plan-slug>.json`
 
-**⛔ Delete stale findings before launching** (previous run of the same plan may have left a file):
+**Delete stale findings before launching** (previous run of the same plan may have left a file):
 
 ```bash
 rm -f "$OUTPUT_PATH"
@@ -48,7 +49,7 @@ rm -f "$OUTPUT_PATH"
 
 ```
 Task(
-  subagent_type="pilot:spec-review",
+  subagent_type="spec-review",
   run_in_background=true,
   prompt="""
   **Plan file:** <plan-path>
@@ -71,7 +72,7 @@ Task(
 
 Launch Codex review NOW — it runs in parallel with the Claude reviewer above.
 
-**⛔ Codex-once rule.** Codex runs at most once per `/spec` invocation. Before launching, check the sentinel file. If it exists, the review already ran in this session — skip the launch and the collection sub-step below. Plan iterations (annotation feedback, plan edits, fixing prior findings) do NOT trigger another Codex run.
+**Codex-once rule.** Codex runs at most once per `/spec` invocation. Before launching, check the sentinel file. If it exists, the review already ran in this session — skip the launch and the collection sub-step below. Plan iterations (annotation feedback, plan edits, fixing prior findings) do NOT trigger another Codex run.
 
 ```bash
 SESS_ID="${PILOT_SESSION_ID:-default}"
@@ -90,13 +91,13 @@ CODEX_COMPANION=$(ls ~/.claude/plugins/cache/openai-codex/codex/*/scripts/codex-
 PROJECT_ROOT="${CLAUDE_PROJECT_ROOT:-$(pwd)}"
 ```
 
-2. Build the review prompt file by rendering the **template at `${CLAUDE_PLUGIN_ROOT}/agents/spec-review-codex.md`**. The template is the single source of truth for plan-review semantics — do NOT re-state the prompt inline in this skill. Substitute three placeholders:
+2. Build the review prompt file by rendering the **template at `$HOME/.claude/agents/spec-review-codex.md`**. The template is the single source of truth for plan-review semantics — do NOT re-state the prompt inline in this skill. Substitute three placeholders:
    - `{{PLAN_PATH}}` — absolute path to the plan file
    - `{{PLAN_GOAL}}` — the 1–2 sentence Goal sentence from the plan's `## Summary`
    - `{{CONTEXT_FILES}}` — newline-separated absolute paths to source/reference files the plan ports from or extends (use the files referenced in `## Context for Implementer`)
 
 ```bash
-PROMPT_TEMPLATE="${CLAUDE_PLUGIN_ROOT}/agents/spec-review-codex.md"
+PROMPT_TEMPLATE="$HOME/.claude/agents/spec-review-codex.md"
 PROMPT_FILE="/tmp/codex-spec-review-${PILOT_SESSION_ID:-default}-<plan-slug>.md"
 
 # Set these before rendering:
@@ -118,7 +119,7 @@ pathlib.Path(os.environ["PROMPT_FILE"]).write_text(text)
 '
 ```
 
-3. Launch the task in background. **⛔ For `task`, the companion's `--background` flag IS supported (unlike `review`/`adversarial-review` where only Claude Code's `Bash(run_in_background=true)` detaches).** Use the companion's own background mode here — the launch command returns the job ID immediately on stdout. Capture the job ID for collection.
+3. Launch the task in background. **For `task`, the companion's `--background` flag IS supported** (unlike `review`/`adversarial-review`, where only Claude Code's `Bash(run_in_background=true)` detaches). Use the companion's own background mode here — the launch command returns the job ID immediately on stdout. Capture the job ID for collection.
 
    ```
    Bash(
@@ -129,6 +130,15 @@ pathlib.Path(os.environ["PROMPT_FILE"]).write_text(text)
    ```
 
    The stdout looks like: `Codex Task started in the background as task-<id>. Check /codex:status task-<id> for progress.` Extract the `task-…` token and store as `JOB_ID`.
+
+   **Verify registration before polling** — fail-fast guard against synthetic-ID launches:
+
+   ```bash
+   node "$CODEX_COMPANION" status "$JOB_ID" --json 2>/dev/null | grep -q '"status":' \
+     || { echo "Codex launch did not register with broker — JOB_ID is synthetic. Skipping Codex this run."; JOB_ID=""; }
+   ```
+
+   If `$JOB_ID` is empty, skip the Codex polling section and proceed with Claude reviewer only.
 
 **Do NOT wait** — proceed to collect the Claude reviewer results first.
 
@@ -143,13 +153,13 @@ for i in $(seq 1 150); do [ -f "$OUTPUT_PATH" ] && echo "READY" && break; sleep 
 
 Then Read the file once. If not READY after 5 min, re-launch synchronously.
 
-**⛔ Validate findings:** After reading the JSON, verify that the `plan_file` field matches the current plan path. If it doesn't match, the findings are stale from a previous `/spec` — delete the file, re-launch the reviewer, and wait again.
+**Validate findings:** After reading the JSON, verify that the `plan_file` field matches the current plan path. If it doesn't match, the findings are stale from a previous `/spec` — delete the file, re-launch the reviewer, and wait again.
 
 **Fix Claude reviewer findings immediately** — must_fix → should_fix. Suggestions if reasonable.
 
 #### Collect Codex Results (if launched)
 
-**⛔ MANDATORY — NEVER skip or defer the Codex review.** If Codex was launched above, you MUST collect and act on its results before proceeding. The Codex review runs as `Bash(run_in_background=true)` — you will be automatically notified when it completes.
+**⛔ Never skip or defer the Codex review.** If Codex was launched above, collect and act on its results before proceeding. The Codex review runs as `Bash(run_in_background=true)` — you will be automatically notified when it completes.
 
 **⛔ The completion notification is the ONLY valid signal.** Do NOT read the output file to check if the review is done. The file may contain partial output from an in-progress review — reading it before the notification arrives leads to false conclusions ("no findings" when the review is still running). This is the #1 cause of premature Codex skip.
 
@@ -186,7 +196,7 @@ Run this as `Bash(run_in_background=true, timeout=600000)`. Plan reviews typical
    node "$CODEX_COMPANION" result "$JOB_ID" --json > /tmp/codex-task-result-$$.json
    ```
 
-   Read `/tmp/codex-task-result-$$.json` via `ctx_execute_file` (or Read for small payloads). The relevant fields:
+   Read `/tmp/codex-task-result-$$.json` with the `Read` tool. The relevant fields:
    - `storedJob.status` — must be `"completed"`. If not, treat as a re-launch trigger; do not silently proceed.
    - `storedJob.result.rawOutput` — a string containing Codex's response. With our prompt, this is JSON matching the schema above.
    - `storedJob.rendered` — same content rendered for display; useful as a fallback if `rawOutput` is malformed.
@@ -213,3 +223,53 @@ rm -f "$PROMPT_FILE"
 ```
 
 **If Codex was NOT launched**, proceed after all Claude reviewer must_fix/should_fix resolved.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+**If `PILOT_SPEC_REVIEW_ENABLED` is `"false"` (from Step 0),** skip native Codex plan review and proceed to the task-card format check below.
+
+**When enabled:** launch the managed Codex custom agent and wait for its final JSON response before requesting approval.
+
+1. Spawn the review agent:
+
+```python
+review = multi_agent_v1.spawn_agent(
+    agent_type="spec-review",
+    message="""
+    Plan file: <plan-path>
+    User request: <original task description>
+    Clarifications: <any Q&A>
+
+    Review for alignment with requirements and adversarial risks.
+    Return ONLY valid JSON matching the spec-review schema.
+    Include the plan file path in the `plan_file` field.
+    """,
+)
+```
+
+2. Wait for the result:
+
+```python
+result = multi_agent_v1.wait_agent(targets=[review.agent_id], timeout_ms=600000)
+```
+
+3. Parse the agent's final message as JSON. If parsing fails, treat the raw final message as one `suggestion` finding and continue; do not launch a second reviewer.
+
+4. Validate `plan_file` matches the current plan. If it does not, discard the stale result and self-review instead of applying mismatched findings.
+
+5. Severity mapping:
+   - `must_fix` → fix immediately
+   - `should_fix` → fix immediately
+   - `suggestion` → implement if quick
+
+Fix every `must_fix` and `should_fix` inline, then re-run the no-placeholders and task-card checks before approval.
+
+Before Step 11, run this task-card format check on the plan:
+
+```bash
+grep -nE '^### Task [0-9]+:|^\*\*(Objective|Files|Key Decisions / Notes|Definition of Done):\*\*' "<plan_path>"
+```
+
+Every `### Task N:` block under `## Implementation Tasks` must contain all four bold labels: `**Objective:**`, `**Files:**`, `**Key Decisions / Notes:**`, and `**Definition of Done:**`. Fix any plain labels such as `Files:`, `Key Decisions:`, `Definition of Done:`, or `Verification:` before asking for approval.
+
+Self-review the plan for obvious issues before requesting approval: missing edge cases, unclear DoD criteria, placeholder text, wrong task-card label format, and unresolved ambiguities.
+CODEX-END -->

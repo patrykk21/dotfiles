@@ -321,6 +321,11 @@ jira_api() {
     curl "${args[@]}" 2>/dev/null
 }
 
+# Jira explains a rejected write (e.g. a workflow validator) only in the response body.
+jira_error_reason() {
+    echo "$1" | sed '$d' | jq -r '[.errorMessages[]?, ((.errors // {}) | to_entries[] | "\(.key): \(.value)")] | join("; ")' 2>/dev/null
+}
+
 find_conductor_ticket() {
     local jql="project = $JIRA_PROJECT AND labels = \"$JIRA_LABEL\" AND status = \"To Do\" ORDER BY created ASC"
 
@@ -394,9 +399,66 @@ transition_to_in_progress() {
         ' | head -1)
     fi
 
+    # Workflows differ per issue type inside the same project. A bug workflow
+    # may name its start-work step "Analysis" and offer no "In Progress"
+    # at all, so both matches above come up empty on a ticket sitting in To Do.
+    # Try known start-work status names in order, then any transition landing in
+    # the in-progress category that is not a park or handoff state.
+    local start_names="${CONDUCTOR_START_WORK_STATUSES:-in development|development|analysis|in analysis|design in progress|start progress|doing}"
+    local not_start="${CONDUCTOR_NOT_START_STATUSES:-blocked|qa|code review|review|on hold|waiting|insufficient info|ready to merge|awaiting ci|awaiting review|reopened}"
+    local target_name="" hit=""
+
     if [ -z "$transition_id" ] || [ "$transition_id" = "null" ]; then
-        log "WARN" "No 'In Progress' transition found for $ticket_key. Available:"
-        echo "$body" | jq -r '.transitions[] | "  - \(.name) -> \(.to.name)"' >> "$LOG_FILE"
+        local want
+        while IFS= read -r want; do
+            [ -n "$want" ] || continue
+            hit=$(echo "$body" | jq -r --arg want "$want" '
+                .transitions[]
+                | select((.to.name // "" | ascii_downcase) == $want)
+                | "\(.id)\t\(.to.name)"
+            ' | head -1)
+            if [ -n "$hit" ]; then
+                transition_id="${hit%%$'\t'*}"
+                target_name="${hit#*$'\t'}"
+                break
+            fi
+        done < <(printf '%s\n' "$start_names" | tr '|' '\n')
+    fi
+
+    if [ -z "$transition_id" ] || [ "$transition_id" = "null" ]; then
+        hit=$(echo "$body" | jq -r --arg deny "$not_start" '
+            ($deny | ascii_downcase | split("|")) as $d
+            | .transitions[]
+            | select(.to.statusCategory.key == "indeterminate")
+            | select(($d | index(.to.name // "" | ascii_downcase)) | not)
+            | "\(.id)\t\(.to.name)"
+        ' | head -1)
+        if [ -n "$hit" ]; then
+            transition_id="${hit%%$'\t'*}"
+            target_name="${hit#*$'\t'}"
+        fi
+    fi
+
+    if [ -n "$target_name" ]; then
+        log "INFO" "$ticket_key: workflow offers no \"In Progress\" — starting work via \"$target_name\"."
+    fi
+
+    if [ -z "$transition_id" ] || [ "$transition_id" = "null" ]; then
+        # Nothing on this workflow starts work. Allow the case where the ticket is
+        # already in progress — Jira never offers a transition to the status an
+        # issue already holds — and skip anything else.
+        local status_resp current_status
+        status_resp=$(jira_api GET "/issue/$ticket_key?fields=status")
+        current_status=$(echo "$status_resp" | sed '$d' | jq -r '.fields.status.name // "unknown"' 2>/dev/null)
+        if [ "$(printf '%s' "$current_status" | tr '[:upper:]' '[:lower:]')" = "in progress" ]; then
+            log "WARN" "$ticket_key is already In Progress — leaving status as-is and continuing."
+            return 0
+        fi
+        log "ERROR" "$ticket_key is in '$current_status' and its workflow offers no start-work transition — skipping."
+        log "ERROR" "Add the right target to CONDUCTOR_START_WORK_STATUSES in config.env. Offered transitions:"
+        while IFS= read -r line; do
+            log "ERROR" "$line"
+        done < <(echo "$body" | jq -r '.transitions[] | "  - \(.name) -> \(.to.name) [\(.to.statusCategory.key)]"')
         return 1
     fi
 
@@ -407,7 +469,9 @@ transition_to_in_progress() {
         log "INFO" "Transitioned $ticket_key to In Progress"
         return 0
     else
-        log "ERROR" "Failed to transition $ticket_key (HTTP $http_code)"
+        local reason
+        reason=$(jira_error_reason "$response")
+        log "ERROR" "Failed to transition $ticket_key (HTTP $http_code)${reason:+: $reason}"
         return 1
     fi
 }
@@ -443,6 +507,10 @@ transition_to_code_review() {
 
     if [ "$http_code" = "204" ] || [ "$http_code" = "200" ]; then
         log "INFO" "Transitioned $ticket_key to Code Review"
+    else
+        local reason
+        reason=$(jira_error_reason "$response")
+        log "WARN" "Failed to transition $ticket_key to Code Review (HTTP $http_code)${reason:+: $reason}"
     fi
 }
 
@@ -769,7 +837,7 @@ fetch_all_candidates_jira() {
     fi
 
     # Format candidates as JSON array for the picker
-    CANDIDATE_TASKS_JSON=$(echo "$body" | jq '[.issues[] | {
+    CANDIDATE_TASKS_JSON=$(echo "$body" | jq --arg jira_base "$JIRA_BASE_URL" '[.issues[] | {
         id: .key,
         task_id: .key,
         name: .fields.summary,
@@ -778,7 +846,7 @@ fetch_all_candidates_jira() {
         priority_label: (.fields.priority.name // "Medium"),
         type: (.fields.issuetype.name // "Task"),
         parent: (.fields.parent.key // null),
-        url: ("https://groupondev.atlassian.net/browse/" + .key),
+        url: ($jira_base + "/browse/" + .key),
         dependencies: [.fields.issuelinks[]? | select(.type.name == "Blocks" or .type.name == "is blocked by") | .inwardIssue.key // .outwardIssue.key]
     }]')
 
@@ -807,7 +875,7 @@ You are choosing the next task for an autonomous coding agent to implement.
 - Pick the task that should be done NEXT considering dependencies and priority.
 - **Priority is king.** Pick the highest priority task that is NOT blocked. Priority ordering: Blocker > Critical > High > Medium > Low > none.
 - **Dependency check:** If a task depends on another task (via explicit dependencies, sequential numbering under the same parent/epic, or description references), the dependency must be completed first. Check completed_history AND existing branches/worktrees. If the dependency is not completed and has no branch, the task is BLOCKED — skip it.
-- **Sequential tickets:** Tickets under the same parent (e.g., ECH-672, ECH-673, ECH-674, ECH-675) are almost always sequential. Pick the lowest number that isn't completed yet. If ECH-672 isn't done, don't pick ECH-673.
+- **Sequential tickets:** Tickets under the same parent (e.g., PROJ-672, PROJ-673, PROJ-674, PROJ-675) are almost always sequential. Pick the lowest number that isn't completed yet. If PROJ-672 isn't done, don't pick PROJ-673.
 - If ALL high-priority tasks are blocked by unmet dependencies, pick the highest priority unblocked task regardless of priority tier.
 - Consider task descriptions and tags for context about what makes sense to do first.
 
@@ -815,13 +883,13 @@ You are choosing the next task for an autonomous coding agent to implement.
 Determine which branch the new worktree should be based on:
 
 1. **Check existing branches for related work.** Look at "Existing Branches" and "Existing Worktrees" for branches that match the same epic, story, or feature area as the picked task. Indicators of related work:
-   - Branches with the same parent ticket key (e.g., ECH-571, ECH-572, ECH-573 are siblings under the same epic)
+   - Branches with the same parent ticket key (e.g., PROJ-571, PROJ-572, PROJ-573 are siblings under the same epic)
    - Branches with similar names suggesting the same feature area (e.g., "biome-linting-phase-1" and a task for "biome-linting-phase-2")
    - Tasks that are sequential phases of the same work (Phase 1, Phase 2, etc.)
 
 2. **If a related branch exists**, set base_branch to that branch name. The new work should build on top of existing changes rather than starting fresh from the default branch.
 
-3. **If multiple related branches exist**, prefer the most recently completed one (check completed_history), or the one whose ticket number is closest and highest (e.g., for ECH-575, prefer ECH-574 over ECH-571).
+3. **If multiple related branches exist**, prefer the most recently completed one (check completed_history), or the one whose ticket number is closest and highest (e.g., for PROJ-575, prefer PROJ-574 over PROJ-571).
 
 4. **If no related branches exist**, use the default base branch.
 
@@ -1012,12 +1080,14 @@ setup_worktree() {
         cp "$PROJECT_DIR/.claude/settings.local.json" "$worktree_path/.claude/settings.local.json" 2>/dev/null && log "INFO" "Copied settings.local.json" || true
 
         # Run project-specific setup hook if configured
-        if [ -n "$WORKTREE_SETUP_HOOK" ] && [ -x "$WORKTREE_SETUP_HOOK" ]; then
-            log "INFO" "Running worktree setup hook: $WORKTREE_SETUP_HOOK"
+        local setup_hook
+        setup_hook=$(worktree_setup_hook)
+        if [ -n "$setup_hook" ] && [ -x "$setup_hook" ]; then
+            log "INFO" "Running worktree setup hook: $setup_hook"
             WORKTREE_PATH="$worktree_path" \
             PROJECT_DIR="$PROJECT_DIR" \
             WORKTREE_NAME="$worktree_name" \
-                "$WORKTREE_SETUP_HOOK" 2>&1 | while read -r line; do
+                "$setup_hook" 2>&1 | while read -r line; do
                     log "INFO" "hook: $line"
                 done
         fi
@@ -1026,29 +1096,31 @@ setup_worktree() {
     # Install dependencies if configured
     if [ -n "$INSTALL_CMD" ]; then
         log "INFO" "Installing dependencies: $INSTALL_CMD"
-        # Source npm registry tokens so .npmrc env-var refs (e.g.
-        # ${GROUPON_PACKAGES_TOKEN}) resolve. Resolution order:
+        # Source npm registry tokens so .npmrc env-var refs resolve. Resolution order:
         #   1. shared conductor secrets.env
         #   2. project-specific conductor secrets
         #   3. the worktree's own .env.local (committed by `wt setup` from the
-        #      base repo) — this is where echelon devs keep the token in practice
-        # Then bridge name mismatches: echelon's .npmrc expects GROUPON_PACKAGES_TOKEN
-        # but .env.local / .env.example use GITHUB_PACKAGES_TOKEN. Map one to the
-        # other if only one is set so install doesn't 401 on @groupon/* deps.
+        #      base repo) — this is where developers keep the token in practice
+        # Then bridge name mismatches: an .npmrc may expect the token under a name
+        # listed in PACKAGES_TOKEN_ALIASES (company.env) while .env.local uses
+        # GITHUB_PACKAGES_TOKEN. Map one to the other if only one is set so
+        # install doesn't 401 on private packages.
         # Sub-shell isolates exports from the rest of the cycle.
         (
+            for f in "$HOME"/.claude/company/*/company.env; do [ -f "$f" ] && . "$f"; done
             set -a
             [ -f "$CONDUCTOR_DIR/secrets.env" ] && source "$CONDUCTOR_DIR/secrets.env"
             [ -f "$CONDUCTOR_DIR/projects/${PROJECT_NAME}.secrets.env" ] && source "$CONDUCTOR_DIR/projects/${PROJECT_NAME}.secrets.env"
             [ -f "$worktree_path/.env.local" ] && source "$worktree_path/.env.local"
             set +a
-            # Bridge GITHUB_PACKAGES_TOKEN <-> GROUPON_PACKAGES_TOKEN
-            if [ -z "${GROUPON_PACKAGES_TOKEN:-}" ] && [ -n "${GITHUB_PACKAGES_TOKEN:-}" ]; then
-                export GROUPON_PACKAGES_TOKEN="$GITHUB_PACKAGES_TOKEN"
-            fi
-            if [ -z "${GITHUB_PACKAGES_TOKEN:-}" ] && [ -n "${GROUPON_PACKAGES_TOKEN:-}" ]; then
-                export GITHUB_PACKAGES_TOKEN="$GROUPON_PACKAGES_TOKEN"
-            fi
+            for name in ${PACKAGES_TOKEN_ALIASES:-}; do
+                if [ -z "${!name:-}" ] && [ -n "${GITHUB_PACKAGES_TOKEN:-}" ]; then
+                    export "$name=$GITHUB_PACKAGES_TOKEN"
+                fi
+                if [ -z "${GITHUB_PACKAGES_TOKEN:-}" ] && [ -n "${!name:-}" ]; then
+                    export GITHUB_PACKAGES_TOKEN="${!name}"
+                fi
+            done
             cd "$worktree_path" && eval "$INSTALL_CMD"
         ) 2>&1 | tail -5 | while read -r line; do
             log "INFO" "install: $line"
@@ -1159,6 +1231,30 @@ start_dev_server() {
 }
 
 # --- Claude Launch ---
+# The employer layer whose WORK_ROOT contains PROJECT_DIR; fails when none does.
+company_dir_for_project() {
+    local env root
+    for env in "$HOME"/.claude/company/*/company.env; do
+        [ -f "$env" ] || continue
+        root=$(unset WORK_ROOT; . "$env" >/dev/null 2>&1; printf '%s' "${WORK_ROOT:-}")
+        if [ -n "$root" ] && [[ "$PROJECT_DIR" == "${root%/}/"* ]]; then
+            dirname "$env"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# WORKTREE_SETUP_HOOK when set, else the owning employer's conductor/hooks/<project>-setup.sh.
+worktree_setup_hook() {
+    local company_dir
+    if [ -n "$WORKTREE_SETUP_HOOK" ]; then
+        printf '%s\n' "$WORKTREE_SETUP_HOOK"
+    elif company_dir=$(company_dir_for_project); then
+        printf '%s\n' "$company_dir/conductor/hooks/${PROJECT_NAME}-setup.sh"
+    fi
+}
+
 generate_prompt() {
     local ticket_key="$1"
     local worktree_name="$2"
@@ -1185,6 +1281,13 @@ generate_prompt() {
         -e "s|{{JIRA_PROJECT}}|$JIRA_PROJECT|g" \
         "$PROMPT_TEMPLATE" > "$prompt_file"
 
+    local company_dir
+    if [ "$TRACKER" = "jira" ] && company_dir=$(company_dir_for_project) \
+        && [ -f "$company_dir/conductor/jira-hygiene-prompt.md" ]; then
+        sed -e "s|{{TICKET_KEY}}|$ticket_key|g" \
+            "$company_dir/conductor/jira-hygiene-prompt.md" >> "$prompt_file"
+    fi
+
     echo "$prompt_file"
 }
 
@@ -1199,8 +1302,13 @@ launch_claude() {
     local ticket_url
     ticket_url=$(build_ticket_url "$ticket_key")
 
-    # Build a readable tab title
+    # Build a readable tab title. Strip shell-active chars (" ` $ \) from the
+    # ticket summary: it is free text interpolated unescaped into the launcher's
+    # --name "..." arg below. A summary like `... "Failed to load..."` would
+    # otherwise break shell quoting, word-split into bare tokens, and make the
+    # first token (e.g. `to`) Claude's initial prompt instead of /conductor <url>.
     local tab_title="🤖 ${ticket_key} — ${TICKET_SUMMARY:-$worktree_name}"
+    tab_title=${tab_title//[\"\`\$\\]/}
 
     # Convert META_FILE to a Windows path for jq inside the launcher if needed
     local meta_file_path="$META_FILE"
@@ -1215,6 +1323,8 @@ launch_claude() {
     # which patches conductor.json). The launcher reads .state from conductor.json
     # after Claude exits and updates project-level metadata.
     local launcher="$CONDUCTOR_DIR/prompts/${worktree_name}.sh"
+    local launch_gh_host
+    launch_gh_host=$(gh_host_for_remote "$(git -C "$worktree_path" remote get-url origin 2>/dev/null)")
     cat > "$launcher" << LAUNCHER
 #!/usr/bin/env bash
 # Set terminal tab title
@@ -1223,15 +1333,11 @@ cd '$worktree_path'
 
 # Resolve gh auth from per-repo metadata so the worker's \`gh pr view\` and
 # \`gh pr checks\` calls hit the right account. Without this, an org-owned
-# repo (e.g. groupon/echelon) silently 404s when the active gh account is
+# repo (e.g. org/repo) silently 404s when the active gh account is
 # a personal one (patrykk21), which causes CI polling to loop forever on
 # states='' because gh returned an error the worker didn't see.
 # Mirrors gh_pr() in conductor.sh — keep the two in sync.
-__ap_remote_url=\$(git -C '$worktree_path' remote get-url origin 2>/dev/null)
-__ap_gh_host="github.com"
-case "\$__ap_remote_url" in
-    *github.groupondev.com*) __ap_gh_host="github.groupondev.com" ;;
-esac
+__ap_gh_host="${launch_gh_host}"
 __ap_gh_token=""
 __ap_repos_json="\$HOME/worktrees/.metadata/repos.json"
 if [ -f "\$__ap_repos_json" ] && command -v jq >/dev/null 2>&1; then
@@ -1256,9 +1362,10 @@ if [ -n "\$__ap_gh_token" ]; then
     export GH_HOST="\$__ap_gh_host"
     export GH_TOKEN="\$__ap_gh_token"
 fi
-unset __ap_remote_url __ap_gh_host __ap_gh_token __ap_repos_json __ap_meta_repo __ap_meta_host __ap_meta_account
+unset __ap_gh_host __ap_gh_token __ap_repos_json __ap_meta_repo __ap_meta_host __ap_meta_account
 
 export CONDUCTOR_PR_ASSIGNEE="${PR_ASSIGNEE:-}"
+export CONDUCTOR_PR_DRAFT="${PR_DRAFT:-false}"
 export CONDUCTOR_WORKTREE_NAME="${worktree_name}"
 export CONDUCTOR_SESSION_DIR="${session_dir}"
 
@@ -1425,7 +1532,7 @@ LAUNCHER
 # --- Session-state helpers ---
 # Phase 3: marker files are gone. State lives in per-worktree conductor.json
 # under $WORKTREES_BASE/.worktree-meta/sessions/<ticket>/conductor.json.
-# WORKTREES_BASE is per-project (e.g. ~/worktrees/echelon) — it already includes
+# WORKTREES_BASE is per-project (e.g. ~/worktrees/<project>) — it already includes
 # the project, so do NOT add another `<proj>` path component.
 # These helpers wrap the lookup + read + write so monitors stay tidy.
 
@@ -1471,7 +1578,7 @@ read_session_detail() {
 # State_detail can be empty when the worker invoked `state awaiting_ci` without
 # the PR_URL (or with a non-URL detail). Without a fallback the reconciler
 # silently skips the worktree and it sticks in awaiting_ci/awaiting_review
-# forever — the convoy 3-4 / 4-3 / ECH-715 regression. Fallback path: ask
+# forever — the convoy 3-4 / 4-3 regression. Fallback path: ask
 # GitHub directly via `gh pr list --head <branch>`. Branch == worktree name
 # in our convention. As a side-effect, when we resolve via fallback we patch
 # conductor.json so subsequent cycles can use the fast path.
@@ -1536,6 +1643,83 @@ emit_state() {
     printf '%s' "$text" > "$markers_dir/$wt.state" 2>/dev/null || true
 }
 
+# --- Dispatch cooldown ---
+# Prevent the scheduler from queueing the same /with-markers <cmd> on top of
+# a tmux pane that's still processing the previous one. Without this, when a
+# state transition (working → awaiting_ci → awaiting_review) happens faster
+# than Claude can chew through the keystroke buffer, the next tick sees an
+# "idle" state and fires another command — and they stack up in the pane.
+#
+# Cooldown is per (worktree, command) so distinct commands aren't blocked by
+# each other (e.g. /merge-base after /fix-pr-comments is fine).
+#
+# Override via CONDUCTOR_DISPATCH_COOLDOWN_SECS in config.env if needed.
+DISPATCH_COOLDOWN_SECS="${CONDUCTOR_DISPATCH_COOLDOWN_SECS:-300}"
+
+# Returns 0 (true) if a recent dispatch is still within the cooldown window.
+dispatch_within_cooldown() {
+    local wt="$1" cmd="$2"
+    local sd
+    sd=$(session_dir_for_worktree "$wt")
+    [ -z "$sd" ] && return 1
+    local file="$sd/last_dispatch_${cmd}"
+    [ -f "$file" ] || return 1
+    local last_ts now
+    last_ts=$(cat "$file" 2>/dev/null || echo "0")
+    now=$(date +%s)
+    [ $(( now - last_ts )) -lt "$DISPATCH_COOLDOWN_SECS" ]
+}
+
+record_dispatch() {
+    local wt="$1" cmd="$2"
+    local sd
+    sd=$(session_dir_for_worktree "$wt")
+    [ -z "$sd" ] && return 0
+    date +%s > "$sd/last_dispatch_${cmd}" 2>/dev/null || true
+}
+
+# Dispatch a /with-markers command to a worktree's tmux pane, but only if the
+# AI is truly idle: state hasn't transitioned out of an idle bucket since the
+# caller's last read, no tmux session means we don't strand state at working,
+# and the per-(worktree,command) cooldown isn't active. Returns 0 on dispatch,
+# 1 on skip (with a log line explaining why).
+#
+# Usage: dispatch_with_markers <wt_name> <cmd_label> <working_detail> <slash_cmd>
+#   cmd_label    — short identifier used for the cooldown key (e.g. "merge-base")
+#   working_detail — short text shown in state_detail while running
+#   slash_cmd    — the actual text sent to tmux (e.g. "/with-markers /merge-base")
+dispatch_with_markers() {
+    local wt_name="$1" cmd_label="$2" working_detail="$3" slash_cmd="$4"
+
+    if dispatch_within_cooldown "$wt_name" "$cmd_label"; then
+        log "INFO" "$wt_name: $cmd_label within cooldown (${DISPATCH_COOLDOWN_SECS}s) — skipping"
+        return 1
+    fi
+
+    # Re-read state immediately before sending — it may have transitioned to
+    # working since the caller's read (a parallel /with-markers, the user
+    # typing in the pane, or a prior tick's dispatch we haven't noticed yet).
+    local recheck
+    recheck=$(read_session_state "$wt_name")
+    case "$recheck" in
+        awaiting_review|approved) ;;
+        *)
+            log "INFO" "$wt_name: state is '$recheck' (not idle) — skipping $cmd_label"
+            return 1
+            ;;
+    esac
+
+    if [ "$HAS_TMUX" != true ] || ! tmux has-session -t "$wt_name" 2>/dev/null; then
+        log "WARN" "$wt_name: no tmux session — cannot dispatch $cmd_label"
+        return 1
+    fi
+
+    emit_state "$wt_name" "working" "$working_detail"
+    tmux send-keys -t "$wt_name:1" "$slash_cmd" Enter
+    record_dispatch "$wt_name" "$cmd_label"
+    return 0
+}
+
 # Resolve the worktree path for a session_dir. Returns empty if the worktree
 # directory is gone (cleanup needed elsewhere). session_dir layout:
 #   $WORKTREES_BASE/<project>/.worktree-meta/sessions/<wt>
@@ -1550,25 +1734,36 @@ worktree_path_for_session() {
     echo "$path"
 }
 
+# gh host for a git remote URL. Any host other than github.com is GitHub
+# Enterprise; an SSH host alias (no dot, e.g. git@work-gh:org/repo) is not a
+# real hostname, so it stays github.com.
+gh_host_for_remote() {
+    local host
+    host=$(printf '%s' "$1" | sed -nE 's#^[A-Za-z][A-Za-z0-9+.-]*://([^/@]*@)?([^/:]+).*#\2#p')
+    [ -n "$host" ] || host=$(printf '%s' "$1" | sed -nE 's#^([^@/]*@)?([^:/]+):.*#\2#p')
+    case "$host" in
+        *.*) printf '%s\n' "$host" ;;
+        *)   printf 'github.com\n' ;;
+    esac
+}
+
 # Run `gh <args>` against a specific worktree's git remote. Picks the gh host
-# from the remote URL (github.com vs github.groupondev.com) and, when the
+# from the remote URL (github.com or a GitHub Enterprise host) and, when the
 # remote owner matches a logged-in gh username, uses that account's token.
 # This unblocks reconciliation for personal repos (e.g. patrykk21/convoy)
 # while keeping work-org repos using the active account.
 gh_pr() {
     local wt_path="$1"; shift
     [ -d "$wt_path" ] || return 1
-    local remote_url host="github.com" owner token
+    local remote_url host owner token
     remote_url=$(git -C "$wt_path" remote get-url origin 2>/dev/null)
-    case "$remote_url" in
-        *github.groupondev.com*) host="github.groupondev.com" ;;
-    esac
+    host=$(gh_host_for_remote "$remote_url")
     owner=$(printf '%s' "$remote_url" | sed -nE 's#.*[:/]([^/:]+)/[^/]+(\.git)?$#\1#p')
 
     # Resolution order (must match launch-pr.sh):
     #   1. ~/worktrees/.metadata/repos.json — explicit gh_account per repo,
     #      keyed by main_path or $WORKTREES_BASE/<repo>/ prefix. Required for
-    #      org-owned repos (groupon/echelon) where OWNER doesn't match a gh
+    #      org-owned repos (org/repo) where OWNER doesn't match a gh
     #      username; without this, gh falls back to the active account which
     #      may not have access and the reconciler gets empty pr_state.
     #   2. OWNER as username (correct for personal patrykk21/* repos).
@@ -1607,8 +1802,8 @@ gh_pr() {
 
 # Run `gh <args>` against the host/repo derived from a PR URL. Used during
 # reconciliation when a worker opened the PR in a different repo than the
-# conductor worktree (e.g. an echelon worktree whose actual change landed on
-# github.groupondev.com/Mobile-Next/next-pwa-app#15697). The worktree's own
+# conductor worktree (e.g. a worktree of one repo whose actual change landed
+# as a PR in another repo on another host). The worktree's own
 # `origin` is irrelevant here — we trust the URL the worker emitted via
 # `state awaiting_ci PR_URL` and route the gh call to that host/repo.
 #
@@ -2024,19 +2219,15 @@ monitor_awaiting_reviews() {
 
         case "$review_decision" in
             CHANGES_REQUESTED)
-                log "INFO" "PR #$pr_number ($wt_name): changes requested — sending /with-markers /fix-pr-comments"
-                emit_state "$wt_name" "working" "fixing review comments"
-                if [ "$HAS_TMUX" = true ] && tmux has-session -t "$wt_name" 2>/dev/null; then
-                    tmux send-keys -t "$wt_name:1" "/with-markers /fix-pr-comments" Enter
+                if dispatch_with_markers "$wt_name" "fix-pr-comments" "fixing review comments" "/with-markers /fix-pr-comments"; then
+                    log "INFO" "PR #$pr_number ($wt_name): changes requested — sent /with-markers /fix-pr-comments"
                 fi
                 ;;
             COMMENTED|"")
                 # No formal decision — check if the latest review left comments
                 if [ "$latest_review_state" = "COMMENTED" ] || [ "$latest_review_state" = "CHANGES_REQUESTED" ]; then
-                    log "INFO" "PR #$pr_number ($wt_name): review with comments (state: $latest_review_state) — sending /with-markers /fix-pr-comments"
-                    emit_state "$wt_name" "working" "fixing review comments"
-                    if [ "$HAS_TMUX" = true ] && tmux has-session -t "$wt_name" 2>/dev/null; then
-                        tmux send-keys -t "$wt_name:1" "/with-markers /fix-pr-comments" Enter
+                    if dispatch_with_markers "$wt_name" "fix-pr-comments" "fixing review comments" "/with-markers /fix-pr-comments"; then
+                        log "INFO" "PR #$pr_number ($wt_name): review with comments (state: $latest_review_state) — sent /with-markers /fix-pr-comments"
                     fi
                 else
                     log "INFO" "PR #$pr_number ($wt_name): no actionable review — waiting"
@@ -2166,10 +2357,8 @@ check_pr_conflicts() {
         mergeable=$(gh_pr "$wt_path" pr view "$pr_number" --json mergeable -q '.mergeable' 2>/dev/null)
 
         if [ "$mergeable" = "CONFLICTING" ]; then
-            log "INFO" "PR #$pr_number ($wt_name): has conflicts — sending /with-markers /merge-base"
-            emit_state "$wt_name" "working" "resolving merge conflicts"
-            if [ "$HAS_TMUX" = true ] && tmux has-session -t "$wt_name" 2>/dev/null; then
-                tmux send-keys -t "$wt_name:1" "/with-markers /merge-base" Enter
+            if dispatch_with_markers "$wt_name" "merge-base" "resolving merge conflicts" "/with-markers /merge-base"; then
+                log "INFO" "PR #$pr_number ($wt_name): has conflicts — sent /with-markers /merge-base"
             fi
         fi
     done < <(list_session_worktrees)
@@ -2359,6 +2548,14 @@ main() {
             TICKET_PRIORITY="High"
         fi
         log "INFO" "Ticket override: $TICKET_KEY - $TICKET_SUMMARY ($TICKET_TYPE, $TICKET_PRIORITY) (from $ticket_override)"
+    elif [ -f "$CONDUCTOR_DIR/pickup-disabled" ]; then
+        # Temporary global kill-switch for automatic ticket pickup. PR/CI
+        # babysitting above still runs; only the Jira label query + AI picker
+        # are skipped. Manual `conductor run --ticket <KEY>` still works.
+        # Re-enable by deleting $CONDUCTOR_DIR/pickup-disabled.
+        log "INFO" "Auto-pickup disabled (pickup-disabled flag). Skipping Jira label query + AI picker."
+        log "INFO" "=== Conductor cycle complete (pickup disabled) ==="
+        exit 0
     elif ! find_ticket; then
         log "INFO" "=== Conductor cycle complete (no work) ==="
         exit 0

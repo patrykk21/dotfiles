@@ -2,7 +2,6 @@
 name: create-skill
 description: Create a well-structured skill — provide a topic to explore the codebase and build a skill interactively, or capture a workflow from the current session
 user-invocable: true
-model: opus[1m]
 ---
 
 # /create-skill — Skill Creator
@@ -41,10 +40,20 @@ SLUG=$(basename "$(git remote get-url origin 2>/dev/null | sed 's/\.git$//')" 2>
 
 **Skill scope:** Choose project or global based on reusability.
 
+<!-- CC-ONLY -->
 | Scope | When | Create in | After creating |
 |-------|------|-----------|----------------|
 | **Project** | Skill is specific to this repo | `.claude/skills/{slug}-{name}/SKILL.md` | Nothing needed |
 | **Global** | Skill applies across projects | `~/.claude/skills/{slug}-{name}/SKILL.md` | Nothing needed |
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+| Scope | When | Create in | After creating |
+|-------|------|-----------|----------------|
+| **Project** | Skill is specific to this repo | `.agents/skills/{slug}-{name}/SKILL.md` | Nothing needed |
+| **Global** | Skill applies across projects | `~/.agents/skills/{slug}-{name}/SKILL.md` | Nothing needed |
+
+Codex project instructions belong in repo-root `AGENTS.md`; skill instructions belong in `.agents/skills/<name>/SKILL.md` or `~/.agents/skills/<name>/SKILL.md`. Do not put Codex skills in `AGENTS.md`.
+CODEX-END -->
 
 **Naming rules:** Lowercase with hyphens only. The slug provides context; the name should be 1-3 words max that are descriptive (not generic). Examples: `pilot-shell-lsp-cleaner`, `my-api-auth-flow`, `acme-deploy`. Never use generic names like "helper", "utils", "tools", "handler", "workflow".
 
@@ -105,10 +114,10 @@ name: {slug}-descriptive-kebab-case-name
 description: |
   [What it does] + [When to use it] + [Key capabilities].
   Use when user asks to [specific trigger phrases]. Include trigger conditions, scenarios, exact error messages.
-targets: [claude]
+targets: [claude, codex]
 tags: [category, domain]
 license: MIT
-allowed-tools: Bash(python:*) WebFetch  # Optional — restrict which tools the skill can use
+allowed-tools: Grep Glob  # Optional — restrict which tools the skill can use
 compatibility: Requires Python 3.12+    # Optional — environment requirements (1-500 chars)
 metadata:                               # Optional — custom key-value pairs
   author: Your Name
@@ -152,7 +161,7 @@ Result: [expected outcome]
 | `targets` | No | Restrict sync to specific CLIs (e.g., `[claude]`). Omit to sync everywhere |
 | `tags` | No | Categories for hub search and filtering (e.g., `[debugging, python]`) |
 | `license` | No | License identifier (e.g., `MIT`, `Apache-2.0`) |
-| `allowed-tools` | No | Restrict which tools the skill can access (e.g., `Bash(python:*) WebFetch`) |
+| `allowed-tools` | No | Restrict which tools the skill can access (e.g., `Grep Glob`) |
 | `compatibility` | No | Environment requirements (1-500 chars) |
 | `metadata` | No | Custom key-value pairs: `author`, `version`, `mcp-server`, `category`, etc. |
 
@@ -183,16 +192,16 @@ description: End-to-end customer onboarding workflow for PayFlow. Handles
 # Too vague — won't trigger
 description: Helps with projects.
 
-# Missing triggers — Claude can't match user requests
+# Missing triggers — the agent can't match user requests
 description: Creates sophisticated multi-page documentation systems.
 
 # Too technical, no user triggers
 description: Implements the Project entity model with hierarchical relationships.
 ```
 
-**⚠️ The Description Trap:** If description summarizes the workflow, Claude follows the short description as a shortcut instead of reading SKILL.md. Always describe trigger conditions, not process.
+**⚠️ The Description Trap:** If description summarizes the workflow, the agent follows the short description as a shortcut instead of reading SKILL.md. Always describe trigger conditions, not process.
 
-**Make descriptions "pushy"** — Claude tends to undertrigger skills (not use them when they'd help). Combat this by being explicit about when to activate. Instead of "How to build a dashboard for internal data", write "How to build a dashboard for internal data. Use this skill whenever the user mentions dashboards, data visualization, internal metrics, or wants to display any kind of data, even if they don't explicitly ask for a 'dashboard.'"
+**Make descriptions "pushy"** — agents tend to undertrigger skills (not use them when they'd help). Combat this by being explicit about when to activate. Instead of "How to build a dashboard for internal data", write "How to build a dashboard for internal data. Use this skill whenever the user mentions dashboards, data visualization, internal metrics, or wants to display any kind of data, even if they don't explicitly ask for a 'dashboard.'"
 
 ### Progressive Disclosure
 
@@ -201,8 +210,13 @@ Three-level system — each level loads only when needed:
 | Level | What | When Loaded | Context Cost |
 |-------|------|-------------|--------------|
 | **1. Frontmatter** | `description` in YAML | Always (system prompt) | ~100 tokens |
+<!-- CC-ONLY -->
 | **2. SKILL.md body** | Full instructions | When Claude thinks skill is relevant | ~1000+ tokens |
-| **3. Linked files** | `scripts/`, `references/`, `assets/` | When Claude navigates to them | Only on demand |
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+| **2. SKILL.md body** | Full instructions | When Codex thinks skill is relevant or the user invokes `$skill-name` | ~1000+ tokens |
+CODEX-END -->
+| **3. Linked files** | `scripts/`, `references/`, `assets/` | When the agent navigates to them | Only on demand |
 
 **Rule of thumb:** "Is this line worth the context tokens it costs?" Don't explain what AI already knows. Only add your project's specific conventions, internal APIs, and domain rules.
 
@@ -280,13 +294,22 @@ Ask yourself:
 ## Step 3: Check Existing
 
 ```bash
+<!-- CC-ONLY -->
 # Project skills
 ls .claude/skills/ 2>/dev/null
 rg -i "keyword" .claude/skills/ 2>/dev/null
-# Global skills (user + Pilot defaults)
+# Global skills (user + Pilot defaults all live at ~/.claude/skills/)
 ls ~/.claude/skills/ 2>/dev/null
-ls ~/.claude/pilot/skills/ 2>/dev/null
-rg -i "keyword" ~/.claude/skills/ ~/.claude/pilot/skills/ 2>/dev/null
+rg -i "keyword" ~/.claude/skills/ 2>/dev/null
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+# Project skills
+ls .agents/skills/ 2>/dev/null
+rg -i "keyword" .agents/skills/ 2>/dev/null
+# Global skills (user + Pilot defaults all live at ~/.agents/skills/)
+ls ~/.agents/skills/ 2>/dev/null
+rg -i "keyword" ~/.agents/skills/ 2>/dev/null
+CODEX-END -->
 ```
 
 | Found | Action |
@@ -299,6 +322,7 @@ rg -i "keyword" ~/.claude/skills/ ~/.claude/pilot/skills/ 2>/dev/null
 
 **Create the skill directory and SKILL.md:**
 
+<!-- CC-ONLY -->
 ```bash
 # Project scope — skill lives in this repo's .claude/skills/
 mkdir -p .claude/skills/{slug}-{name}
@@ -310,14 +334,35 @@ mkdir -p ~/.claude/skills/{slug}-{name}
 ```
 
 Skills in `.claude/skills/` (project) or `~/.claude/skills/` (global) are automatically available to Claude — no sync step needed.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+```bash
+# Project scope — skill lives in this repo's .agents/skills/
+mkdir -p .agents/skills/{slug}-{name}
+# Write SKILL.md
+
+# Global scope — skill applies across all projects
+mkdir -p ~/.agents/skills/{slug}-{name}
+# Write SKILL.md
+```
+
+Skills in `.agents/skills/` (project) or `~/.agents/skills/` (global) are available to Codex — no sync step needed.
+CODEX-END -->
 
 Edit the created `SKILL.md` with the skill content using the template from Step 1.
 
 **Portability checklist** — skills are shared with users who may NOT have Pilot Shell:
 
+<!-- CC-ONLY -->
 - **Only use built-in Claude Code tools** in skill instructions: `Read`, `Write`, `Edit`, `Bash`, `Grep`, `Glob`, `Agent`, `WebFetch`, `WebSearch`, `Notebook`, `LSP`, `TodoRead`/`TodoWrite`
 - **Never reference Pilot-specific tools:** `semble search/find-related` (CLI or MCP), `agent-browser`, `pilot` CLI, Pilot MCP servers (`mem-search`, `context7`, `grep-mcp`, `web-fetch`, `web-search`)
 - **Substitute with built-in equivalents:** `semble search` → `Grep`/`Glob`, `agent-browser` → Claude Code Chrome (`mcp__claude-in-chrome__*`) or `Bash` with `npx agent-browser`, web fetch → `WebFetch`
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+- **Only use built-in Codex tools** in skill instructions: `Read`, `Write`/`apply_patch`, `Edit`, `Bash`, `Grep`, `Glob`. Subagent and web tools are not available in Codex — use `Bash` with `curl` for web fetching and `codex exec` for isolated sub-tasks.
+- **Never reference Pilot-specific tools:** `semble search/find-related` (CLI or MCP), `agent-browser`, `pilot` CLI, Pilot MCP servers (`mem-search`, `context7`, `grep-mcp`, `web-fetch`, `web-search`)
+- **Substitute with built-in equivalents:** `semble search` → `Grep`/`Glob`, web fetch → `Bash` with `curl`
+CODEX-END -->
 - If a skill genuinely requires a non-standard tool, document it as a prerequisite in the skill body (not silently assume it exists)
 
 **Determinism checklist** — maximize reliability:
@@ -370,7 +415,7 @@ Should NOT trigger:
 - "[general request the skill shouldn't handle]"
 ```
 
-**Debug approach:** Ask Claude "When would you use the [skill name] skill?" — Claude will quote the description back. Adjust based on what's missing.
+**Debug approach:** Ask the target agent "When would you use the [skill name] skill?" — the agent will quote the description back. Adjust based on what's missing.
 
 ## Step 6: Test & Iterate
 
@@ -391,8 +436,9 @@ margin column. Revenue is in column C, costs in D i think"
 
 Share them with the user: "Here are a few test cases I'd like to try. Do these look right, or do you want to add more?"
 
-### Step 6.2: Run Tests with Subagents
+### Step 6.2: Run Tests
 
+<!-- CC-ONLY -->
 For each test prompt, spawn a subagent that has access to the skill and ask it to complete the task. Save outputs to a workspace directory.
 
 ```
@@ -417,6 +463,32 @@ Save outputs to: [workspace]/iteration-N/test-ID/with-skill/
 **Baseline run** — same prompt, but tell the subagent to NOT use the skill. This reveals what value the skill actually adds.
 
 Launch all runs in parallel (with-skill AND baseline for each test case) to save time.
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+For each test prompt, run `codex exec` in isolated sandbox directories — one with the skill installed, one without. Save outputs to a workspace directory.
+
+```
+Workspace structure:
+<skill-name>-workspace/
+└── iteration-1/
+    ├── test-1-descriptive-name/
+    │   ├── with-skill/      # Output from codex exec with skill installed
+    │   └── without-skill/   # Baseline output (no skill)
+    └── test-2-descriptive-name/
+        ├── with-skill/
+        └── without-skill/
+```
+
+**With-skill run** — create a temp directory with the skill installed under `.agents/skills/<name>/SKILL.md`, then:
+```bash
+cd <workspace>/iteration-N/test-ID/with-skill/
+codex exec "Complete this task: [test prompt]. Save outputs to the current directory."
+```
+
+**Baseline run** — same prompt, but in a directory without the skill installed.
+
+Run all test cases sequentially (Codex does not support parallel subagents).
+CODEX-END -->
 
 ### Step 6.3: Evaluate Results
 
@@ -473,15 +545,24 @@ After the skill works well, optimize its triggering accuracy.
 
 **Make queries realistic** — include file paths, personal context, abbreviations, typos, casual speech, varying lengths. Bad: `"Format this data"`. Good: `"i have this csv from marketing (campaigns_q4.csv) and need to pivot it so each campaign type is a column with spend as values, can you also add a total row at the bottom"`.
 
-**How skill triggering works:** Skills appear in Claude's `available_skills` list with their name + description. Claude decides whether to consult a skill based on that description alone. Important: Claude only consults skills for tasks it can't easily handle on its own — simple one-step queries like "read this file" won't trigger a skill even if the description matches, because Claude can handle them directly. Your test queries should be substantive enough that Claude would actually benefit from consulting a skill.
+**How skill triggering works:** Skills appear to the target agent with their name + description. The agent decides whether to consult a skill based on that description alone. Important: agents only consult skills for tasks they can't easily handle on their own — simple one-step queries like "read this file" won't trigger a skill even if the description matches, because the agent can handle them directly. Your test queries should be substantive enough that the target agent would actually benefit from consulting a skill.
 
 **Test triggering accuracy:**
 
+<!-- CC-ONLY -->
 ```bash
 # For each query, test if Claude would trigger the skill
 # Run in a new session or use claude -p (pipe mode)
 echo "<test query>" | claude -p "Would you use the [skill-name] skill for this request? Answer only YES or NO."
 ```
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+```bash
+# For each query, test if Codex would trigger the skill
+# Run in a new session or use codex exec
+codex exec "Would you use the [skill-name] skill for this request? Answer only YES or NO. Request: <test query>"
+```
+CODEX-END -->
 
 **Iterate on the description** based on mismatches:
 - Should-trigger but didn't → add relevant trigger phrases/scenarios to description
@@ -499,7 +580,7 @@ Run 2-3 iterations. If available, split queries 60/40 into train/test sets — o
 | **Too many options** — "use pdfplumber, PyMuPDF, or camelot..." | Give one default, mention alternatives only if needed |
 | **No verification** — "deploy to staging" (how do you know it worked?) | Always include a verification command |
 | **Hardcoded paths** — `/Users/john/projects/my-app/...` | Relative paths or environment variables |
-| **Ambiguous language** — "Make sure to validate things properly" | `CRITICAL: Before calling create_project, verify: project name non-empty, at least one team member assigned` |
+| **Ambiguous language** — "Make sure to validate things properly" | `Before calling create_project, verify: project name non-empty, at least one team member assigned` |
 
 ### Iteration Signals
 
@@ -507,7 +588,7 @@ Run 2-3 iterations. If available, split queries 60/40 into train/test sets — o
 |--------|---------|-----|
 | **Undertriggering** | Skill doesn't load when it should, users manually enabling it | Add more detail and trigger keywords to description |
 | **Overtriggering** | Skill loads for irrelevant queries, users disabling it | Add negative triggers ("Do NOT use for..."), be more specific |
-| **Instructions not followed** | Claude loads skill but ignores steps | Instructions too verbose (condense), buried (move critical to top), or ambiguous (use exact commands) |
+| **Instructions not followed** | Agent loads skill but ignores steps | Instructions too verbose (condense), buried (move critical to top), or ambiguous (use exact commands) |
 | **Large context issues** | Skill seems slow or responses degraded | Move detailed docs to `references/`, keep SKILL.md under 5,000 words |
 
 ### Rationalization-Resistant Design (for discipline skills only)
@@ -524,7 +605,12 @@ Skip these for technique/reference skills — they don't have rationalization pr
 
 **Scenario:** User asks to create a skill for finding dead code using LSP.
 
+<!-- CC-ONLY -->
 **Result:** `.claude/skills/my-project-lsp-cleaner/SKILL.md`
+<!-- /CC-ONLY -->
+<!-- CODEX-START
+**Result:** `.agents/skills/my-project-lsp-cleaner/SKILL.md`
+CODEX-END -->
 
 ```yaml
 name: my-project-lsp-cleaner
@@ -532,9 +618,9 @@ description: |
   Find dead/unused code using LSP findReferences. Use when: (1) user asks
   to find dead code, (2) cleaning up codebase, (3) refactoring. Key insight:
   function with only 1 reference (definition) or only test refs is dead code.
-targets: [claude]
+targets: [claude, codex]
 tags: [refactoring, code-quality]
 license: MIT
-author: Claude Code
+author: Pilot Shell
 version: 1.0.0
 ```
